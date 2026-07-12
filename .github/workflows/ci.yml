@@ -4,12 +4,17 @@ on:
   push:
     branches:
       - main
-      - "infra/**"
+      - develop
       - "feature/**"
+      - "fix/**"
+      - "chore/**"
+      - "docs/**"
+      - "refactor/**"
 
   pull_request:
     branches:
       - main
+      - develop
 
 permissions:
   contents: read
