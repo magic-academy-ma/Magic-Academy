@@ -1,0 +1,29 @@
+language: ko-KR
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_filters:
+    - "!docs/**"
+    - "!.github/**"
+    - "!*.md"
+
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        Magic Academy는 멀티 에이전트 LLM 시뮬레이션 프로젝트다.
+        아래 원칙에 따라 리뷰한다.
+
+        1. Agent 설계: docs/02-domain/agents.md의 내부 상태(배고픔·피로도·스트레스·만족도·기분)와 memory 상한(10)을 반영하는지 확인한다.
+        2. 관계 모델: docs/02-domain/relationships.md의 6개 척도(호감도·친밀도·신뢰도·긴장도·경쟁·의존도)를 올바르게 사용하는지 확인한다.
+        3. 토큰 비용: Agent 수(25) × memory × tick 누적으로 비용이 급증할 수 있다. 불필요한 LLM 호출을 지적한다.
+        4. 보안: API Key, 개인정보, 시크릿이 코드에 하드코딩되어 있으면 반드시 지적한다.
+        5. Public repo: 팀원 실명·연락처·내부 KPI가 커밋에 포함되지 않도록 확인한다.
+
+chat:
+  auto_reply: true
