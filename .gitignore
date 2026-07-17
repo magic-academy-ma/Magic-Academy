@@ -30,4 +30,4 @@ Thumbs.db
 *.swp
 
 # ─── Claude Code ──────────────────────────────────────
-.claude/settings.local.json
+.claude/
