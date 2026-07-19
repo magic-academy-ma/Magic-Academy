@@ -41,11 +41,6 @@ updated: 2026-07-13
 
 > **미정** — Time Tick 최종 확정과 함께 결정 예정 (`what-is-pending.md` 참조)
 
-### Event Master Agent (미정)
-
-매 Tick마다 사건을 생성·오케스트레이션하는 전담 Agent.  
-MVP 포함 여부 미확정 → `what-is-pending.md` 참조.
-
 ---
 
 ## 사건과 관계 변화 매핑 (대략)

@@ -88,14 +88,14 @@ source_updated: 2026-07-08                        # 원본 반영 시점 (drift 
 ## 7. 동기화 프로세스
 
 - **원칙**: Confluence(원본) → `confluence/` 미러 → `docs/`(AI용 재정렬). 재정렬은 판단이 필요하므로 **수동 큐레이션**, drift는 자동 감지.
-- **drift 감지**: 각 `docs/` 파일의 `source_updated`를 원본 Confluence 갱신일과 수동 비교해 뒤처진 문서를 `_meta/SYNC.md` 큐에 추가.
-- **소유자·주기**: 문서 담당자가 Confluence 갱신 시 재큐레이션 후 커밋. `_meta/SYNC.md`에 명문화.
+- **`scripts/docs-drift`**: 각 `docs/` 파일의 `source` + `source_updated`를 원본 `confluence/` 파일의 실제 갱신과 비교해 뒤처진 문서 목록 출력.
+- **소유자·주기**: 문서 담당(기본 EunHye)이 Confluence 갱신 시 재큐레이션 후 커밋. `_meta/SYNC.md`에 명문화.
 
 > 주의: `confluence/`는 저장소 밖(git 밖)이므로, drift 스크립트는 로컬에 `confluence/` 미러가 있는 담당자 환경에서 실행하는 것을 전제로 한다.
 
 ## 8. 검증 (코드 아님 → 문서 무결성 기준)
 
-- SYNC.md 이관 큐 상태 정확성 확인
+- `docs-drift` 스크립트 동작 확인
 - 크로스링크 무결성 체크(깨진 내부 링크 0)
 - frontmatter 스키마 린트(필수 필드 존재)
 - 민감정보 스캔(분류 정책 위반 0)

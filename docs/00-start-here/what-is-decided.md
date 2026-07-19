@@ -3,11 +3,16 @@ title: 확정된 사항
 status: approved
 visibility: public
 updated: 2026-07-13
+source:
+  - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
+  - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
+  - "시스템 레이어 구조 (Confluence #6389788)"
+  - "Magic Layer 설계 (Confluence #6619141)"
 ---
 
 # 확정된 사항
 
-> 출처: 2차 회의 (2026-07-07), 3차 회의 (2026-07-09 예정)
+> 출처: 2차 회의 (2026-07-07) · [Spec] MVP 핵심 설계 기준 (Confluence #6356994) · 2026-07-09 기술 스택 확정 회의 (Confluence #7405620)
 
 ---
 
@@ -21,13 +26,17 @@ updated: 2026-07-13
 
 ## Agent 구성 (MVP)
 
+> 출처: [Spec] MVP 핵심 설계 기준 §FR-01~FR-09 · Magic Layer 설계 (Confluence #6619141)
+
 | Agent | 수량 | 비고 |
 |-------|------|------|
-| Student Agent | 20 | 한 반 기준 |
-| Professor Agent | 5 | 교양 1 + 전공 4 |
-| User Persona Agent | 1 | 사용자가 성격·성향 지정 |
+| Student Agent | 20 | 한 반 기준 — §FR-01 |
+| Professor Agent | 5 | 교양 1 + 전공 4 — §FR-01 |
+| Event Master Agent | 1 | 매 Tick 사건 생성 오케스트레이터 — §FR-05, FR-09 |
+| Magic Agent | 1 | 마법 세계 특화 사건 생성 · Magic Layer 운영 |
 
-- **Student Agent memory 상한**: 최대 10
+- **User Persona**: 별도 Agent 아님. Student 20명 중 1명을 지정하며 성격·성향 수정 가능. 직접 조종 불가.
+- **Student Agent memory 상한**: 최대 10 — §FR-02
 
 ---
 
