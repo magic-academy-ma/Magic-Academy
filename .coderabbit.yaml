@@ -17,6 +17,8 @@ reviews:
   path_instructions:
     - path: "**/*"
       instructions: |
+        모든 리뷰는 반드시 한국어로 작성한다.
+
         Magic Academy 팀 코드 컨벤션을 기준으로 검토한다.
 
         리뷰 코멘트는 아래 태그 중 하나로 시작한다.
