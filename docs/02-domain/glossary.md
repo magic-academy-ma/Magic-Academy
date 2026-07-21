@@ -17,7 +17,7 @@ updated: 2026-07-13
 
 | 용어 | 정의 |
 |------|------|
-| **Agent** | 시뮬레이션 내 자율적으로 행동하는 단위. Student · Professor · User Persona · (미정) Event Master |
+| **Agent** | 시뮬레이션 내 자율적으로 행동하는 단위. Student · Professor · Event Master · Magic Agent |
 | **내부 상태** | 각 Agent가 보유하는 배고픔·피로도·스트레스·만족도·기분 값. 행동과 관계 변화의 입력 |
 
 ## E
@@ -61,7 +61,7 @@ updated: 2026-07-13
 
 | 용어 | 정의 |
 |------|------|
-| **Time Tick** | 시뮬레이션 시간 단위. 잠정 1 Tick = 24분 = 1일. **최종 확정 미정** |
+| **Time Tick** | 시뮬레이션 시간 단위. 1 Tick = 24분 = 1일 (확정) |
 | **3축** | Magic Academy 시뮬레이션을 구동하는 핵심 프레임: 관계·조직·사건 |
 
 ## U
