@@ -3,6 +3,23 @@
 Magic Academy — 마법 대학교를 배경으로 한 멀티 에이전트 LLM 시뮬레이션.  
 agent들이 관계·조직·사건 속에서 상호작용하며 상태가 변화한다.
 
+**현재 상태**: 구현 단계 — Week 3 시작 (2026-07-21 기준)
+
+---
+
+## 기술 스택
+
+| 계층 | 기술 |
+|------|------|
+| 백엔드 | FastAPI |
+| 에이전트 오케스트레이션 | LangGraph |
+| DB | PostgreSQL + pgvector |
+| 프론트엔드 | React |
+| 인프라 | Docker Compose |
+
+- **Agent 수 (초기 / MVP)**: Student 초기 5명, MVP 8~10명 / Professor 5 / Event Master 1 / Magic Agent 1
+- **실행 명령어**: 아직 코드 없음 — `docs/05-team-rules/`에서 환경 설정 가이드 확인
+
 ---
 
 ## 시작
