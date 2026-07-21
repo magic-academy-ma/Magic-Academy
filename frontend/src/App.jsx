@@ -8,7 +8,12 @@ export default function App() {
 
   useEffect(() => {
     fetch("http://localhost:8000/students/")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`학생 목록 조회에 실패했습니다. (${res.status})`);
+        }
+        return res.json();
+      })
       .then((data) => {
         setStudents(data);
         setLoading(false);
