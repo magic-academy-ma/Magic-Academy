@@ -95,9 +95,9 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 
 | 상태 | Confluence 문서 | docs/ 파일 | 추가일 |
 |------|----------------|------------|--------|
-| ✅ | 09_CONVENTIONS / 1. 브랜치 컨벤션 | `05-team-rules/git-workflow.md` | 2026-07-13 |
-| ✅ | 09_CONVENTIONS / 2. Issue 라벨·제목 컨벤션 | `05-team-rules/git-workflow.md` (병합) | 2026-07-13 |
-| ✅ | 09_CONVENTIONS / 3. PR 크기·리뷰 컨벤션 | `05-team-rules/git-workflow.md` (병합) | 2026-07-13 |
+| ✅ | 09_CONVENTIONS / 1. 브랜치 컨벤션 | `05-team-rules/git-workflow-commit.md` | 2026-07-21 |
+| ✅ | 09_CONVENTIONS / 2. Issue 라벨·제목 컨벤션 | `05-team-rules/git-workflow-pr.md` | 2026-07-21 |
+| ✅ | 09_CONVENTIONS / 3. PR 크기·리뷰 컨벤션 | `05-team-rules/git-workflow-pr.md` (병합) | 2026-07-21 |
 | ✅ | 09_CONVENTIONS / 4. 코드 스타일·폴더 구조 컨벤션 | `05-team-rules/conventions.md` | 2026-07-13 |
 | ✅ | 09_CONVENTIONS / 8. AI 사용 컨벤션 | `05-team-rules/ai-usage.md` | 2026-07-13 |
 | ✅ | 09_CONVENTIONS / 11. Definition of Done | `05-team-rules/definition-of-done.md` | 2026-07-13 |

@@ -31,7 +31,7 @@ source_updated: 2026-07-18
      ↓
 [Agent Runtime]  LangGraph 7노드 × 25명 병렬
                  Memory Stream + 단순 Reflection
-                 Memory 선택: pgvector RAG top-3 + 최신 2개 고정 (최대 5개)
+                 Memory 선택: pgvector RAG top-3 + 최신 2개 고정 (매 tick 주입 최대 5개 — 보유 상한 10개와 별개)
      ↓
 [Persistence]  PostgreSQL + pgvector (HNSW 인덱스) / Alembic
 ```
@@ -46,7 +46,7 @@ source_updated: 2026-07-18
 | --- | --- | --- | --- |
 | 오케스트레이션 | LangGraph + Custom Tick Orchestrator | AutoGen (업무 해결형), CrewAI (역할 고정형), 완전 Custom (구현 과다) | 멀티에이전트 오케스트레이션 프레임워크 조사 |
 | Agent Memory 구조 | Memory Stream + 단순 Reflection (B안) — 큰 사건 참여 Agent에게만 Reflection 생성 | A안 원본 전체 재현 (구현 과다), C안 Memory 없음 (관계·서사 누적 불가) | Generative Agents 논문 구현 분석 |
-| Memory 선택 전략 | pgvector RAG top-3 + 최신 2개 고정 (최대 5개) — score = α×importance + β×recency + γ×relevance | Sliding Window (중요 기억 손실), LLM 요약 압축 (Summarization Drift 문제), Hybrid (파라미터 튜닝 필요) | 토큰 비용 대응 — 메모리 압축 전략 |
+| Memory 선택 전략 | pgvector RAG top-3 + 최신 2개 고정 (매 tick 주입 최대 5개, 보유 상한 10개와 별개) — score = α×importance + β×recency + γ×relevance | Sliding Window (중요 기억 손실), LLM 요약 압축 (Summarization Drift 문제), Hybrid (파라미터 튜닝 필요) | 토큰 비용 대응 — 메모리 압축 전략 |
 | 25명 병렬 실행 | asyncio.gather + Semaphore(10) | 순차 실행 (tick당 수십 초 이상), LangGraph Supervisor (LLM 추가 비용) | LangGraph 25명 병렬 실행 패턴 |
 | LLM 모델 | Haiku 4.5 (학생·교수·Magic Layer), Sonnet 4.6 (Event Master) | Sonnet 전체 (~2배 비용), Opus 전체 (~5배 비용) | 토큰 비용 시나리오 추정 |
 | 토큰 최적화 | 3블록 단위 tick + 프롬프트 캐싱 + Memory 5개 제한 (Naive 대비 약 89% 절감) | A안 Naive 전체 Sonnet ($4,170/8주), B안 모델 다운그레이드만 ($2,080/8주) | 토큰 비용 시나리오 추정 |

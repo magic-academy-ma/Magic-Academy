@@ -106,7 +106,7 @@ docs/05-team-rules/ai-usage.md
 docs/05-team-rules/definition-of-done.md
 ```
 
-**참고**: `_meta/SYNC.md`는 이관 담당자(EunHye)가 직접 확인하는 운영 문서다. AI가 이관 작업 자체를 수행하는 경우에만 로드한다. 일반 문서 작업에서는 불필요.
+**참고**: `_meta/SYNC.md`는 이관 담당자가 직접 확인하는 운영 문서다. AI가 이관 작업 자체를 수행하는 경우에만 로드한다. 일반 문서 작업에서는 불필요.
 
 ### PR 작성·리뷰
 
@@ -139,9 +139,9 @@ docs/05-team-rules/ai-usage.md
 
 `what-is-decided.md`의 **세계관 카테고리 섹션** (시간/공간/조직/관계/사건/배경)은 `02-domain/` 파일들과 내용이 거의 중복된다. 현재는 확정 출처 표시가 필요해서 유지하는 것이 맞지만, 향후 도메인 파일이 확정 상태가 되면 해당 섹션을 링크로 대체하면 토큰을 줄일 수 있다.
 
-### 2. `05-team-rules/git-workflow.md` 분리 고려 (~500토큰 절감 가능)
+### 2. `05-team-rules/git-workflow.md` 분리 완료 (~500토큰 절감)
 
-현재 git-workflow.md는 브랜치 규칙 + 커밋 컨벤션 + Issue 양식 + PR 양식 + 리뷰 태그를 한 파일에 담고 있어 ~847 토큰이다. PR 작성 시에는 PR/리뷰 섹션만 필요하고, 구현 중에는 커밋 컨벤션만 필요하다. `git-workflow-commit.md` / `git-workflow-pr.md`로 분리하면 작업별 로드량을 절반으로 줄일 수 있다.
+`git-workflow.md` (~847 토큰)를 `git-workflow-commit.md` / `git-workflow-pr.md`로 분리했다. 작업 유형별 로드량이 절반으로 줄었다. (2026-07-21 완료)
 
 ### 3. `05-team-rules/ai-usage.md` 섹션 정리 (~100토큰 절감 가능)
 

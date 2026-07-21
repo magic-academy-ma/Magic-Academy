@@ -12,7 +12,7 @@ visibility: public
 
 ## 1. 목적 및 스코프
 
-팀원이 이 저장소(`Je-hye/Magic-Academy`)를 clone하면, 각자 어떤 AI 도구를 쓰든
+팀원이 이 저장소를 clone하면, 각자 어떤 AI 도구를 쓰든
 **일관된 문서 기준 위에서** Magic Academy를 개발할 수 있는 환경을 만든다.
 
 **이번 cycle 산출물**
@@ -89,7 +89,7 @@ source_updated: 2026-07-08                        # 원본 반영 시점 (drift 
 
 - **원칙**: Confluence(원본) → `confluence/` 미러 → `docs/`(AI용 재정렬). 재정렬은 판단이 필요하므로 **수동 큐레이션**, drift는 자동 감지.
 - **`scripts/docs-drift`**: 각 `docs/` 파일의 `source` + `source_updated`를 원본 `confluence/` 파일의 실제 갱신과 비교해 뒤처진 문서 목록 출력.
-- **소유자·주기**: 문서 담당(기본 EunHye)이 Confluence 갱신 시 재큐레이션 후 커밋. `_meta/SYNC.md`에 명문화.
+- **소유자·주기**: 문서 담당자가 Confluence 갱신 시 재큐레이션 후 커밋. `_meta/SYNC.md`에 명문화.
 
 > 주의: `confluence/`는 저장소 밖(git 밖)이므로, drift 스크립트는 로컬에 `confluence/` 미러가 있는 담당자 환경에서 실행하는 것을 전제로 한다.
 

@@ -30,7 +30,8 @@ agent들이 관계·조직·사건 속에서 상호작용하며 상태가 변화
 docs/00-start-here/index.md
 ```
 
-전체 읽기 순서, 확정/미정 항목, source of truth 규칙이 거기 있다.
+전체 읽기 순서, 확정/미정 항목, source of truth 규칙이 거기 있다.  
+작업 유형별 컨텍스트 로딩 범위(Always Load / Task-Specific / Skip)는 `docs/00-start-here/context-scope.md`에 정의돼 있다.
 
 ---
 
@@ -39,7 +40,7 @@ docs/00-start-here/index.md
 ```
 docs/
 ├── 00-start-here/   # 진입점 (여기부터)
-├── 01-product/      # 제품 정의 · MVP · 유저 시나리오
+├── 01-product/      # 제품 정의 · MVP · 유저 시나리오 (미이관 — Confluence 원본 참조)
 ├── 02-domain/       # 핵심 도메인 모델 ← 구현 전 반드시 읽기
 ├── 03-system-design/# 아키텍처 · 데이터 모델 · API
 ├── 04-feature-specs/# 기능별 상세 스펙 (구현 직전 작성)
