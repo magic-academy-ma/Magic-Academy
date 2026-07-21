@@ -31,8 +31,9 @@ updated: 2026-07-21
 | `02-domain/glossary.md` | 78 | ~382 | Always |
 | `05-team-rules/conventions.md` | 88 | ~316 | Task |
 | `05-team-rules/definition-of-done.md` | 58 | ~281 | Task |
-| `05-team-rules/git-workflow.md` | 215 | ~847 | Task |
-| `05-team-rules/ai-usage.md` | 120 | ~437 | Task |
+| `05-team-rules/git-workflow-commit.md` | ~60 | ~230 | Task (구현·커밋 시) |
+| `05-team-rules/git-workflow-pr.md` | ~110 | ~420 | Task (PR 작성·리뷰 시) |
+| `05-team-rules/ai-usage.md` | ~80 | ~290 | Task |
 | `decisions/README.md` | 50 | ~158 | Task |
 | `README.md` | 12 | ~211 | Skip |
 | `_meta/SYNC.md` | 116 | ~1,020 | Skip |
@@ -75,9 +76,10 @@ Always Load 전체 + 아래 추가:
 ```
 docs/05-team-rules/conventions.md
 docs/05-team-rules/definition-of-done.md
+docs/05-team-rules/git-workflow-commit.md
 ```
 
-**추가 이유**: 폴더 구조·네이밍 컨벤션, 완료 기준을 확인해야 구현 방향이 팀 규칙과 어긋나지 않는다.  
+**추가 이유**: 폴더 구조·네이밍 컨벤션, 완료 기준, 브랜치·커밋 형식을 확인해야 구현 방향이 팀 규칙과 어긋나지 않는다.  
 해당 기능 스펙이 있으면 `docs/04-feature-specs/<기능명>.md`도 필수 로드 (구현 직전).
 
 ### 버그 수정
@@ -86,10 +88,11 @@ Always Load 전체 + 아래 추가:
 
 ```
 docs/05-team-rules/conventions.md
+docs/05-team-rules/git-workflow-commit.md
 ```
 
-**추가 이유**: 수정 후 변수명·폴더 위치가 컨벤션에 맞는지 확인이 필요하다.  
-git-workflow, definition-of-done은 버그 수정 시 불필요 — PR 작성 단계에서 로드한다.
+**추가 이유**: 수정 후 변수명·폴더 위치가 컨벤션에 맞는지, 커밋 타입이 올바른지 확인이 필요하다.  
+git-workflow-pr, definition-of-done은 버그 수정 시 불필요 — PR 작성 단계에서 로드한다.
 
 ### 문서 작업 / 이관
 
@@ -110,12 +113,12 @@ docs/05-team-rules/definition-of-done.md
 Always Load 중 `00-start-here/` 3종 + 아래:
 
 ```
-docs/05-team-rules/git-workflow.md
+docs/05-team-rules/git-workflow-pr.md
 docs/05-team-rules/definition-of-done.md
 docs/05-team-rules/ai-usage.md
 ```
 
-**추가 이유**: PR 제목·본문 형식, 커밋 타입, 리뷰 코멘트 태그(`[Must]`, `[Suggest]` 등), AI 사용 여부 표기가 모두 이 세 파일에 정의돼 있다. 도메인 파일은 코드 변경 내용을 이미 작성한 시점에 불필요하다.
+**추가 이유**: PR 제목·본문 형식, 리뷰 코멘트 태그(`[Must]`, `[Suggest]` 등), AI 사용 여부 표기가 git-workflow-pr에 정의돼 있다. 브랜치·커밋 파일(git-workflow-commit)과 도메인 파일은 이 시점에 불필요하다.
 
 ---
 
