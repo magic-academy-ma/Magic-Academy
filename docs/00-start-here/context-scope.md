@@ -64,7 +64,7 @@ docs/02-domain/glossary.md
 ```
 
 **이유**:
-- `00-start-here/` 3종: 프로젝트 방향, 확정/미정 경계를 파악하지 못하면 임의 결정이 발생한다. 모든 작업의 전제 조건.
+- `00-start-here/` 4종: 프로젝트 방향, 확정/미정 경계를 파악하지 못하면 임의 결정이 발생한다. 모든 작업의 전제 조건.
 - `02-domain/` 7종: 이 프로젝트는 도메인 용어(3축, Tick, Agent 종류, 관계 척도)가 코드 구조와 직결된다. 도메인을 모르면 잘못된 변수명, 잘못된 관계 방향, 잘못된 사건 분류가 생긴다.
 - `00-start-here/context-quality.md`: AI context 충분성을 작업 시작 전에 판단하는 기준. 이 파일 없이는 AI가 잘못된 컨텍스트로 작업을 시작해도 알아차릴 수 없다.
 
@@ -113,7 +113,7 @@ docs/05-team-rules/definition-of-done.md
 
 ### PR 작성·리뷰
 
-Always Load 중 `00-start-here/` 3종 + 아래:
+Always Load 중 `00-start-here/` 4종 + 아래:
 
 ```
 docs/05-team-rules/git-workflow-pr.md

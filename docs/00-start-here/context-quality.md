@@ -29,7 +29,7 @@ updated: 2026-07-23
 
 ## 파트 2 — 문서 관리자 점검 (작성·갱신·PR 머지 전)
 
-- [ ] **frontmatter**: `title`, `status`, `updated`, `source_updated` 필드가 모두 채워져 있는가
+- [ ] **frontmatter**: `title`, `status`, `updated` 필드가 채워져 있는가 (Confluence 이관 파일은 `source_updated`도 필요)
 - [ ] **미정 명시**: 확정되지 않은 내용에 `[미정]` 표시가 있는가
 - [ ] **크로스링크**: 관련 문서를 상대 경로로 참조하고 있는가
 - [ ] **토큰 효율**: 불필요한 중복·설명 없이 핵심만 담겨 있는가
