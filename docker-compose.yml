@@ -1,0 +1,90 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: magic-academy-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-magic_academy}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-magic_academy}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+    networks:
+      - magic-net
+
+  backend:
+    build:
+      context: ./backend
+
+    container_name: magic-academy-backend
+
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
+    volumes:
+      - ./backend:/app
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-magic_academy}
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - magic-net
+
+  frontend:
+    build:
+      context: ./frontend
+
+    container_name: magic-academy-frontend
+
+    command: npm run dev -- --host
+
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+
+    ports:
+      - "5173:5173"
+
+    depends_on:
+      - backend
+
+    networks:
+      - magic-net
+
+networks:
+  magic-net:
+    driver: bridge
+
+volumes:
+  pgdata:
