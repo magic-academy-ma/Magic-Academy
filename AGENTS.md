@@ -190,3 +190,97 @@ docs/
 > 영향 범위: [대상]  
 > 되돌릴 수 있는지: [가능 / 불가능]  
 > 진행할까요?
+
+---
+
+## 역할별 페르소나
+
+> **세션 시작 전**: 아래 본인 페르소나를 확인하고, 지정된 자동 로딩 문서를 읽는다.  
+> 은혜 선택 기준: 시스템 구현 → `@system` / Issue·스펙 → `@pm` / AI 환경 관리 → `@ai-native`  
+> 지유 선택 기준: DB·Docker·인프라 → `@infra` / Professor Agent 설계 → `@agent-dev`  
+> 역할 침범 방지: 본인 영역 밖을 수정해야 할 경우 해당 페르소나 담당자에게 먼저 확인
+
+### @system — 은혜
+
+**주요 담당**: Event Master Agent, Tick Engine, 시스템 오케스트레이션
+
+**자동 로딩 문서**
+- `docs/02-domain/`
+- `docs/03-system-design/`
+- `docs/04-feature-specs/event-master/`
+- `docs/04-feature-specs/tick-engine/`
+
+---
+
+### @pm — 은혜 (+ 공통)
+
+**주요 담당**: Issue 작성, 스펙 초안, 요구사항 명확화, 범위 관리
+
+**자동 로딩 문서**
+- `docs/01-product/`
+- `docs/04-feature-specs/`
+- `docs/02-domain/`
+
+---
+
+### @ai-native — 은혜
+
+**주요 담당**: AGENTS.md·Skills 설계, AI context 문서 관리, Claude Code 설정
+
+**자동 로딩 문서**
+- `docs/00-start-here/`
+- `docs/05-team-rules/`
+- `docs/superpowers/`
+
+---
+
+### @agent-dev — 가윤·지유 (공통)
+
+**주요 담당**: Agent 캐릭터·페르소나 정의, Agent 행동 설계, LangGraph 노드, Agent Runtime
+
+**자동 로딩 문서**
+- `docs/02-domain/`
+- `docs/03-system-design/`
+- `docs/04-feature-specs/agent-runtime/`
+- `docs/04-feature-specs/agent-design/`
+
+---
+
+### @magic-layer — 혜정
+
+**주요 담당**: Magic Layer Agent, Frontend (React Flow)
+
+**자동 로딩 문서**
+- `docs/02-domain/`
+- `docs/03-system-design/`
+- `docs/04-feature-specs/magic-layer/`
+
+---
+
+### @infra — 지유
+
+**주요 담당**: PostgreSQL+pgvector, Docker, CI/CD
+
+**자동 로딩 문서**
+- `docs/03-system-design/data-model/`
+- `docs/05-team-rules/`
+
+---
+
+### @backend — 공통 (4명)
+
+**주요 담당**: FastAPI 라우터, API 설계, 공통 BE 패턴
+
+**자동 로딩 문서**
+- `docs/03-system-design/api/`
+- `docs/05-team-rules/`
+
+---
+
+### @fe — 공통 (4명)
+
+**주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 표시
+
+**자동 로딩 문서**
+- `docs/03-system-design/`
+- `docs/04-feature-specs/` (FE 관련)
