@@ -16,7 +16,11 @@
 
 ## 실행 순서
 
-1. `git diff develop...HEAD` 또는 사용자가 지정한 범위로 diff를 가져온다
+1. base 브랜치를 결정한다:
+   - 사용자가 명시한 경우 그 값 사용
+   - `git rev-parse --abbrev-ref @{u}` 로 upstream 확인
+   - upstream이 없으면 사용자에게 base 브랜치를 확인한다
+   - `git diff {base}...HEAD` 로 diff를 가져온다
 2. 변경 파일 목록과 변경 규모를 파악한다
 3. 아래 관점으로 검토한다:
    - 작업 범위 준수 — 요청 범위 밖의 변경이 포함됐는가

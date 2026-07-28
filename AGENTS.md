@@ -3,7 +3,7 @@
 Magic Academy — 마법 대학교를 배경으로 한 멀티 에이전트 LLM 시뮬레이션.  
 agent들이 관계·조직·사건 속에서 상호작용하며 상태가 변화한다.
 
-**현재 상태**: 구현 단계 — Week 3 시작 (2026-07-21 기준)
+**현재 상태**: 구현 단계 — Week 4 (2026-07-28 기준)
 
 ---
 
@@ -17,7 +17,7 @@ agent들이 관계·조직·사건 속에서 상호작용하며 상태가 변화
 | 프론트엔드 | React |
 | 인프라 | Docker Compose |
 
-- **Agent 수 (초기 / MVP)**: Student 초기 5명, MVP 8~10명 / Professor 5 / Event Master 1 / Magic Agent 1
+- **Agent 수**: 생활 Agent 6명 — Student 5명(User Persona 1명 포함) + Professor 1명 (1단계 MVP) / 2단계 13명, 3단계 25명으로 확장 / Event Master 1 + Magic Layer 1 (시스템 컴포넌트, 생활 Agent 수에서 제외)
 - **실행 명령어**: 아직 코드 없음 — `docs/05-team-rules/`에서 환경 설정 가이드 확인
 
 ---
@@ -60,7 +60,7 @@ docs/
 - **사건** — 관계와 조직을 변화시키는 트리거 (수업·시험·MT·축제…)
 
 배경(시간·공간·날씨·학기)은 3축에 영향을 주지만 스스로 방향을 만들지 않는다.  
-시간은 **Time Tick** 기반이다 — **24분 = 1일**, 밤 시간은 스킵 가능.
+시간은 **Time Tick** 기반이다 — **1 Tick = 8분 = 1블록**, 1일 = 3블록 = 24분, 밤 시간은 스킵 가능.
 
 새 엔티티나 관계/사건 타입은 이 3축 프레임에 맞춰 정의한다.
 
@@ -197,7 +197,9 @@ docs/
 
 > **세션 시작 전**: 아래 본인 페르소나를 확인하고, 지정된 자동 로딩 문서를 읽는다.  
 > 은혜 선택 기준: 시스템 구현 → `@system` / Issue·스펙 → `@pm` / AI 환경 관리 → `@ai-native`  
+> 가윤 선택 기준: Agent 캐릭터·행동 설계 → `@agent-dev`  
 > 지유 선택 기준: DB·Docker·인프라 → `@infra` / Professor Agent 설계 → `@agent-dev`  
+> 혜정 선택 기준: Magic Layer·Frontend → `@magic-layer`  
 > 역할 침범 방지: 본인 영역 밖을 수정해야 할 경우 해당 페르소나 담당자에게 먼저 확인
 
 ### @system — 은혜
@@ -207,8 +209,8 @@ docs/
 **자동 로딩 문서**
 - `docs/02-domain/`
 - `docs/03-system-design/`
-- `docs/04-feature-specs/event-master/`
-- `docs/04-feature-specs/tick-engine/`
+- `docs/04-feature-specs/event-master/` (미구현, 추후 추가)
+- `docs/04-feature-specs/tick-engine/` (미구현, 추후 추가)
 
 ---
 
@@ -230,7 +232,7 @@ docs/
 **자동 로딩 문서**
 - `docs/00-start-here/`
 - `docs/05-team-rules/`
-- `docs/superpowers/`
+- `docs/superpowers/` (미구현, 추후 추가)
 
 ---
 
@@ -241,8 +243,8 @@ docs/
 **자동 로딩 문서**
 - `docs/02-domain/`
 - `docs/03-system-design/`
-- `docs/04-feature-specs/agent-runtime/`
-- `docs/04-feature-specs/agent-design/`
+- `docs/04-feature-specs/agent-runtime/` (미구현, 추후 추가)
+- `docs/04-feature-specs/agent-design/` (미구현, 추후 추가)
 
 ---
 
@@ -253,7 +255,7 @@ docs/
 **자동 로딩 문서**
 - `docs/02-domain/`
 - `docs/03-system-design/`
-- `docs/04-feature-specs/magic-layer/`
+- `docs/04-feature-specs/magic-layer/` (미구현, 추후 추가)
 
 ---
 

@@ -12,7 +12,7 @@ Agent 이름과 역할을 받아 페르소나·행동 규칙·LangGraph 노드 �
 ## 사전 확인
 
 - `docs/02-domain/`을 읽어 도메인 모델(Agent, 관계, 조직, 사건)과 어긋나지 않는지 확인한다
-- `docs/04-feature-specs/agent-design/` 또는 `agent-runtime/`에 기존 스펙이 있으면 참조한다
+- `docs/04-feature-specs/agent-design/` 또는 `agent-runtime/`에 기존 스펙이 있으면 참조한다 (미구현 시 생략)
 - 미정 항목(`docs/00-start-here/what-is-pending.md`)과 교차하는 부분은 명시하고 임의 확정하지 않는다
 
 ## 출력 형식
@@ -61,7 +61,7 @@ Agent 이름과 역할을 받아 페르소나·행동 규칙·LangGraph 노드 �
 ## 6. 관련 문서
 
 - `docs/02-domain/`
-- `docs/04-feature-specs/agent-design/`
+- `docs/04-feature-specs/agent-design/` (미구현, 생성 후 추가)
 ```
 
 ## 주의

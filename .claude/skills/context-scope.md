@@ -17,22 +17,19 @@
 
 ## 출력 형식
 
+`docs/00-start-here/context-scope.md`의 해당 섹션 내용을 그대로 인용한 뒤, 아래 항목을 추가한다.
+
 ```
 ## 컨텍스트 로딩 범위 — {작업 유형}
 
-### Always Load (모든 작업 공통)
-- docs/00-start-here/index.md
-- docs/00-start-here/what-is-decided.md
-- docs/00-start-here/what-is-pending.md
-- docs/02-domain/ (7개 파일)
-- docs/00-start-here/context-quality.md
+### Always Load
+(context-scope.md의 Always Load 섹션 그대로 인용)
 
 ### 이 작업에 추가로 필요한 파일
-- {파일 경로} — {이유 한 줄}
+(context-scope.md의 해당 Task-Specific 섹션 그대로 인용)
 
 ### 이 작업에서 Skip할 파일
-- docs/_meta/SYNC.md — 이관 운영 문서, 불필요
-- (기타)
+(context-scope.md의 해당 내용 그대로 인용)
 
 ### 예상 총 토큰
 ~{숫자} 토큰
