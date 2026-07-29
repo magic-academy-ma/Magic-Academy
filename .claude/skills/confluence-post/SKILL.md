@@ -1,3 +1,7 @@
+---
+description: 문서 초안을 받아 Confluence 페이지를 생성하고 Discord 공지 문구를 출력할 때 사용
+---
+
 # /confluence-post
 
 문서 초안을 받아 Confluence 페이지를 생성하고 Discord 공지 문구를 출력한다.

@@ -1,3 +1,7 @@
+---
+description: 사용 가능한 Magic Academy Skills와 페르소나 목록을 출력할 때 사용
+---
+
 # /help
 
 Magic Academy에서 사용 가능한 Claude Skills 목록을 출력한다.

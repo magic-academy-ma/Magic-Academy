@@ -1,3 +1,7 @@
+---
+description: Agent 이름과 역할을 받아 페르소나·행동 규칙·LangGraph 노드 인터페이스 초안을 생성할 때 사용
+---
+
 # /agent-spec
 
 Agent 이름과 역할을 받아 페르소나·행동 규칙·LangGraph 노드 인터페이스 초안을 생성한다.

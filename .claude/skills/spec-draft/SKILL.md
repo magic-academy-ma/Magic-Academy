@@ -1,3 +1,7 @@
+---
+description: 기능 설명을 받아 docs/04-feature-specs/ 형식의 스펙 초안을 생성할 때 사용
+---
+
 # /spec-draft
 
 기능 설명을 받아 `docs/04-feature-specs/` 형식에 맞는 스펙 초안을 생성한다.

@@ -1,3 +1,7 @@
+---
+description: PR 변경사항을 [Must]/[Question]/[Suggest]/[Nit]/[Good] 태그 기반으로 코드 리뷰할 때 사용
+---
+
 # /pr-review
 
 현재 브랜치의 diff를 분석해 태그 기반 리뷰 코멘트를 생성한다.
@@ -18,9 +22,9 @@
 
 1. base 브랜치를 결정한다:
    - 사용자가 명시한 경우 그 값 사용
-   - `git rev-parse --abbrev-ref @{u}` 로 upstream 확인
-   - upstream이 없으면 사용자에게 base 브랜치를 확인한다
-   - `git diff {base}...HEAD` 로 diff를 가져온다
+   - `gh pr view --json baseRefName --jq .baseRefName` 으로 PR base 조회
+   - PR이 없으면 사용자에게 base 브랜치를 확인한다
+   - `git diff origin/{base}...HEAD` 로 diff를 가져온다
 2. 변경 파일 목록과 변경 규모를 파악한다
 3. 아래 관점으로 검토한다:
    - 작업 범위 준수 — 요청 범위 밖의 변경이 포함됐는가

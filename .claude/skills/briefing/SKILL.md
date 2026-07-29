@@ -1,3 +1,7 @@
+---
+description: 세션 작업 상태를 Done / In progress / Next 형식으로 정리할 때 사용
+---
+
 # /briefing
 
 현재 세션의 작업 상태를 Done / In progress / Next 형식으로 정리한다.

@@ -1,3 +1,7 @@
+---
+description: 작업 내용을 받아 Magic Academy GitHub Issue 초안을 생성할 때 사용
+---
+
 # /issue-writer
 
 작업 내용을 받아 Magic Academy GitHub Issue 초안을 생성한다.
@@ -46,7 +50,7 @@
 
 ## MA 프로젝트 컨텍스트
 
-- 저장소: Je-hye/Magic-Academy (Public)
+- 저장소: magic-academy-ma/Magic-Academy (Public)
 - 브랜치 규칙: Issue 생성 후 `feature/issue-{번호}-{작업명}` 브랜치 분기
 - 타깃 브랜치: `develop` (main 직접 push 금지)
 - 시크릿·개인정보·팀원 개인 KPI를 Issue에 포함하지 않는다
