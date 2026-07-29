@@ -90,11 +90,11 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 05. Tech / ERD·데이터 모델 | `03-system-design/data-model.md` | 2026-07-13 |
 | ✅ | 05. Tech / API 명세 (#12451842, v1.1, 구 #10911849 trashed) | `03-system-design/api-spec.md` | 2026-07-13 |
 | ✅ | 05. Tech / 배포·인프라 | `03-system-design/infra.md` | 2026-07-13 |
-| ⬜ | 05. Tech / Tick Engine 스펙 (#12910622) | `03-system-design/tick-engine.md` | 2026-07-28 |
-| ⬜ | 05. Tech / Agent Runtime 설계 (#11894790) | `03-system-design/agent-runtime.md` | 2026-07-28 |
-| ⬜ | 05. Tech / Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 2026-07-28 |
-| ⬜ | 05. Tech / Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-07-28 |
-| ⬜ | 05. Tech / User Flow (#17367076) | `03-system-design/user-flow.md` | 2026-07-28 |
+| ✅ | 05. Tech / Tick Engine 스펙 (#12910622) | `03-system-design/tick-engine.md` | 2026-07-28 |
+| ✅ | 05. Tech / Agent Runtime 설계 (#11894790) | `03-system-design/agent-runtime.md` | 2026-07-28 |
+| ✅ | 05. Tech / Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 2026-07-28 |
+| ✅ | 05. Tech / Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-07-28 |
+| ✅ | 05. Tech / User Flow (#17367076) | `03-system-design/user-flow.md` | 2026-07-28 |
 
 ### 05-team-rules/
 
