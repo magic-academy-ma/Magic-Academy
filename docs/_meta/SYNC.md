@@ -72,14 +72,14 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 
 | 상태 | Confluence 문서 | docs/ 파일 | 추가일 |
 |------|----------------|------------|--------|
-| ⬜ | 02. Product Planning / 프로젝트 개요 | `01-product/overview.md` | 2026-07-13 |
-| ⬜ | 02. Product Planning / 문제 정의 | `01-product/overview.md` (병합) | 2026-07-13 |
-| ⬜ | 02. Product Planning / 타겟 사용자 | `01-product/target-users.md` | 2026-07-13 |
-| ⬜ | 02. Product Planning / MVP 범위 | `01-product/mvp-scope.md` | 2026-07-13 |
-| ⬜ | 02. Product Planning / 기능 우선순위 | `01-product/mvp-scope.md` (병합) | 2026-07-13 |
-| ⬜ | 02. Product Planning / 사용자 시나리오 | `01-product/user-scenarios.md` | 2026-07-13 |
-| ⬜ | 03. Requirements / 기능 요구사항 | `01-product/functional-requirements.md` | 2026-07-13 |
-| ⬜ | 03. Requirements / 비기능 요구사항 | `01-product/non-functional-requirements.md` | 2026-07-13 |
+| ✅ | 02. Product Planning / MVP 범위 (#17989637) | `01-product/mvp-scope.md` | 2026-07-29 |
+| ✅ | 02. Product Planning / 기능 우선순위 (#17956886) | `01-product/mvp-scope.md` (병합) | 2026-07-29 |
+| ✅ | 03. Requirements / 핵심 기능 정의 (#16777846) | `01-product/functional-requirements.md` | 2026-07-29 |
+| — | 02. Product Planning / 프로젝트 개요 | 이관 제외 — `what-is-decided.md`에 포함 | 2026-07-13 |
+| — | 02. Product Planning / 문제 정의 | 이관 제외 — `what-is-decided.md`에 포함 | 2026-07-13 |
+| — | 02. Product Planning / 타겟 사용자 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
+| — | 02. Product Planning / 사용자 시나리오 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
+| — | 03. Requirements / 비기능 요구사항 | 이관 불가 — Confluence 미존재 | 2026-07-13 |
 
 ### 03-system-design/
 
