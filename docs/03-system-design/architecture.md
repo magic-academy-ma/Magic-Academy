@@ -4,18 +4,18 @@ source: confluence/05_TECH/architecture.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
 status: approved
 visibility: public
-updated: 2026-07-21
-source_updated: 2026-07-18
+updated: 2026-07-28
+source_updated: 2026-07-28
 ---
 
 ## 1. 시스템 개요
 
-마법 대학교 배경 25명 Agent 멀티에이전트 LLM 시뮬레이션.
+마법 대학교를 배경으로 생활 Agent 6명부터 시작해 단계적으로 확장하는 멀티에이전트 LLM 시뮬레이션.
 
 | 제약 | 값 |
 | --- | --- |
-| Agent 수 | 학생 20명 + 교수 5명 + Event Master 1명 + Magic Layer 1명 |
-| 시간 단위 | 1 Tick = 24분 = 1일 |
+| Agent 수 | 1단계: 생활 Agent 6명(Student 5명 중 User Persona 1명 포함 + Professor 1명). 2단계 13명, 3단계 25명으로 확장. Event Master와 Magic Layer는 시스템 컴포넌트로 별도 관리 |
+| 시간 단위 | 1 Tick = 8분 = 1블록, 1일 = 3블록 = 24분 |
 | 하루 구조 | 3블록 (아침 / 오후 / 저녁), 밤 스킵 |
 | 병렬 실행 | asyncio.gather + Semaphore(10) |
 
@@ -33,7 +33,7 @@ source_updated: 2026-07-18
 │   asyncio)   │  (Sonnet 4.6)    │  (Haiku 4.5)   │
 ├──────────────┴────────┬─────────┴────────────────┤
 │  Agent Runtime        │  Domain Services          │
-│  (LangGraph, 25명)    │  (관계·조직·사건 계산)    │
+│  (LangGraph, 6명 MVP) │  (관계·조직·사건 계산)    │
 │  Haiku 4.5            │                           │
 ├───────────────────────┴───────────────────────────┤
 │  Persistence: PostgreSQL + pgvector               │
@@ -54,7 +54,7 @@ Tick Engine (APScheduler + asyncio)
     │           ↓
     ├──→ Magic Layer (Haiku 4.5)  —  ① 마법 세계관 변환  ② 30% 특수 사건 추가
     │           ↓
-    └──→ Agent Runtime × 25명 병렬 (Haiku 4.5, LangGraph 7노드)
+    └──→ Agent Runtime × 6명 병렬 (1단계 MVP, Haiku 4.5, LangGraph 7노드)
                 ↓  Intent
 Domain Services  —  Intent 수집 → Conflict Resolve → Commit
     ↓
@@ -74,7 +74,7 @@ Frontend
 | Tick Engine | tick 트리거, world state snapshot 생성, 전체 파이프라인 조율 | — | APScheduler in-process |
 | Event Master Agent | 매 tick 일반 대학 생활 이벤트 생성 (수업·과제·과팅·시험 등) | Sonnet 4.6 | 단일 LLM 호출 |
 | Magic Layer | ① Event Master 이벤트 마법 세계관 변환 ② 30% 확률 마법 특수 사건 생성 | Haiku 4.5 | 별도 담당 |
-| Agent Runtime | 25명 병렬 실행 (LangGraph 7노드), Intent 반환 | Haiku 4.5 | asyncio.gather + Semaphore(10) |
+| Agent Runtime | 1단계 생활 Agent 6명 병렬 실행 (LangGraph 7노드), Intent 반환. 2단계 13명, 3단계 25명으로 확장 | Haiku 4.5 | asyncio.gather + Semaphore(10) |
 | Domain Services | Intent 수집 → Conflict Resolve → DB Commit | — | DB 직접 수정 담당 |
 | API Layer | REST + WebSocket 라우터 | — | FastAPI 내장 WS |
 
@@ -122,7 +122,7 @@ backend/
     - ② 30% 확률로 마법 특수 사건 추가 생성 (폭발·저주·실종 등)
     - 생성된 이벤트는 동일 events 테이블에 source = 'magic_layer' 로 저장
 
-[4] StudentAgentGraph — 25명 병렬 실행
+[4] Agent Runtime — 생활 Agent 6명 병렬 실행 (1단계 MVP)
     - 입력: world state snapshot + 개인 memory + 관계 정보 + 현재 이벤트
     - asyncio.gather() + semaphore(max=10) 동시 호출 제한
     - Agent별 LangGraph 실행 (7노드):
@@ -136,7 +136,7 @@ backend/
     - 각 Agent: DB 직접 수정 없이 Intent만 반환
 
 [5] Intent Collector
-    - 25명 Agent의 Intent 수집
+    - 현재 단계의 생활 Agent Intent 수집
 
 [6] Conflict Resolver
     - 같은 tick, 같은 관계에 복수 delta → 합산 후 clamp(-100, +100)
@@ -201,3 +201,5 @@ backend/
 | v1.0 | 2026-07-13 | 초안 작성 — 선행조사 11개 기반, 회의 출발점. 미확정 항목 §8 포함. |
 | v2.0 | 2026-07-18 | 구성 재편 — §1 시스템 개요 추가. Magic Layer 실행 위치 확정 반영. 레이어 방향도 추가. §5 주요 인터페이스 신설. 토큰 비용·미확정 항목 섹션 삭제. |
 | v2.1 | 2026-07-18 | 레이어 방향도 수정 — world state snapshot 공유 입력 및 수신 컴포넌트 명시. |
+| v2.2 | 2026-07-23 | Agent Runtime을 1단계 생활 Agent 6명, 2단계 13명, 3단계 25명으로 정정하고 아키텍처 도식·책임표·실행 흐름에 반영했다. Event Master와 Magic Layer는 생활 Agent 수에서 제외했다. |
+| v2.3 | 2026-07-28 | Tick 단위를 Tick Engine 스펙(#12910622) 기준으로 정정. 1 Tick = 8분 = 1블록, 1일 = 3블록 = 24분. |

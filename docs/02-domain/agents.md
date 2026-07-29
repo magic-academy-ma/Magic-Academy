@@ -4,26 +4,39 @@ source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "Magic Layer 설계 (Confluence #6619141)"
   - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
+  - "시스템 아키텍처 v2.3 (Confluence #8290305)"
+  - "Agent Runtime 설계 (Confluence #11894790)"
 canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/6356994
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/6619141
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
 status: approved
 visibility: public
-updated: 2026-07-13
+updated: 2026-07-28
 ---
 
 # Agent 정의
 
-## MVP Agent 구성
+## Agent 구성
 
-| Agent 종류 | 수량 | 역할 | 출처 |
-|-----------|------|------|------|
-| Student Agent | 20 (세계 설계) / 초기 5 · MVP 8~10 (구현) | 시뮬레이션의 주체. 관계·조직·사건의 중심 | Spec §FR-01 |
-| Professor Agent | 5 | 수업·시험·조별과제 등 학사 사건의 진행자 | Spec §FR-01 |
+### 생활 Agent (1단계 MVP: 6명)
+
+| Agent 종류 | 1단계 | 역할 | 출처 |
+|-----------|-------|------|------|
+| Student Agent | 5명 (User Persona 1명 포함) | 시뮬레이션의 주체. 관계·조직·사건의 중심 | Spec §FR-01, 아키텍처 v2.3 |
+| Professor Agent | 1명 | 수업·시험·조별과제 등 학사 사건의 진행자 | Spec §FR-01, 아키텍처 v2.3 |
+
+2단계 13명, 3단계 25명으로 확장 예정.
+
+### 시스템 컴포넌트 (생활 Agent 수 제외)
+
+| 컴포넌트 | 수량 | 역할 | 출처 |
+|---------|------|------|------|
 | Event Master Agent | 1 | 매 Tick 사건 생성 오케스트레이터 | Spec §FR-05, FR-09 |
-| Magic Agent | 1 | 마법 세계 특화 사건 생성 · Magic Layer 운영 | Magic Layer 설계 |
+| Magic Layer | 1 | 마법 세계관 변환 + 30% 특수 사건 생성 | Magic Layer 설계 (Confluence #6619141) |
 
-> **User Persona**: 별도 Agent 아님. Student 20명 중 1명을 사용자가 지정하며, 해당 Agent의 성격·성향을 수정할 수 있다. 직접 조종은 MVP 제외.
+> **User Persona**: 별도 Agent 아님. Student 5명 중 1명을 사용자가 지정하며, 해당 Agent의 성격·성향(Big Five)을 수정할 수 있다. 직접 조종 불가.
 
 ---
 
@@ -43,29 +56,29 @@ updated: 2026-07-13
 
 ## Student Agent
 
-- **수량**: 20명 (한 반 기준, 세계 설계 규모) — Spec §FR-01
-- **구현 규모**: 초기 구현 5명, MVP 8~10명 (AGENTS.md 기준)
-- **memory 보유 상한**: 최대 10개 (핵심 리스크: 토큰 비용) — Spec §FR-02
+- **1단계 수량**: 5명 (User Persona 1명 포함) — 아키텍처 v2.3 (Confluence #8290305)
+- **memory 보유 상한**: 최대 10개 — Spec §FR-02
 - **조직 소속**: 전공 1개 + 기숙사 1개 + 동아리 0~1개 + 총학생회(선택)
 - **학년**: 1~4학년 중 전공별 랜덤 배정
-- 성격·성향을 개별 부여할 수 있으며, 주인공적 성격 부여 가능
-- **User Persona 지정**: 20명 중 1명을 사용자가 지정. 해당 Agent의 성격·성향만 수정 가능. 직접 조종 불가 (MVP 제외)
+- **Big Five 성격**: openness, conscientiousness, extraversion, agreeableness, emotional_stability (각 0~100 SMALLINT)
+- **User Persona 지정**: 5명 중 1명을 사용자가 지정. Big Five 성향만 수정 가능. 직접 조종 불가.
 
 ## Professor Agent
 
-- **수량**: 5명 (교양 교수 1 + 전공 교수 4) — Spec §FR-01
+- **1단계 수량**: 1명 — 아키텍처 v2.3 (Confluence #8290305)
 - 담당 과목의 수업·시험·조별과제 사건을 진행
 - 학생 Agent와 관계(신뢰도·의존도 등)를 형성할 수 있음
 
-## Event Master Agent
+## Event Master Agent (시스템 컴포넌트)
 
-- **수량**: 1
+- **수량**: 1 — 생활 Agent 수에서 제외
 - **MVP 포함**: 확정 — Spec §FR-05, FR-09
 - 역할: 매 Tick 사건을 생성하는 오케스트레이터 (하루 1~2회 특별 사건 생성)
-- 모델: Sonnet (서사 품질 중요)
+- 모델: Sonnet 4.6 (서사 품질 중요)
 
-## Magic Agent
+## Magic Layer (시스템 컴포넌트)
 
-- **수량**: 1
+- **수량**: 1 — 생활 Agent 수에서 제외
 - **MVP 포함**: 확정 — Magic Layer 설계 (Confluence #6619141)
-- 역할: 마법 세계 특화 사건 생성 (마법 실험 폭발·저주·실종 등 RANDOM_INCIDENT 분기)
+- 역할: ① Event Master 이벤트 마법 세계관 변환 (매 Tick) ② 30% 확률 마법 특수 사건 생성
+- 모델: Haiku 4.5
