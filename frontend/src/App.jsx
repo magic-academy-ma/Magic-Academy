@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
 export default function App() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/students/")
+    fetch(`${API_URL}/v1/students/`)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`학생 목록 조회에 실패했습니다. (${res.status})`);

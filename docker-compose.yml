@@ -46,7 +46,13 @@ services:
       - ./backend:/app
 
     environment:
+      APP_NAME: ${APP_NAME:-Magic Academy}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-false}
+      API_V1_PREFIX: ${API_V1_PREFIX:-/v1}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-magic_academy}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
 
     ports:
       - "${BACKEND_PORT:-8000}:8000"
