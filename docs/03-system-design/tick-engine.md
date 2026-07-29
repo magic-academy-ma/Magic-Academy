@@ -74,21 +74,29 @@ source_updated: 2026-07-28
     - Professor가 관련 수업·시험·사건이 없는 Tick에는 Professor Intent를 요구하지 않음
 
 
-[6] Conflict Resolver
-    - Policy Engine이 signal을 수치 delta 후보로 변환
-    - 같은 Tick, 같은 관계·상태 metric의 승인된 delta를 합산
+[6] Policy Engine
+    - Agent Runtime이 반환한 정성적 signal과 intensity를 수치 delta 후보로 변환
+    - Action 기본 생리 효과 및 Event 기본 효과 적용
+    - Magic Layer expected_effects 허용 목록 및 상한 검증
+    - 같은 source·rule의 내부 중복 effect 제거
+    - DB를 직접 수정하지 않으며 delta 후보(effect_candidates)만 반환
+
+
+[7] Conflict Resolver
+    - 서로 다른 source에서 나온 delta 후보를 합산
+    - 같은 Tick, 같은 관계·상태 metric의 승인된 delta를 최종 합산
     - 합산 결과를 metric별 허용 범위로 clamp
     - 이벤트 중복 참여는 event_id 기준으로 dedup
 
 
-[7] DB Commit  (PostgreSQL batch write, 블록당 1회)
+[8] DB Commit  (PostgreSQL batch write, 블록당 1회)
     - 관계 변화 (relationships 테이블)
     - Agent 내부 상태 변화 (agent_states 테이블)
     - memory 저장 (agent_memories 테이블)
     - event log (events + event_participants 테이블)
 
 
-[8] WebSocket broadcast
+[9] WebSocket broadcast
     - 변경분(delta)만 프론트엔드에 push (전체 상태 아님)
 ```
 
@@ -167,7 +175,7 @@ Tick Engine (APScheduler + asyncio)  ← 이 스펙
     ↓
 Event Master Agent → Magic Layer → Agent Runtime × 6 (MVP, 확장 가능)
     ↓
-Domain Services (Intent Collector → Conflict Resolver → DB Commit)
+Domain Services (Intent Collector → Policy Engine → Conflict Resolver → DB Commit)
     ↓
 PostgreSQL + pgvector
 ```
@@ -185,3 +193,4 @@ PostgreSQL + pgvector
 | v1.2 | 2026-07-24 | Agent Runtime 출력 계약을 signal·Intent 1개·Memory 후보 방식으로 정리. Magic Layer 특수 사건 발생 기준을 world_state 조건 기반으로 확정. |
 | v1.3 | 2026-07-28 | Professor 조건부 실행, Event 저장 후보 반환과 batch commit 책임, delta 합산 및 clamp 규칙, WebSocket 상태값 표현 정정. |
 | v1.4 | 2026-07-28 | 자동·수동 야간 전환이 동일 로직을 사용하도록 정의. WebSocket 경로와 메시지 타입을 API 명세 §14 기준으로 통일. Tick batch commit 성공 이후에만 변경 메시지 발행. |
+| v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
