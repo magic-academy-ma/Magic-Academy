@@ -35,6 +35,7 @@ services:
 
     container_name: magic-academy-backend
 
+    # Development-only command: source bind mount and hot reload are not for production.
     command: >
       uvicorn app.main:app
       --host 0.0.0.0
@@ -48,7 +49,20 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-magic_academy}
 
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
     depends_on:
       db:
@@ -70,14 +84,15 @@ services:
       - /app/node_modules
 
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
 
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
 
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
     networks:
       - magic-net
