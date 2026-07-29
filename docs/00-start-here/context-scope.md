@@ -105,6 +105,7 @@ Always Load 중 `02-domain/` 7종 + 아래:
 docs/00-start-here/index.md
 docs/00-start-here/what-is-decided.md
 docs/00-start-here/what-is-pending.md
+docs/00-start-here/context-quality.md
 docs/05-team-rules/ai-usage.md
 docs/05-team-rules/definition-of-done.md
 ```

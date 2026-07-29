@@ -191,7 +191,7 @@ docs/
 - 기능 또는 프로젝트 코드를 `main`에 직접 push
 - `--force` push
 - 브랜치 삭제
-- 이미 push된 커밋 amend
+- 이미 원격에 push된 커밋 amend
 
 **파괴적 작업**
 - `rm -rf` 또는 파일·디렉터리 일괄 삭제
