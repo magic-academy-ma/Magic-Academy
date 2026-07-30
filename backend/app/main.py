@@ -1,4 +1,8 @@
+import os
+
+import psycopg
 from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.students import router as students_router
@@ -16,5 +20,18 @@ app.include_router(students_router)
 
 
 @app.get("/health")
-async def health() -> dict:
-    return {"status": "ok"}
+def health() -> dict[str, str]:
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@localhost:5432/magic_academy",
+    )
+
+    try:
+        with psycopg.connect(database_url, connect_timeout=3) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+    except psycopg.Error as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+
+    return {"status": "ok", "database": "ok"}
