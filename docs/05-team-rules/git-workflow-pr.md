@@ -136,3 +136,21 @@ Closes #이슈번호
 [Nit]      사소한 수정
 [Good]     좋은 구현 또는 유지하면 좋은 부분
 ```
+
+---
+
+## Branch Protection Rulesets
+
+`main`과 `develop` 브랜치에 GitHub Ruleset이 설정되어 있다.
+
+| 규칙 | main | develop |
+|------|------|---------|
+| PR 없이 직접 push | 차단 | 차단 |
+| PR 승인 필수 인원 | 1명 | 1명 |
+| Force push | 차단 | 차단 |
+| 브랜치 삭제 | 차단 | 차단 |
+| 새 커밋 push 시 기존 승인 무효화 | 적용 | 적용 |
+| Admin bypass | 불가 | 불가 |
+
+- `bypass_actors`를 빈 배열로 설정하여 Admin을 포함한 모든 계정에 동일하게 적용된다.
+- `feature/*` 브랜치에는 별도 ruleset이 없으며 컨벤션으로만 관리한다.
