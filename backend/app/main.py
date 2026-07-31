@@ -21,17 +21,19 @@ app.include_router(students_router)
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    database_url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/magic_academy",
-    )
-
     try:
-        with psycopg.connect(database_url, connect_timeout=3) as connection:
+        with psycopg.connect(
+            host=os.environ.get("DB_HOST", "localhost"),
+            port=int(os.environ.get("DB_PORT", "5432")),
+            dbname=os.environ.get("DB_NAME", "magic_academy"),
+            user=os.environ.get("DB_USER", "postgres"),
+            password=os.environ.get("DB_PASSWORD"),
+            connect_timeout=3,
+        ) as connection:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
-    except psycopg.Error as exc:
+    except (psycopg.Error, ValueError) as exc:
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
 
     return {"status": "ok", "database": "ok"}

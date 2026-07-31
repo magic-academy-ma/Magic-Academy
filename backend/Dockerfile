@@ -10,7 +10,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+RUN addgroup --system app \
+    && adduser --system --ingroup app app
+
+COPY --chown=app:app app ./app
+
+USER app
 
 EXPOSE 8000
 
