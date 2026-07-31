@@ -1,0 +1,111 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: magic-academy-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-magic_academy}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-magic_academy}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+    networks:
+      - magic-net
+
+  backend:
+    build:
+      context: ./backend
+
+    container_name: magic-academy-backend
+
+    # Development-only command: source bind mount and hot reload are not for production.
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
+    volumes:
+      - ./backend:/app
+
+    environment:
+      APP_NAME: ${APP_NAME:-Magic Academy}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-false}
+      API_V1_PREFIX: ${API_V1_PREFIX:-/v1}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-magic_academy}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - magic-net
+
+  frontend:
+    build:
+      context: ./frontend
+
+    container_name: magic-academy-frontend
+
+    command: npm run dev -- --host
+
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000}
+
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - magic-net
+
+networks:
+  magic-net:
+    driver: bridge
+
+volumes:
+  pgdata:
