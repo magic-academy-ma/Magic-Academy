@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -12,7 +13,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/v1"
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/magic_academy"
+    database_url: str | None = None
+    db_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_db: str = "magic_academy"
+    postgres_user: str = "postgres"
+    postgres_password: str | None = None
     cors_origins: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(
@@ -26,10 +32,19 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
-    def sqlalchemy_database_url(self) -> str:
-        if self.database_url.startswith("postgresql://"):
+    def sqlalchemy_database_url(self) -> str | URL:
+        if self.database_url and self.database_url.startswith("postgresql://"):
             return self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-        return self.database_url
+        if self.database_url:
+            return self.database_url
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.postgres_user,
+            password=self.postgres_password,
+            host=self.db_host,
+            port=self.postgres_port,
+            database=self.postgres_db,
+        )
 
 
 @lru_cache
