@@ -5,6 +5,7 @@ AI 학생들이 살아가는 마법학교에서 관계, 조직, 사건이 스스
 ## 로컬 실행
 
 저장소 루트에서 환경변수 파일을 만들고 `POSTGRES_PASSWORD`에 로컬 개발용 비밀번호를 설정합니다.
+`JWT_SECRET`에도 충분히 긴 로컬 서명 키를 설정해야 합니다.
 
 ```bash
 cp .env.example .env
@@ -49,6 +50,20 @@ uvicorn app.main:app --reload
 - API base URL: http://localhost:8000/v1
 
 Backend는 도메인 중심 모듈 구조를 사용합니다.
+
+Backend 컨테이너는 시작할 때 `alembic upgrade head`를 실행합니다. 기존
+Simulation 행이 있는 DB에 owner migration을 처음 적용할 때는 자동 소유자를
+배정하지 않고 중단하므로, 사용자별 `owner_id` backfill이 먼저 필요합니다.
+
+### 테스트
+
+```bash
+docker compose exec backend python -m pytest -q
+docker compose exec frontend npm run lint
+docker compose exec frontend npm run test -- --run
+docker compose exec frontend npm run build
+npm --prefix frontend run test:e2e
+```
 
 ```text
 backend/app/

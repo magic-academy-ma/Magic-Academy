@@ -33,6 +33,17 @@ class TimestampMixin:
     )
 
 
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[\"USER\"]'::jsonb"))
+
+
 class Simulation(TimestampMixin, Base):
     __tablename__ = "simulations"
     __table_args__ = (
@@ -42,9 +53,13 @@ class Simulation(TimestampMixin, Base):
         ),
         CheckConstraint("current_day >= 1", name="ck_simulations_current_day"),
         CheckConstraint("current_tick >= 0", name="ck_simulations_current_tick"),
+        Index("idx_simulations_owner_created", "owner_id", text("created_at DESC")),
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="ready")
     current_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
@@ -75,6 +90,7 @@ class Agent(TimestampMixin, Base):
     __tablename__ = "agents"
     __table_args__ = (
         UniqueConstraint("simulation_id", "id", name="uq_agents_simulation_id_id"),
+        UniqueConstraint("simulation_id", "fixture_key", name="uq_agents_simulation_fixture_key"),
         CheckConstraint("agent_type IN ('student', 'professor', 'user_persona')", name="ck_agents_agent_type"),
         CheckConstraint("gender IS NULL OR gender IN ('male', 'female', 'non_binary', 'unspecified')", name="ck_agents_gender"),
         CheckConstraint("mbti_type IN ('ISTJ', 'ESTP', 'INFP', 'ENTJ', 'ESFJ')", name="ck_agents_mbti_type"),
@@ -84,6 +100,7 @@ class Agent(TimestampMixin, Base):
         CheckConstraint("agreeableness BETWEEN 0 AND 100", name="ck_agents_agreeableness"),
         CheckConstraint("emotional_stability BETWEEN 0 AND 100", name="ck_agents_emotional_stability"),
         CheckConstraint("inactive_until_tick IS NULL OR inactive_until_tick >= 0", name="ck_agents_inactive_until_tick"),
+        CheckConstraint("grade IS NULL OR grade BETWEEN 1 AND 4", name="ck_agents_grade"),
         Index("uq_agents_active_user_persona", "simulation_id", unique=True, postgresql_where=text("agent_type = 'user_persona' AND deleted_at IS NULL")),
         Index("idx_agents_simulation_id", "simulation_id", "id"),
         Index("idx_agents_runtime_active", "simulation_id", "active_status", "inactive_until_tick"),
@@ -91,11 +108,14 @@ class Agent(TimestampMixin, Base):
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     simulation_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False)
+    fixture_key: Mapped[str | None] = mapped_column(String(50))
+    fixture_version: Mapped[str | None] = mapped_column(String(50))
     agent_type: Mapped[str] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     gender: Mapped[str | None] = mapped_column(String(20))
     personality_type: Mapped[str | None] = mapped_column(String(30))
     mbti_type: Mapped[str] = mapped_column(String(4), nullable=False)
+    grade: Mapped[int | None] = mapped_column(SmallInteger)
     openness: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="50")
     conscientiousness: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="50")
     extraversion: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="50")

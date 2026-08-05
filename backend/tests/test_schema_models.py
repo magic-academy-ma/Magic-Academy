@@ -11,6 +11,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(
             set(Base.metadata.tables),
             {
+                "users",
                 "simulations",
                 "locations",
                 "agents",
@@ -33,7 +34,10 @@ class SchemaModelTests(unittest.TestCase):
     def test_required_unique_constraints_and_indexes_exist(self) -> None:
         expected_names = {
             "uq_locations_simulation_code",
+            "uq_users_username",
+            "idx_simulations_owner_created",
             "uq_agents_simulation_id_id",
+            "uq_agents_simulation_fixture_key",
             "uq_agents_active_user_persona",
             "uq_agent_states_agent_id",
             "uq_relationships_pair",
@@ -77,6 +81,12 @@ class SchemaModelTests(unittest.TestCase):
         created_tick = Base.metadata.tables["agent_memories"].c.created_tick
         self.assertFalse(created_tick.nullable)
         self.assertEqual(created_tick.type.python_type, int)
+
+    def test_slice_zero_owner_and_fixture_columns_exist(self) -> None:
+        simulations = Base.metadata.tables["simulations"]
+        agents = Base.metadata.tables["agents"]
+        self.assertFalse(simulations.c.owner_id.nullable)
+        self.assertTrue({"fixture_key", "fixture_version", "grade"} <= set(agents.c.keys()))
 
     def test_embedding_column_is_deferred_until_dimension_is_decided(self) -> None:
         self.assertNotIn("embedding", Base.metadata.tables["agent_memories"].c)
