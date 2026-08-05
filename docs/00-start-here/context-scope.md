@@ -34,6 +34,7 @@ updated: 2026-07-21
 | `05-team-rules/definition-of-done.md` | 58 | ~281 | Task |
 | `05-team-rules/git-workflow-commit.md` | ~60 | ~230 | Task (구현·커밋 시) |
 | `05-team-rules/git-workflow-pr.md` | ~110 | ~420 | Task (PR 작성·리뷰 시) |
+| `05-team-rules/dev-workflow.md` | ~80 | ~400 | Task (외부 게시 작업 시) |
 | `05-team-rules/ai-usage.md` | ~80 | ~290 | Task |
 | `decisions/README.md` | 50 | ~158 | Task |
 | `README.md` | 12 | ~211 | Skip |
@@ -118,11 +119,12 @@ Always Load 중 `00-start-here/` 4종 + 아래:
 
 ```
 docs/05-team-rules/git-workflow-pr.md
+docs/05-team-rules/dev-workflow.md
 docs/05-team-rules/definition-of-done.md
 docs/05-team-rules/ai-usage.md
 ```
 
-**추가 이유**: PR 제목·본문 형식, 리뷰 코멘트 태그(`[Must]`, `[Suggest]` 등), AI 사용 여부 표기가 git-workflow-pr에 정의돼 있다. 브랜치·커밋 파일(git-workflow-commit)과 도메인 파일은 이 시점에 불필요하다.
+**추가 이유**: PR 제목·본문 형식, 리뷰 코멘트 태그(`[Must]`, `[Suggest]` 등), AI 사용 여부 표기가 git-workflow-pr에 정의돼 있다. `dev-workflow.md`는 Draft PR 생성·Ready 전환·리뷰 코멘트 게시 전의 승인 절차를 정의한다. 브랜치·커밋 파일(git-workflow-commit)과 도메인 파일은 이 시점에 불필요하다.
 
 ---
 
