@@ -1,5 +1,6 @@
 import unittest
 
+from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -14,6 +15,8 @@ class SchemaModelTests(unittest.TestCase):
                 "simulations",
                 "locations",
                 "agents",
+                "student_profiles",
+                "professor_profiles",
                 "agent_states",
                 "agent_memories",
                 "relationships",
@@ -26,7 +29,8 @@ class SchemaModelTests(unittest.TestCase):
 
     def test_primary_and_foreign_keys_use_postgresql_uuid(self) -> None:
         for table in Base.metadata.tables.values():
-            self.assertIsInstance(table.c.id.type, UUID)
+            for primary_key in table.primary_key.columns:
+                self.assertIsInstance(primary_key.type, UUID)
             for foreign_key in table.foreign_keys:
                 self.assertIsInstance(foreign_key.parent.type, UUID)
 
@@ -34,6 +38,7 @@ class SchemaModelTests(unittest.TestCase):
         expected_names = {
             "uq_locations_simulation_code",
             "uq_agents_simulation_id_id",
+            "uq_agents_simulation_fixture_key",
             "uq_agents_active_user_persona",
             "uq_agent_states_agent_id",
             "uq_relationships_pair",
@@ -77,6 +82,41 @@ class SchemaModelTests(unittest.TestCase):
         created_tick = Base.metadata.tables["agent_memories"].c.created_tick
         self.assertFalse(created_tick.nullable)
         self.assertEqual(created_tick.type.python_type, int)
+
+    def test_fixture_columns_are_required(self) -> None:
+        agents = Base.metadata.tables["agents"]
+        self.assertFalse(agents.c.fixture_key.nullable)
+        self.assertFalse(agents.c.fixture_version.nullable)
+
+    def test_role_profiles_use_agent_id_as_primary_and_foreign_key(self) -> None:
+        student_profiles = Base.metadata.tables["student_profiles"]
+        professor_profiles = Base.metadata.tables["professor_profiles"]
+        for table in (student_profiles, professor_profiles):
+            self.assertEqual(list(table.primary_key.columns.keys()), ["agent_id"])
+            self.assertEqual(
+                {foreign_key.target_fullname for foreign_key in table.c.agent_id.foreign_keys},
+                {"agents.id"},
+            )
+        self.assertTrue({"grade", "interest_field"} <= set(student_profiles.c.keys()))
+        self.assertTrue({"academic_rank", "specialty"} <= set(professor_profiles.c.keys()))
+
+    def test_big_five_constraints_use_signed_five_point_steps(self) -> None:
+        agents = Base.metadata.tables["agents"]
+        constraints = {
+            constraint.name: str(constraint.sqltext)
+            for constraint in agents.constraints
+            if isinstance(constraint, CheckConstraint)
+        }
+        for column in (
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "emotional_stability",
+        ):
+            expression = constraints[f"ck_agents_{column}"]
+            self.assertIn("BETWEEN -50 AND 50", expression)
+            self.assertIn("% 5 = 0", expression)
 
     def test_embedding_column_is_deferred_until_dimension_is_decided(self) -> None:
         self.assertNotIn("embedding", Base.metadata.tables["agent_memories"].c)

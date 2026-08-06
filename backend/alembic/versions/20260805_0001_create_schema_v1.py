@@ -52,16 +52,18 @@ def upgrade() -> None:
         CREATE TABLE agents (
             id UUID PRIMARY KEY,
             simulation_id UUID NOT NULL CONSTRAINT fk_agents_simulation REFERENCES simulations(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+            fixture_key VARCHAR(50) NOT NULL,
+            fixture_version VARCHAR(50) NOT NULL,
             agent_type VARCHAR(20) NOT NULL CONSTRAINT ck_agents_agent_type CHECK (agent_type IN ('student','professor','user_persona')),
             name VARCHAR(50) NOT NULL,
             gender VARCHAR(20) CONSTRAINT ck_agents_gender CHECK (gender IS NULL OR gender IN ('male','female','non_binary','unspecified')),
             personality_type VARCHAR(30),
             mbti_type VARCHAR(4) NOT NULL CONSTRAINT ck_agents_mbti_type CHECK (mbti_type IN ('ISTJ','ESTP','INFP','ENTJ','ESFJ')),
-            openness SMALLINT NOT NULL DEFAULT 50 CONSTRAINT ck_agents_openness CHECK (openness BETWEEN 0 AND 100),
-            conscientiousness SMALLINT NOT NULL DEFAULT 50 CONSTRAINT ck_agents_conscientiousness CHECK (conscientiousness BETWEEN 0 AND 100),
-            extraversion SMALLINT NOT NULL DEFAULT 50 CONSTRAINT ck_agents_extraversion CHECK (extraversion BETWEEN 0 AND 100),
-            agreeableness SMALLINT NOT NULL DEFAULT 50 CONSTRAINT ck_agents_agreeableness CHECK (agreeableness BETWEEN 0 AND 100),
-            emotional_stability SMALLINT NOT NULL DEFAULT 50 CONSTRAINT ck_agents_emotional_stability CHECK (emotional_stability BETWEEN 0 AND 100),
+            openness SMALLINT NOT NULL DEFAULT 0 CONSTRAINT ck_agents_openness CHECK (openness BETWEEN -50 AND 50 AND openness % 5 = 0),
+            conscientiousness SMALLINT NOT NULL DEFAULT 0 CONSTRAINT ck_agents_conscientiousness CHECK (conscientiousness BETWEEN -50 AND 50 AND conscientiousness % 5 = 0),
+            extraversion SMALLINT NOT NULL DEFAULT 0 CONSTRAINT ck_agents_extraversion CHECK (extraversion BETWEEN -50 AND 50 AND extraversion % 5 = 0),
+            agreeableness SMALLINT NOT NULL DEFAULT 0 CONSTRAINT ck_agents_agreeableness CHECK (agreeableness BETWEEN -50 AND 50 AND agreeableness % 5 = 0),
+            emotional_stability SMALLINT NOT NULL DEFAULT 0 CONSTRAINT ck_agents_emotional_stability CHECK (emotional_stability BETWEEN -50 AND 50 AND emotional_stability % 5 = 0),
             role_description TEXT,
             active_status VARCHAR(30) NOT NULL DEFAULT 'active',
             inactive_until_tick BIGINT CONSTRAINT ck_agents_inactive_until_tick CHECK (inactive_until_tick IS NULL OR inactive_until_tick >= 0),
@@ -69,11 +71,24 @@ def upgrade() -> None:
             deleted_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            CONSTRAINT uq_agents_simulation_id_id UNIQUE (simulation_id, id)
+            CONSTRAINT uq_agents_simulation_id_id UNIQUE (simulation_id, id),
+            CONSTRAINT uq_agents_simulation_fixture_key UNIQUE (simulation_id, fixture_key)
         );
         CREATE UNIQUE INDEX uq_agents_active_user_persona ON agents (simulation_id) WHERE agent_type = 'user_persona' AND deleted_at IS NULL;
         CREATE INDEX idx_agents_simulation_id ON agents (simulation_id, id ASC);
         CREATE INDEX idx_agents_runtime_active ON agents (simulation_id, active_status, inactive_until_tick);
+
+        CREATE TABLE student_profiles (
+            agent_id UUID PRIMARY KEY CONSTRAINT fk_student_profiles_agent REFERENCES agents(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+            grade SMALLINT NOT NULL CONSTRAINT ck_student_profiles_grade CHECK (grade BETWEEN 1 AND 4),
+            interest_field VARCHAR(100) NOT NULL
+        );
+
+        CREATE TABLE professor_profiles (
+            agent_id UUID PRIMARY KEY CONSTRAINT fk_professor_profiles_agent REFERENCES agents(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+            academic_rank VARCHAR(50) NOT NULL,
+            specialty VARCHAR(200) NOT NULL
+        );
 
         CREATE TABLE agent_states (
             id UUID PRIMARY KEY,
@@ -204,6 +219,8 @@ def downgrade() -> None:
         DROP TABLE organization_memberships;
         DROP TABLE organizations;
         DROP TABLE agent_states;
+        DROP TABLE professor_profiles;
+        DROP TABLE student_profiles;
         DROP TABLE agents;
         DROP TABLE locations;
         DROP TABLE simulations;
