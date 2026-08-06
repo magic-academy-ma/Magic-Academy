@@ -80,11 +80,11 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | — | 02. Product Planning / 타겟 사용자 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
 | — | 02. Product Planning / 사용자 시나리오 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
 | — | 03. Requirements / 비기능 요구사항 | 이관 불가 — Confluence 미존재 | 2026-07-13 |
-| ⬜ | 03. Requirements / [요구사항] 시뮬레이션 파라미터 설정 (#21364758) | `01-product/simulation-parameters.md` | 2026-08-05 |
+| ✅ | 03. Requirements / [요구사항] 시뮬레이션 파라미터 설정 (#21364758) | `01-product/simulation-parameters.md` | 2026-08-05 |
 | — | [Spec] 대표 캠페인 — 첫 학기, 다섯 명의 마법사 (#13533186) | 미이관 — 사용자 시나리오 계열 | 2026-08-05 |
 | — | [Scenario] 대표 캠페인 데모 — 설정 생성부터 시점 복원까지 (#13402116) | 미이관 — 사용자 시나리오 계열 | 2026-08-05 |
-| ⬜ | MVP 범위 (#17989637) — drift | `01-product/mvp-scope.md` 재동기화 | 2026-08-05 |
-| ⬜ | 핵심 기능 정의 (#16777846) — drift | `01-product/functional-requirements.md` 재동기화 | 2026-08-05 |
+| ✅ | MVP 범위 (#17989637) — drift | `01-product/mvp-scope.md` 재동기화 | 2026-08-05 |
+| ✅ | 핵심 기능 정의 (#16777846) — drift | `01-product/functional-requirements.md` 재동기화 | 2026-08-05 |
 
 ### 03-system-design/
 
@@ -103,8 +103,8 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 05. Tech / Event Master Agent 설계 (#10878982) | `03-system-design/event-master.md` | 2026-08-06 |
 | ✅ | 05. Tech / 인증·접근 제어 설계 (#23888013) | `03-system-design/auth.md` | 2026-08-06 |
 | ✅ | 05. Tech / [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | 2026-08-06 |
-| ⬜ | Tick Engine 스펙 (#12910622) — drift | `03-system-design/tick-engine.md` 재동기화 | 2026-08-05 |
-| ⬜ | Policy Engine 설계 (#14090319) — drift | `03-system-design/policy-engine.md` 재동기화 | 2026-08-05 |
+| ✅ | Tick Engine 스펙 (#12910622) — drift | `03-system-design/tick-engine.md` 재동기화 | 2026-08-05 |
+| ✅ | Policy Engine 설계 (#14090319) — drift | `03-system-design/policy-engine.md` 재동기화 | 2026-08-05 |
 
 ### 05-team-rules/
 
@@ -121,8 +121,8 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 
 | 상태 | Confluence 문서 | docs/ 파일 | 추가일 |
 |------|----------------|------------|--------|
-| ⬜ | [기능 명세서] 1단계 Magic Academy MVP (#16777778) | `04-feature-specs/mvp-feature-spec.md` | 2026-08-05 |
-| ⬜ | [Spec] Inspector 기능 정의 (#12582917) | `04-feature-specs/inspector.md` | 2026-08-05 |
+| ✅ | [기능 명세서] 1단계 Magic Academy MVP (#16777778) | `04-feature-specs/mvp-feature-spec.md` | 2026-08-05 |
+| ✅ | [Spec] Inspector 기능 정의 (#12582917) | `04-feature-specs/inspector.md` | 2026-08-05 |
 
 ---
 
