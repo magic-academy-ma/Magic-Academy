@@ -130,13 +130,32 @@ class InfluenceDirection(StrEnum):
     OPPOSE = "OPPOSE"
 
 
+class BigFiveContext(StrictModel):
+    openness: int = Field(ge=-50, le=50)
+    conscientiousness: int = Field(ge=-50, le=50)
+    extraversion: int = Field(ge=-50, le=50)
+    agreeableness: int = Field(ge=-50, le=50)
+    emotional_stability: int = Field(ge=-50, le=50)
+
+
+class AgentStateContext(StrictModel):
+    hunger: int = Field(ge=0, le=100)
+    fatigue: int = Field(ge=0, le=100)
+    stress: int = Field(ge=0, le=100)
+    satisfaction: int = Field(ge=0, le=100)
+    mood: int = Field(ge=-100, le=100)
+
+
 class AgentContext(StrictModel):
     agent_id: UUID
     fixture_key: str
     agent_type: Literal["student", "professor"]
+    name: str
     mbti: MBTI | None
+    big_five: BigFiveContext
+    state: AgentStateContext
     current_location_id: UUID | None
-    active_status: bool
+    active_status: bool = Field(strict=True)
 
 
 class EventSummary(StrictModel):
