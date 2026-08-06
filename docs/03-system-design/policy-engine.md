@@ -2,10 +2,10 @@
 title: Policy Engine 설계
 source: confluence/05_TECH/policy-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/14090319/Policy+Engine
-status: draft
+status: approved
 visibility: public
-updated: 2026-07-28
-source_updated: 2026-07-22
+updated: 2026-08-06
+source_updated: 2026-08-05
 ---
 
 **기준 문서:** Agent Runtime 설계 (#11894790) · Tick Engine 스펙 (#12910622) · ERD 초안 (#12189697)
