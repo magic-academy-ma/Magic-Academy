@@ -1,9 +1,10 @@
 from copy import deepcopy
 from enum import StrEnum
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, TypedDict
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 class StrictModel(BaseModel):
@@ -393,3 +394,218 @@ class MockLLMClient:
             ],
         }
         return response
+
+
+class LLMInvocationError(Exception):
+    """An expected LLM invocation failure that may be retried."""
+
+
+class RuntimeGraphState(TypedDict):
+    runtime_input: AgentRuntimeInput
+    current_llm_response: object | None
+    attempt_count: int
+    last_validation_failure: str | None
+    candidate: IntentCandidate | None
+    final_result: AgentRuntimeResult | None
+
+
+class AgentRuntime:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        *,
+        model: str = "mock-llm",
+        prompt_version: str = "agent-runtime-10.1",
+    ) -> None:
+        self._llm_client = llm_client
+        self._model = model
+        self._prompt_version = prompt_version
+        self._graph = self._build_graph()
+
+    def run(self, runtime_input: AgentRuntimeInput) -> AgentRuntimeResult:
+        state = self.run_state(runtime_input)
+        result = state["final_result"]
+        if result is None:
+            raise RuntimeError("runtime graph completed without a final result")
+        return result
+
+    def run_state(self, runtime_input: AgentRuntimeInput) -> RuntimeGraphState:
+        initial_state: RuntimeGraphState = {
+            "runtime_input": runtime_input,
+            "current_llm_response": None,
+            "attempt_count": 0,
+            "last_validation_failure": None,
+            "candidate": None,
+            "final_result": None,
+        }
+        return self._graph.invoke(initial_state)
+
+    def _build_graph(self):
+        graph = StateGraph(RuntimeGraphState)
+        graph.add_node("decide", self._decide)
+        graph.add_node("validate", self._validate)
+        graph.add_node("success", self._assemble_success)
+        graph.add_node("fallback", self._assemble_fallback)
+        graph.add_node("skipped", self._assemble_skipped)
+        graph.add_conditional_edges(
+            START,
+            self._route_start,
+            {"decide": "decide", "skipped": "skipped"},
+        )
+        graph.add_edge("decide", "validate")
+        graph.add_conditional_edges(
+            "validate",
+            self._route_after_validation,
+            {"success": "success", "retry": "decide", "fallback": "fallback"},
+        )
+        graph.add_edge("success", END)
+        graph.add_edge("fallback", END)
+        graph.add_edge("skipped", END)
+        return graph.compile()
+
+    @staticmethod
+    def _route_start(state: RuntimeGraphState) -> str:
+        if state["runtime_input"].agent.active_status:
+            return "decide"
+        return "skipped"
+
+    def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
+        attempt_count = state["attempt_count"] + 1
+        try:
+            response = self._llm_client.generate(state["runtime_input"])
+        except LLMInvocationError as exc:
+            return {
+                "attempt_count": attempt_count,
+                "current_llm_response": None,
+                "candidate": None,
+                "last_validation_failure": _failure_reason(exc),
+            }
+        return {
+            "attempt_count": attempt_count,
+            "current_llm_response": response,
+            "candidate": None,
+            "last_validation_failure": None,
+        }
+
+    @staticmethod
+    def _validate(state: RuntimeGraphState) -> dict[str, object]:
+        if state["current_llm_response"] is None:
+            return {"candidate": None}
+        try:
+            candidate = validate_intent_candidate(
+                state["current_llm_response"], state["runtime_input"]
+            )
+        except (ValidationError, ValueError) as exc:
+            return {
+                "candidate": None,
+                "last_validation_failure": _failure_reason(exc),
+            }
+        return {"candidate": candidate, "last_validation_failure": None}
+
+    @staticmethod
+    def _route_after_validation(state: RuntimeGraphState) -> str:
+        if state["candidate"] is not None:
+            return "success"
+        if state["attempt_count"] < 2:
+            return "retry"
+        return "fallback"
+
+    def _assemble_success(self, state: RuntimeGraphState) -> dict[str, object]:
+        candidate = state["candidate"]
+        if candidate is None:
+            raise RuntimeError("success node requires a validated candidate")
+        return {
+            "final_result": self._result(
+                state,
+                status=RuntimeStatus.PROPOSED,
+                intent=candidate,
+                retry_count=state["attempt_count"] - 1,
+                failure_reason=None,
+            )
+        }
+
+    def _assemble_fallback(self, state: RuntimeGraphState) -> dict[str, object]:
+        failure_reason = state["last_validation_failure"]
+        if failure_reason is None:
+            raise RuntimeError("fallback node requires a failure reason")
+        return {
+            "final_result": self._result(
+                state,
+                status=RuntimeStatus.FALLBACK,
+                intent=_wait_intent("유효한 행동을 결정하지 못해 대기한다."),
+                retry_count=1,
+                failure_reason=failure_reason,
+            )
+        }
+
+    def _assemble_skipped(self, state: RuntimeGraphState) -> dict[str, object]:
+        return {
+            "final_result": self._result(
+                state,
+                status=RuntimeStatus.SKIPPED,
+                intent=_wait_intent(
+                    "비활성 Agent이므로 이번 행동 결정을 건너뛴다."
+                ),
+                retry_count=0,
+                failure_reason=None,
+            )
+        }
+
+    def _result(
+        self,
+        state: RuntimeGraphState,
+        *,
+        status: RuntimeStatus,
+        intent: IntentCandidate,
+        retry_count: int,
+        failure_reason: str | None,
+    ) -> AgentRuntimeResult:
+        runtime_input = state["runtime_input"]
+        return AgentRuntimeResult(
+            run_id=runtime_input.run_id,
+            tick_number=runtime_input.tick_number,
+            agent_id=runtime_input.agent.agent_id,
+            status=status,
+            intent=intent,
+            retry_count=retry_count,
+            failure_reason=failure_reason,
+            model=self._model,
+            prompt_version=self._prompt_version,
+            idempotency_key=(
+                f"{runtime_input.run_id}:{runtime_input.tick_number}:"
+                f"{runtime_input.agent.agent_id}"
+            ),
+        )
+
+
+def _wait_intent(motivation_summary: str) -> IntentCandidate:
+    return IntentCandidate(
+        action_type=ActionType.WAIT,
+        target_agent_id=None,
+        target_location_id=None,
+        related_event_id=None,
+        utterance=None,
+        motivation_summary=motivation_summary,
+        reaction=Reaction(
+            valence=ReactionValence.NEUTRAL,
+            intensity=Intensity.LOW,
+            relationship_signals=[],
+            state_signals=[],
+        ),
+        decision_explanation=DecisionExplanation(
+            alternatives=[
+                ActionAlternative(
+                    action_type=ActionType.WAIT,
+                    description="현재 위치에서 대기한다.",
+                    relative_priority=RelativePriority.HIGH,
+                    selected=True,
+                )
+            ],
+            influencing_factors=[],
+        ),
+        memory_candidates=[],
+    )
+
+
+def _failure_reason(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"
