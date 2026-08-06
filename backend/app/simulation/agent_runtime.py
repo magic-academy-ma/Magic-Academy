@@ -4,7 +4,14 @@ from typing import Any, Literal, Protocol, TypedDict
 from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 
 class StrictModel(BaseModel):
@@ -246,6 +253,13 @@ class AgentRuntimeResult(StrictModel):
     prompt_version: str
     idempotency_key: str
 
+    @field_validator("idempotency_key")
+    @classmethod
+    def validate_idempotency_key(cls, value: str) -> str:
+        if not value.strip() or value != value.strip():
+            raise ValueError("idempotency_key must be non-blank without surrounding whitespace")
+        return value
+
 
 STUDENT_ACTIONS = set(ActionType) - {ActionType.TEACH_CLASS}
 PROFESSOR_ACTIONS = set(ActionType) - {ActionType.ATTEND_CLASS}
@@ -283,14 +297,16 @@ def validate_intent_candidate(
             raise ValueError("memory candidate contains an invalid related_agent_id")
         if memory.related_event_id is not None and memory.related_event_id not in valid_event_ids:
             raise ValueError("memory candidate contains an invalid related_event_id")
-    _validate_action_targets(candidate)
+    _validate_action_targets(candidate, runtime_input.agent.agent_id)
     return candidate
 
 
-def _validate_action_targets(candidate: IntentCandidate) -> None:
+def _validate_action_targets(candidate: IntentCandidate, acting_agent_id: UUID) -> None:
     if candidate.action_type in {ActionType.TALK, ActionType.HELP}:
         if candidate.target_agent_id is None:
             raise ValueError(f"{candidate.action_type} requires target_agent_id")
+        if candidate.target_agent_id == acting_agent_id:
+            raise ValueError(f"{candidate.action_type} cannot target the acting agent")
     if candidate.action_type in {ActionType.EAT, ActionType.MOVE, ActionType.REST}:
         if candidate.target_location_id is None:
             raise ValueError(f"{candidate.action_type} requires target_location_id")

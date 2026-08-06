@@ -79,6 +79,16 @@ def invalid_response(runtime_input: AgentRuntimeInput) -> dict:
     return response
 
 
+def self_target_response(runtime_input: AgentRuntimeInput) -> dict:
+    response = deepcopy(valid_response(runtime_input))
+    response["action_type"] = "TALK"
+    response["target_agent_id"] = str(runtime_input.agent.agent_id)
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["decision_explanation"]["alternatives"][0]["action_type"] = "TALK"
+    return response
+
+
 def test_first_call_success_returns_proposed() -> None:
     runtime_input = make_runtime_input()
     client = SequenceLLMClient([valid_response(runtime_input)])
@@ -173,3 +183,14 @@ def test_graph_state_tracks_attempts_failure_and_final_result() -> None:
     assert state["attempt_count"] == 2
     assert state["last_validation_failure"] is not None
     assert state["final_result"].retry_count == 1
+
+
+def test_self_target_validation_failure_uses_existing_retry_flow() -> None:
+    runtime_input = make_runtime_input()
+    invalid = self_target_response(runtime_input)
+    client = SequenceLLMClient([invalid, invalid])
+    result = AgentRuntime(client).run(runtime_input)
+    assert client.call_count == 2
+    assert result.status == RuntimeStatus.FALLBACK
+    assert result.retry_count == 1
+    assert "cannot target the acting agent" in result.failure_reason

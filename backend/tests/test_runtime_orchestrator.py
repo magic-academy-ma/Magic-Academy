@@ -224,4 +224,3 @@ def test_actual_graph_to_in_memory_sink_integration() -> None:
     assert batch.results[0].status == RuntimeStatus.PROPOSED
     assert batch.save_result.new_count == 1
     assert sink.get(batch.results[0].idempotency_key) == batch.results[0]
-

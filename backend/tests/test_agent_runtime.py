@@ -190,6 +190,59 @@ def test_action_requiring_agent_target_rejects_null(runtime_input: AgentRuntimeI
         validate_intent_candidate(response, runtime_input)
 
 
+def test_study_without_target_is_valid(runtime_input: AgentRuntimeInput) -> None:
+    response = valid_response(runtime_input)
+    response["action_type"] = "STUDY"
+    response["target_agent_id"] = None
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["decision_explanation"]["alternatives"][0]["action_type"] = "STUDY"
+    candidate = validate_intent_candidate(response, runtime_input)
+    assert candidate.action_type.value == "STUDY"
+
+
+@pytest.mark.parametrize("action_type", ["TALK", "HELP"])
+def test_agent_action_with_other_target_is_valid(
+    runtime_input: AgentRuntimeInput, action_type: str
+) -> None:
+    response = valid_response(runtime_input)
+    response["action_type"] = action_type
+    response["target_agent_id"] = str(STUDENT_IDS[1])
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["decision_explanation"]["alternatives"][0]["action_type"] = action_type
+    candidate = validate_intent_candidate(response, runtime_input)
+    assert candidate.target_agent_id == STUDENT_IDS[1]
+
+
+@pytest.mark.parametrize("action_type", ["TALK", "HELP"])
+def test_agent_action_with_self_target_is_rejected(
+    runtime_input: AgentRuntimeInput, action_type: str
+) -> None:
+    response = valid_response(runtime_input)
+    response["action_type"] = action_type
+    response["target_agent_id"] = str(runtime_input.agent.agent_id)
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["decision_explanation"]["alternatives"][0]["action_type"] = action_type
+    with pytest.raises(ValueError, match="cannot target the acting agent"):
+        validate_intent_candidate(response, runtime_input)
+
+
+@pytest.mark.parametrize("action_type", ["TALK", "HELP"])
+def test_agent_action_without_target_is_rejected(
+    runtime_input: AgentRuntimeInput, action_type: str
+) -> None:
+    response = valid_response(runtime_input)
+    response["action_type"] = action_type
+    response["target_agent_id"] = None
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["decision_explanation"]["alternatives"][0]["action_type"] = action_type
+    with pytest.raises(ValueError, match="requires target_agent_id"):
+        validate_intent_candidate(response, runtime_input)
+
+
 def test_mock_client_default_response_matches_section_10_1(
     runtime_input: AgentRuntimeInput,
 ) -> None:
@@ -228,6 +281,26 @@ def test_runtime_result_serializes_uuid_as_json_string(runtime_input: AgentRunti
     serialized = result.model_dump(mode="json")
     assert serialized["agent_id"] == str(STUDENT_IDS[0])
     assert serialized["intent"]["related_event_id"] == str(CLASS_EVENT_ID)
+
+
+@pytest.mark.parametrize("idempotency_key", ["", "   ", "\t\n", " key-with-spaces "])
+def test_blank_idempotency_key_is_rejected(
+    runtime_input: AgentRuntimeInput, idempotency_key: str
+) -> None:
+    candidate = validate_intent_candidate(valid_response(runtime_input), runtime_input)
+    with pytest.raises(ValidationError, match="idempotency_key"):
+        AgentRuntimeResult(
+            run_id=runtime_input.run_id,
+            tick_number=runtime_input.tick_number,
+            agent_id=runtime_input.agent.agent_id,
+            status=RuntimeStatus.PROPOSED,
+            intent=candidate,
+            retry_count=0,
+            failure_reason=None,
+            model="mock-llm",
+            prompt_version="agent-runtime-10.1",
+            idempotency_key=idempotency_key,
+        )
 
 
 def test_runtime_input_rejects_schedule_event_type_mismatch() -> None:
