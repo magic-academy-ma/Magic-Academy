@@ -100,6 +100,7 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 05. Tech / Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 2026-07-28 |
 | ✅ | 05. Tech / Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-07-28 |
 | ✅ | 05. Tech / User Flow (#17367076) | `03-system-design/user-flow.md` | 2026-07-28 |
+| ✅ | 05. Tech / Event Master Agent 설계 (#10878982) | `03-system-design/event-master.md` | 2026-08-06 |
 | ⬜ | 05. Tech / Event Master Agent 설계 (#10878982) | `03-system-design/event-master.md` | 2026-08-05 |
 | ⬜ | 05. Tech / 인증·접근 제어 설계 (#23888013) | `03-system-design/auth.md` | 2026-08-05 |
 | ⬜ | 05. Tech / [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | 2026-08-05 |
