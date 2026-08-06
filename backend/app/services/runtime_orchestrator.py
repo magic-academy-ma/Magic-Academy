@@ -1,12 +1,22 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from app.services.runtime_results import (
     RuntimeResultBatchSaveResult,
     RuntimeResultSink,
 )
-from app.simulation.agent_runtime import AgentRuntimeInput, AgentRuntimeResult
+from app.services.runtime_target_selection import RuntimeTargetSelector
+from app.simulation.agent_context_assembler import AgentContextAssembler
+from app.simulation.agent_runtime import (
+    AgentContext,
+    AgentRuntimeInput,
+    AgentRuntimeResult,
+    Block,
+    EventSummary,
+    ScheduleSummary,
+)
 
 
 class AgentRuntimeExecutor(Protocol):
@@ -24,9 +34,53 @@ class RuntimeOrchestrator:
         self,
         runtime: AgentRuntimeExecutor,
         result_sink: RuntimeResultSink,
+        context_assembler: AgentContextAssembler | None = None,
     ) -> None:
         self._runtime = runtime
         self._result_sink = result_sink
+        self._context_assembler = context_assembler or AgentContextAssembler()
+        self._target_selector = RuntimeTargetSelector()
+
+    def select_and_run(
+        self,
+        *,
+        run_id: str,
+        tick_number: int,
+        block: Block,
+        agent_candidates: Sequence[AgentContext],
+        schedule: ScheduleSummary,
+        schedule_requires_professor: bool,
+        events: Sequence[EventSummary],
+        valid_agent_ids: Sequence[UUID],
+        valid_location_ids: Sequence[UUID],
+    ) -> RuntimeBatchExecutionResult:
+        selected_agents = self._target_selector.select(
+            agent_candidates,
+            schedule_requires_professor=schedule_requires_professor,
+            events=events,
+        )
+        runtime_inputs = tuple(
+            self._context_assembler.assemble(
+                run_id=run_id,
+                tick_number=tick_number,
+                block=block,
+                agent_id=agent.agent_id,
+                fixture_key=agent.fixture_key,
+                agent_type=agent.agent_type,
+                name=agent.name,
+                mbti=agent.mbti,
+                big_five=agent.big_five,
+                state=agent.state,
+                current_location_id=agent.current_location_id,
+                active_status=agent.active_status,
+                events=events,
+                schedule=schedule,
+                valid_agent_ids=valid_agent_ids,
+                valid_location_ids=valid_location_ids,
+            )
+            for agent in selected_agents
+        )
+        return self.run_batch(runtime_inputs)
 
     def run_batch(
         self, runtime_inputs: Sequence[AgentRuntimeInput]
