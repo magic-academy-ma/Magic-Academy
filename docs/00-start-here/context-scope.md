@@ -2,7 +2,7 @@
 title: AI Context 로딩 범위
 status: approved
 visibility: public
-updated: 2026-07-21
+updated: 2026-08-06
 ---
 
 # AI Context 로딩 범위
@@ -17,32 +17,37 @@ updated: 2026-07-21
 > 측정 기준: `wc -m`(실제 문자 수) ÷ 4 = 예상 토큰  
 > 한국어는 UTF-8에서 1자 = 3 bytes이므로 byte 기반보다 문자 수 기반이 더 정확하다.
 
-| 파일 | 줄 수 | 예상 토큰 | 분류 |
+| 파일 | 문자 수 | 예상 토큰 | 분류 |
 |------|------:|----------:|------|
-| `00-start-here/index.md` | 46 | ~224 | Always |
-| `00-start-here/what-is-decided.md` | 113 | ~572 | Always |
-| `00-start-here/what-is-pending.md` | 31 | ~177 | Always |
-| `00-start-here/context-quality.md` | ~50 | ~200 | Always |
-| `02-domain/overview.md` | 44 | ~228 | Always |
-| `02-domain/agents.md` | 70 | ~452 | Always |
-| `02-domain/relationships.md` | 66 | ~305 | Always |
-| `02-domain/organizations.md` | 61 | ~240 | Always |
-| `02-domain/events.md` | 64 | ~320 | Always |
-| `02-domain/time-and-space.md` | 76 | ~284 | Always |
-| `02-domain/glossary.md` | 78 | ~382 | Always |
-| `05-team-rules/conventions.md` | 88 | ~316 | Task |
-| `05-team-rules/definition-of-done.md` | 58 | ~281 | Task |
-| `05-team-rules/git-workflow-commit.md` | ~60 | ~230 | Task (구현·커밋 시) |
-| `05-team-rules/git-workflow-pr.md` | ~110 | ~420 | Task (PR 작성·리뷰 시) |
-| `05-team-rules/dev-workflow.md` | ~80 | ~400 | Task (외부 게시 작업 시) |
-| `05-team-rules/ai-usage.md` | ~80 | ~290 | Task |
-| `decisions/README.md` | 50 | ~158 | Task |
-| `README.md` | 12 | ~211 | Skip |
-| `_meta/SYNC.md` | 116 | ~1,020 | Skip |
-| `_meta/ai-native-env-design.md` | 113 | ~1,063 | Skip |
+| `00-start-here/index.md` | 898 | ~225 | Always |
+| `00-start-here/what-is-decided.md` | 2,448 | ~612 | Always |
+| `00-start-here/what-is-pending.md` | 959 | ~240 | Always |
+| `00-start-here/context-quality.md` | 895 | ~224 | Always |
+| `02-domain/overview.md` | 913 | ~228 | Always |
+| `02-domain/agents.md` | 2,403 | ~601 | Always |
+| `02-domain/relationships.md` | 1,220 | ~305 | Always |
+| `02-domain/organizations.md` | 960 | ~240 | Always |
+| `02-domain/events.md` | 1,280 | ~320 | Always |
+| `02-domain/time-and-space.md` | 1,102 | ~276 | Always |
+| `02-domain/glossary.md` | 1,512 | ~378 | Always |
+| `superpowers/README.md` | 1,255 | ~314 | Always (@ai-native 세션) |
+| `superpowers/ai-workflow.md` | 1,553 | ~388 | Always (@ai-native 세션) |
+| `05-team-rules/conventions.md` | 1,267 | ~317 | Task |
+| `05-team-rules/definition-of-done.md` | 1,127 | ~282 | Task |
+| `05-team-rules/git-workflow-commit.md` | 1,473 | ~368 | Task (구현·커밋 시) |
+| `05-team-rules/git-workflow-pr.md` | 2,610 | ~653 | Task (PR 작성·리뷰 시) |
+| `05-team-rules/dev-workflow.md` | 1,709 | ~427 | Task (외부 게시 작업 시) |
+| `05-team-rules/ai-usage.md` | 1,330 | ~333 | Task |
+| `decisions/README.md` | 632 | ~158 | Task |
+| `README.md` | — | ~211 | Skip |
+| `_meta/SYNC.md` | — | ~1,020 | Skip |
+| `_meta/ai-native-env-design.md` | — | ~1,063 | Skip |
 
-**총 Always Load 토큰**: ~3,384 토큰  
-**전체 docs/ 토큰**: ~6,497 토큰
+> 측정일: 2026-08-06 (`wc -m`)
+
+**총 Always Load 토큰**: ~3,648 토큰 (00-start-here/ + 02-domain/ 기준, superpowers/ 제외)  
+**@ai-native Always Load**: ~4,350 토큰 (위 + superpowers/ 2종)  
+**전체 docs/ 토큰 (Skip 제외)**: ~6,887 토큰
 
 ---
 
