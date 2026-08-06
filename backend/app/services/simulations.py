@@ -9,6 +9,8 @@ from app.api.schemas import (
     AgentResponse,
     AgentStateResponse,
     LocationResponse,
+    ProfessorProfileResponse,
+    StudentProfileResponse,
 )
 from app.domain.models import Simulation, User
 from app.repositories.simulations import get_simulation, list_agents_with_state
@@ -41,7 +43,9 @@ def require_owned_simulation(db: Session, simulation_id: UUID, owner: User) -> S
 def get_agent_responses(db: Session, simulation_id: UUID, owner: User) -> list[AgentResponse]:
     require_owned_simulation(db, simulation_id, owner)
     responses = []
-    for agent, state, location in list_agents_with_state(db, simulation_id):
+    for agent, state, location, student_profile, professor_profile in list_agents_with_state(
+        db, simulation_id
+    ):
         responses.append(
             AgentResponse(
                 id=agent.id,
@@ -50,13 +54,28 @@ def get_agent_responses(db: Session, simulation_id: UUID, owner: User) -> list[A
                 name=agent.name,
                 agent_type=agent.agent_type,
                 mbti_type=agent.mbti_type,
-                grade=agent.grade,
                 profile=AgentProfileResponse(
                     openness=agent.openness,
                     conscientiousness=agent.conscientiousness,
                     extraversion=agent.extraversion,
                     agreeableness=agent.agreeableness,
                     emotional_stability=agent.emotional_stability,
+                ),
+                student_profile=(
+                    StudentProfileResponse(
+                        grade=student_profile.grade,
+                        interest_field=student_profile.interest_field,
+                    )
+                    if student_profile
+                    else None
+                ),
+                professor_profile=(
+                    ProfessorProfileResponse(
+                        academic_rank=professor_profile.academic_rank,
+                        specialty=professor_profile.specialty,
+                    )
+                    if professor_profile
+                    else None
                 ),
                 state=AgentStateResponse(
                     hunger=state.hunger,

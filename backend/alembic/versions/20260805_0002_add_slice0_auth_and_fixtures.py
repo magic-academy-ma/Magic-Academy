@@ -34,17 +34,67 @@ def upgrade() -> None:
     op.create_foreign_key("fk_simulations_owner", "simulations", "users", ["owner_id"], ["id"], ondelete="RESTRICT", onupdate="RESTRICT")
     op.create_index("idx_simulations_owner_created", "simulations", ["owner_id", sa.text("created_at DESC")])
 
-    op.add_column("agents", sa.Column("fixture_key", sa.String(50), nullable=True))
-    op.add_column("agents", sa.Column("fixture_version", sa.String(50), nullable=True))
-    op.add_column("agents", sa.Column("grade", sa.SmallInteger(), nullable=True))
+    op.add_column("agents", sa.Column("fixture_key", sa.String(50), nullable=False))
+    op.add_column("agents", sa.Column("fixture_version", sa.String(50), nullable=False))
     op.create_unique_constraint("uq_agents_simulation_fixture_key", "agents", ["simulation_id", "fixture_key"])
-    op.create_check_constraint("ck_agents_grade", "agents", "grade IS NULL OR grade BETWEEN 1 AND 4")
+
+    big_five_columns = (
+        "openness",
+        "conscientiousness",
+        "extraversion",
+        "agreeableness",
+        "emotional_stability",
+    )
+    for column in big_five_columns:
+        op.drop_constraint(f"ck_agents_{column}", "agents", type_="check")
+        op.create_check_constraint(
+            f"ck_agents_{column}",
+            "agents",
+            f"{column} BETWEEN -50 AND 50 AND {column} % 5 = 0",
+        )
+        op.alter_column("agents", column, server_default=sa.text("0"))
+
+    op.create_table(
+        "student_profiles",
+        sa.Column(
+            "agent_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+            primary_key=True,
+        ),
+        sa.Column("grade", sa.SmallInteger(), nullable=False),
+        sa.Column("interest_field", sa.String(100), nullable=False),
+        sa.CheckConstraint("grade BETWEEN 1 AND 4", name="ck_student_profiles_grade"),
+    )
+    op.create_table(
+        "professor_profiles",
+        sa.Column(
+            "agent_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+            primary_key=True,
+        ),
+        sa.Column("academic_rank", sa.String(50), nullable=False),
+        sa.Column("specialty", sa.String(200), nullable=False),
+    )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_agents_grade", "agents", type_="check")
+    op.drop_table("professor_profiles")
+    op.drop_table("student_profiles")
+    for column in (
+        "openness",
+        "conscientiousness",
+        "extraversion",
+        "agreeableness",
+        "emotional_stability",
+    ):
+        op.drop_constraint(f"ck_agents_{column}", "agents", type_="check")
+        op.create_check_constraint(
+            f"ck_agents_{column}", "agents", f"{column} BETWEEN 0 AND 100"
+        )
+        op.alter_column("agents", column, server_default=sa.text("50"))
     op.drop_constraint("uq_agents_simulation_fixture_key", "agents", type_="unique")
-    op.drop_column("agents", "grade")
     op.drop_column("agents", "fixture_version")
     op.drop_column("agents", "fixture_key")
     op.drop_index("idx_simulations_owner_created", table_name="simulations")

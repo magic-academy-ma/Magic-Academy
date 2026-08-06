@@ -98,8 +98,8 @@ def test_invalid_issuer_or_audience_returns_401(client, claim, value) -> None:
 
 
 def test_registration_login_creation_and_idempotent_seed(client) -> None:
-    from app.domain.models import Agent, AgentState, Location
-    from app.services.fixtures import seed_slice_zero
+    from app.domain.models import Agent, AgentState, Location, ProfessorProfile, StudentProfile
+    from app.services.fixtures import AGENT_FIXTURES, seed_slice_zero
 
     test_client, session_factory = client
     user, headers = register_and_login(test_client, "owner-a")
@@ -116,6 +116,41 @@ def test_registration_login_creation_and_idempotent_seed(client) -> None:
     assert sum(agent["agent_type"] == "professor" for agent in agents) == 1
     assert [agent["fixture_key"] for agent in agents] == sorted(agent["fixture_key"] for agent in agents)
     assert all(UUID(agent["id"]).version == 7 for agent in agents)
+    fixtures_by_key = {fixture.key: fixture for fixture in AGENT_FIXTURES}
+    for response_agent in agents:
+        fixture = fixtures_by_key[response_agent["fixture_key"]]
+        assert response_agent["fixture_version"] == fixture.version
+        assert response_agent["name"] == fixture.name
+        assert response_agent["agent_type"] == fixture.agent_type
+        assert response_agent["mbti_type"] == fixture.mbti_type
+        assert response_agent["profile"] == {
+            "openness": fixture.openness,
+            "conscientiousness": fixture.conscientiousness,
+            "extraversion": fixture.extraversion,
+            "agreeableness": fixture.agreeableness,
+            "emotional_stability": fixture.emotional_stability,
+        }
+        assert response_agent["state"] == {
+            "hunger": fixture.hunger,
+            "fatigue": fixture.fatigue,
+            "stress": fixture.stress,
+            "satisfaction": fixture.satisfaction,
+            "mood": fixture.mood,
+            "current_action": None,
+        }
+        assert response_agent["location"]["code"] == fixture.location_code
+        if fixture.agent_type == "student":
+            assert response_agent["student_profile"] == {
+                "grade": fixture.grade,
+                "interest_field": fixture.interest_field,
+            }
+            assert response_agent["professor_profile"] is None
+        else:
+            assert response_agent["student_profile"] is None
+            assert response_agent["professor_profile"] == {
+                "academic_rank": fixture.academic_rank,
+                "specialty": fixture.specialty,
+            }
 
     with session_factory() as db:
         seed_slice_zero(db, UUID(simulation_id))
@@ -123,6 +158,55 @@ def test_registration_login_creation_and_idempotent_seed(client) -> None:
         assert db.scalar(select(func.count()).select_from(Agent)) == 6
         assert db.scalar(select(func.count()).select_from(AgentState)) == 6
         assert db.scalar(select(func.count()).select_from(Location)) == 2
+        assert db.scalar(select(func.count()).select_from(StudentProfile)) == 5
+        assert db.scalar(select(func.count()).select_from(ProfessorProfile)) == 1
+        for stored_agent in db.scalars(select(Agent)).all():
+            fixture = fixtures_by_key[stored_agent.fixture_key]
+            assert (
+                stored_agent.openness,
+                stored_agent.conscientiousness,
+                stored_agent.extraversion,
+                stored_agent.agreeableness,
+                stored_agent.emotional_stability,
+            ) == (
+                fixture.openness,
+                fixture.conscientiousness,
+                fixture.extraversion,
+                fixture.agreeableness,
+                fixture.emotional_stability,
+            )
+            stored_state = db.scalar(
+                select(AgentState).where(AgentState.agent_id == stored_agent.id)
+            )
+            assert (
+                stored_state.hunger,
+                stored_state.fatigue,
+                stored_state.stress,
+                stored_state.satisfaction,
+                stored_state.mood,
+                stored_state.current_action,
+            ) == (
+                fixture.hunger,
+                fixture.fatigue,
+                fixture.stress,
+                fixture.satisfaction,
+                fixture.mood,
+                None,
+            )
+            stored_location = db.get(Location, stored_state.location_id)
+            assert stored_location.code == fixture.location_code
+            if fixture.agent_type == "student":
+                stored_profile = db.get(StudentProfile, stored_agent.id)
+                assert (stored_profile.grade, stored_profile.interest_field) == (
+                    fixture.grade,
+                    fixture.interest_field,
+                )
+            else:
+                stored_profile = db.get(ProfessorProfile, stored_agent.id)
+                assert (stored_profile.academic_rank, stored_profile.specialty) == (
+                    fixture.academic_rank,
+                    fixture.specialty,
+                )
 
 
 def test_owner_gets_200_other_user_gets_403_and_missing_gets_404(client) -> None:

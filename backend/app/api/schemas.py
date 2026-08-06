@@ -84,6 +84,16 @@ class LocationResponse(BaseModel):
     name: str
 
 
+class StudentProfileResponse(BaseModel):
+    grade: int
+    interest_field: str
+
+
+class ProfessorProfileResponse(BaseModel):
+    academic_rank: str
+    specialty: str
+
+
 class AgentResponse(BaseModel):
     id: UUID
     fixture_key: str
@@ -91,7 +101,8 @@ class AgentResponse(BaseModel):
     name: str
     agent_type: str
     mbti_type: str
-    grade: int | None
     profile: AgentProfileResponse
+    student_profile: StudentProfileResponse | None
+    professor_profile: ProfessorProfileResponse | None
     state: AgentStateResponse
     location: LocationResponse

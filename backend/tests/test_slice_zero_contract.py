@@ -21,6 +21,40 @@ def test_fixture_contract_has_exactly_five_students_and_one_professor() -> None:
     assert LOCATIONS == {"dormitory": "기숙사", "classroom": "교실"}
 
 
+def test_each_fixture_matches_the_confluence_v02_contract() -> None:
+    expected = {
+        "student-01": ("student-fixture-v0.2", "아델", "student", "ISTJ", "female", -25, 25, -25, -20, 0, 25, 15, 20, 60, 0, 1, "방어 마법", None, None, "dormitory"),
+        "student-02": ("student-fixture-v0.2", "레오", "student", "ESTP", "male", -25, -25, 25, -20, 0, 35, 20, 15, 65, 10, 2, "마법 생물", None, None, "dormitory"),
+        "student-03": ("student-fixture-v0.2", "리아", "student", "INFP", "female", 25, -25, -25, 20, 0, 20, 15, 20, 55, 0, 1, "고대 마법", None, None, "dormitory"),
+        "student-04": ("student-fixture-v0.2", "카이", "student", "ENTJ", "male", 25, 25, 25, -20, 0, 25, 10, 25, 60, 5, 3, "마법 도구 제작", None, None, "dormitory"),
+        "student-05": ("student-fixture-v0.2", "세라", "student", "ESFJ", "female", -25, 25, 25, 20, 0, 30, 20, 15, 65, 10, 4, "마법약", None, None, "dormitory"),
+        "professor-01": ("professor-fixture-v0.2", "에단", "professor", "ISTJ", "male", -20, 40, -25, 10, 35, 20, 15, 20, 70, 20, None, None, "통합 교수", "통합마법학과 수업·시험·학생 지도", "classroom"),
+    }
+    for fixture in AGENT_FIXTURES:
+        assert (
+            fixture.version,
+            fixture.name,
+            fixture.agent_type,
+            fixture.mbti_type,
+            fixture.gender,
+            fixture.openness,
+            fixture.conscientiousness,
+            fixture.extraversion,
+            fixture.agreeableness,
+            fixture.emotional_stability,
+            fixture.hunger,
+            fixture.fatigue,
+            fixture.stress,
+            fixture.satisfaction,
+            fixture.mood,
+            fixture.grade,
+            fixture.interest_field,
+            fixture.academic_rank,
+            fixture.specialty,
+            fixture.location_code,
+        ) == expected[fixture.key]
+
+
 def test_password_is_hashed_and_verified() -> None:
     encoded = hash_password("correct-horse")
     assert encoded != "correct-horse"

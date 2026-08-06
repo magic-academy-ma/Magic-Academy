@@ -60,6 +60,23 @@ export default function App() {
 
   if (!auth) return <AuthPanel onLogin={setAuth} />;
 
+  async function loadAgents(simulationId) {
+    setLoading(true);
+    setError("");
+    try {
+      const agentList = await apiRequest(`/v1/simulations/${simulationId}/agents`, {
+        token: auth.access_token,
+      });
+      setAgents(agentList);
+      setSelectedAgent(agentList[0] ?? null);
+    } catch (requestError) {
+      if (requestError.status === 401) setAuth(null);
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function createSimulation(event) {
     event.preventDefault();
     setLoading(true);
@@ -70,10 +87,8 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      const agentList = await apiRequest(`/v1/simulations/${created.id}/agents`, { token: auth.access_token });
       setSimulation(created);
-      setAgents(agentList);
-      setSelectedAgent(agentList[0] ?? null);
+      await loadAgents(created.id);
     } catch (requestError) {
       if (requestError.status === 401) setAuth(null);
       setError(requestError.message);
@@ -98,14 +113,16 @@ export default function App() {
             <div className="panel agent-list">
               <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
-              {!loading && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
+              {error && <p className="message error" role="alert">{error}</p>}
+              {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
+              {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
               {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
             </div>
             <aside className="panel inspector">
               <h2>Inspector</h2>
               {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
                 <h3>{selectedAgent.name}</h3>
-                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.grade ? `${selectedAgent.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
+                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
               </>}
             </aside>
           </section>
