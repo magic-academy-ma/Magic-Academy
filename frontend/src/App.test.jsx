@@ -89,4 +89,25 @@ describe('Slice 0 UI', () => {
       url.endsWith('/v1/simulations') && options?.method === 'POST'
     )).toHaveLength(1)
   })
+
+  it('clears the previous user session state after an agent request returns 401', async () => {
+    const nextUser = { ...user, id: '01900000-0000-7000-8000-000000000099', username: 'owner-b', display_name: 'Owner B' }
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ access_token: 'token-a', token_type: 'bearer', user }))
+      .mockImplementationOnce(() => response(simulation, 201))
+      .mockImplementationOnce(() => response({}, 401))
+      .mockImplementationOnce(() => response({ access_token: 'token-b', token_type: 'bearer', user: nextUser }))
+
+    render(<App />)
+    await login()
+    await userEvent.click(document.querySelector('.create-panel button'))
+
+    expect(await screen.findByRole('main')).toHaveClass('auth-shell')
+    await login()
+
+    expect(await screen.findByText('Owner B')).toBeInTheDocument()
+    expect(document.querySelector('.create-panel')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: simulation.name })).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
+  })
 })

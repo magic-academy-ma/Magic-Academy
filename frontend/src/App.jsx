@@ -58,6 +58,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  function resetSession() {
+    setAuth(null);
+    setSimulation(null);
+    setAgents([]);
+    setSelectedAgent(null);
+    setError("");
+  }
+
   if (!auth) return <AuthPanel onLogin={setAuth} />;
 
   async function loadAgents(simulationId) {
@@ -70,7 +78,10 @@ export default function App() {
       setAgents(agentList);
       setSelectedAgent(agentList[0] ?? null);
     } catch (requestError) {
-      if (requestError.status === 401) setAuth(null);
+      if (requestError.status === 401) {
+        resetSession();
+        return;
+      }
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -90,7 +101,10 @@ export default function App() {
       setSimulation(created);
       await loadAgents(created.id);
     } catch (requestError) {
-      if (requestError.status === 401) setAuth(null);
+      if (requestError.status === 401) {
+        resetSession();
+        return;
+      }
       setError(requestError.message);
     } finally {
       setLoading(false);
