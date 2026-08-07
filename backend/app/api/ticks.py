@@ -46,7 +46,7 @@ def make_tick_router(engine: TickEngine) -> APIRouter:
     router = APIRouter(tags=["ticks"])
 
     @router.post(
-        "/simulations/{simulation_id}/tick",
+        "/tick/{simulation_id}/run",
         response_model=TickResponse,
     )
     async def run_tick(simulation_id: str, body: TickRequest) -> TickResponse:

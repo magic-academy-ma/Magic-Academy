@@ -1,7 +1,7 @@
 """
 Tick API 엔드포인트 테스트
 
-POST /v1/simulations/{simulation_id}/tick
+POST /v1/tick/{simulationId}/run
 
 DB 연결 없이 TickEngine 의존성 주입으로 검증한다.
 """
@@ -42,7 +42,7 @@ def make_engine(runtime=None) -> TickEngine:
 
 def test_tick_returns_200_on_success():
     client = TestClient(make_test_app(make_engine()))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [{"id": "s-1", "agent_type": "student", "is_active": True}],
         "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["s-1"]},
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
@@ -52,7 +52,7 @@ def test_tick_returns_200_on_success():
 
 def test_tick_response_contains_participant_ids():
     client = TestClient(make_test_app(make_engine()))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [{"id": "s-1", "agent_type": "student", "is_active": True}],
         "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["s-1"]},
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
@@ -64,7 +64,7 @@ def test_tick_response_contains_participant_ids():
 
 def test_tick_with_professor_not_in_event_excludes_professor():
     client = TestClient(make_test_app(make_engine()))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [
             {"id": "s-1", "agent_type": "student", "is_active": True},
             {"id": "p-1", "agent_type": "professor", "is_active": True},
@@ -97,7 +97,7 @@ def test_duplicate_tick_returns_409():
     engine._running = True
 
     client = TestClient(make_test_app(engine))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [{"id": "s-1", "agent_type": "student", "is_active": True}],
         "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["s-1"]},
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
@@ -113,7 +113,7 @@ def test_runtime_failure_returns_500():
         raise RuntimeError("LLM timeout")
 
     client = TestClient(make_test_app(make_engine(runtime=failing_runtime)))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [{"id": "s-1", "agent_type": "student", "is_active": True}],
         "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["s-1"]},
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
@@ -126,7 +126,7 @@ def test_runtime_failure_returns_500():
 
 def test_invalid_agent_type_returns_422():
     client = TestClient(make_test_app(make_engine()))
-    response = client.post("/v1/simulations/sim-1/tick", json={
+    response = client.post("/v1/tick/sim-1/run", json={
         "agents": [{"id": "x-1", "agent_type": "unknown", "is_active": True}],
         "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["x-1"]},
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
