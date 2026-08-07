@@ -38,10 +38,11 @@ services:
 
     # Development-only command: source bind mount and hot reload are not for production.
     command: >
+      sh -c "alembic upgrade head &&
       uvicorn app.main:app
       --host 0.0.0.0
       --port 8000
-      --reload
+      --reload"
 
     volumes:
       - ./backend:/app
@@ -53,6 +54,10 @@ services:
       DEBUG: ${DEBUG:-false}
       API_V1_PREFIX: ${API_V1_PREFIX:-/v1}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      JWT_ISSUER: ${JWT_ISSUER:-magic-academy-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-magic-academy-web}
+      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-60}
       DB_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-magic_academy}

@@ -33,6 +33,17 @@ class TimestampMixin:
     )
 
 
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[\"USER\"]'::jsonb"))
+
+
 class Simulation(TimestampMixin, Base):
     __tablename__ = "simulations"
     __table_args__ = (
@@ -42,9 +53,13 @@ class Simulation(TimestampMixin, Base):
         ),
         CheckConstraint("current_day >= 1", name="ck_simulations_current_day"),
         CheckConstraint("current_tick >= 0", name="ck_simulations_current_tick"),
+        Index("idx_simulations_owner_created", "owner_id", text("created_at DESC")),
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="ready")
     current_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")

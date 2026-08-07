@@ -12,6 +12,7 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(
             set(Base.metadata.tables),
             {
+                "users",
                 "simulations",
                 "locations",
                 "agents",
@@ -37,6 +38,8 @@ class SchemaModelTests(unittest.TestCase):
     def test_required_unique_constraints_and_indexes_exist(self) -> None:
         expected_names = {
             "uq_locations_simulation_code",
+            "uq_users_username",
+            "idx_simulations_owner_created",
             "uq_agents_simulation_id_id",
             "uq_agents_simulation_fixture_key",
             "uq_agents_active_user_persona",
@@ -83,10 +86,14 @@ class SchemaModelTests(unittest.TestCase):
         self.assertFalse(created_tick.nullable)
         self.assertEqual(created_tick.type.python_type, int)
 
-    def test_fixture_columns_are_required(self) -> None:
+    def test_slice_zero_owner_and_fixture_columns_exist(self) -> None:
+        simulations = Base.metadata.tables["simulations"]
         agents = Base.metadata.tables["agents"]
+        self.assertFalse(simulations.c.owner_id.nullable)
+        self.assertTrue({"fixture_key", "fixture_version"} <= set(agents.c.keys()))
         self.assertFalse(agents.c.fixture_key.nullable)
         self.assertFalse(agents.c.fixture_version.nullable)
+        self.assertNotIn("grade", agents.c)
 
     def test_role_profiles_use_agent_id_as_primary_and_foreign_key(self) -> None:
         student_profiles = Base.metadata.tables["student_profiles"]

@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str | None = None
     cors_origins: str = "http://localhost:5173"
+    jwt_secret: str = Field(min_length=32)
+    jwt_issuer: str = "magic-academy-api"
+    jwt_audience: str = "magic-academy-web"
+    jwt_access_token_minutes: int = 60
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
