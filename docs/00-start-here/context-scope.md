@@ -30,8 +30,6 @@ updated: 2026-08-06
 | `02-domain/events.md` | 1,280 | ~320 | Always |
 | `02-domain/time-and-space.md` | 1,102 | ~276 | Always |
 | `02-domain/glossary.md` | 1,512 | ~378 | Always |
-| `superpowers/README.md` | 1,255 | ~314 | Always (@ai-native 세션) |
-| `superpowers/ai-workflow.md` | 1,553 | ~388 | Always (@ai-native 세션) |
 | `05-team-rules/conventions.md` | 1,267 | ~317 | Task |
 | `05-team-rules/definition-of-done.md` | 1,127 | ~282 | Task |
 | `05-team-rules/git-workflow-commit.md` | 1,473 | ~368 | Task (구현·커밋 시) |
@@ -52,9 +50,8 @@ updated: 2026-08-06
 
 > 측정일: 2026-08-06 (`wc -m`)
 
-**총 Always Load 토큰**: ~3,648 토큰 (00-start-here/ + 02-domain/ 기준, superpowers/ 제외)  
-**@ai-native Always Load**: ~4,350 토큰 (위 + superpowers/ 2종)  
-**전체 docs/ 토큰 (Skip 제외)**: ~25,462 토큰
+**총 Always Load 토큰**: ~3,648 토큰 (00-start-here/ + 02-domain/ 기준)  
+**전체 docs/ 토큰 (Skip 제외)**: ~24,760 토큰
 
 ---
 
