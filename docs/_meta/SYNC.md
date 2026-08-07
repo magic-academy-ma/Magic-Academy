@@ -62,7 +62,7 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | 99. Archive | 미이관 | 불필요 |
 
 `02-domain/`은 Confluence 직접 매핑 없음 → PRD 부록 A + `local/CLAUDE.md` 도메인 모델 기반으로 새로 작성.  
-`04-feature-specs/`는 구현 직전 새로 작성 (Confluence 매핑 없음).
+`04-feature-specs/`는 Confluence 이관(#16777778, #12582917)과 신규 작성으로 구분됨. 이관 항목은 §이관 큐 참조.
 
 ---
 
@@ -151,3 +151,4 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | — | [Sprint] 1단계 개발 5영업일 스프린트 (#19169283) | INTERNAL — 스프린트 계획 | 2026-08-05 |
 | — | [Branding] Magic Academy 브랜딩 (#24281259) | 구현 AI context 불필요 | 2026-08-05 |
 | — | [Test] * 4종 + Magic Academy 테스트 문서 범위 및 담당 (#22544473 등) | 테스트 문서 — 07 QA & Test 스코프 제외 결정 | 2026-08-05 |
+| — | 05. Tech / 인증·접근 제어 설계 (#23888013) | INTERNAL — 변경 이력 팀원 실명(PII) + 내부 API 경로 노출 | 2026-08-07 |

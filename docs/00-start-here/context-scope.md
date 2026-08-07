@@ -39,7 +39,6 @@ updated: 2026-08-06
 | `decisions/README.md` | 632 | ~158 | Task |
 | `02-domain/world-setting.md` | 14,397 | ~3,599 | Task (세계관·Magic Layer 구현 시) |
 | `03-system-design/event-master.md` | 14,173 | ~3,543 | Task (Event Master 구현 시) |
-| `03-system-design/auth.md` | 9,240 | ~2,310 | Task (인증 구현 시) |
 | `03-system-design/policy-signal-delta.md` | 12,921 | ~3,230 | Task (Policy Engine 구현 시) |
 | `04-feature-specs/mvp-feature-spec.md` | 10,767 | ~2,692 | Task (MVP 기능 구현 시) |
 | `04-feature-specs/inspector.md` | 6,167 | ~1,542 | Task (Inspector 구현 시) |
@@ -51,7 +50,7 @@ updated: 2026-08-06
 > 측정일: 2026-08-06 (`wc -m`)
 
 **총 Always Load 토큰**: ~3,648 토큰 (00-start-here/ + 02-domain/ 기준)  
-**전체 docs/ 토큰 (Skip 제외)**: ~24,760 토큰
+**전체 docs/ 토큰 (Skip 제외)**: ~22,450 토큰
 
 ---
 
