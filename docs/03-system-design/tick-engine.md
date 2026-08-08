@@ -41,19 +41,17 @@ source_updated: 2026-08-05
 
 ### 2.1 실행 인수 잠금 (PostgreSQL lease)
 
-Tick이 시작될 때 PostgreSQL `tick_lock` 테이블에서 lease를 취득한다. lease 취득 실패(이미 실행 중) 시 TickOrchestrator를 호출하지 않고 해당 Tick을 건너뛴다.
+TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick lease를 획득한다.
 
-```sql
--- lease 취득 (fencing_token은 취득 시 자동 증가)
-INSERT INTO tick_lock (simulation_id, tick_id, fencing_token, acquired_at)
-VALUES (%s, %s, nextval('tick_fencing_seq'), now())
-ON CONFLICT (simulation_id) DO NOTHING
-RETURNING fencing_token;
-```
+`simulation_ticks`에는 `run_id`, `logical_tick_key`, `status`, `attempt`, `fence_token`, `lease_expires_at`, `heartbeat_at`, `snapshot_version`, `resolution_id`, `failure_code`를 기록한다.
 
-* 취득 성공: 반환된 `fencing_token`을 이후 DB Commit 단계에 전달.
-* 취득 실패(0 rows): 중복 실행으로 간주하여 Tick 건너뜀.
-* Commit 후 lease 해제: `DELETE FROM tick_lock WHERE simulation_id = %s AND fencing_token = %s`.
+`status='running'`인 행은 Simulation별 최대 1개만 허용하는 partial unique index로 중첩 실행을 차단한다.
+
+* 자동 Scheduler Trigger가 기존 실행과 경합하면 새 Tick을 적재하지 않고 skip한다. 수동 Tick·밤 스킵 요청은 `409 TICK_ALREADY_RUNNING`을 반환한다.
+* 실행 중 TickOrchestrator가 lease heartbeat를 갱신한다. lease가 만료되면 기존 실행을 `stale`로 종료하고 새 `fence_token`을 발급할 수 있다.
+* Commit Service는 현재 `run_id`와 `fence_token`을 다시 검증해 만료된 이전 실행의 지연 Commit을 거부한다.
+* lease TTL과 heartbeat 주기는 설정값으로 관리하며 `lease TTL > heartbeat 주기 × 2`를 만족해야 한다.
+* 서로 다른 Simulation은 독립적인 lease를 사용해 병렬 실행할 수 있다.
 
 ---
 
@@ -114,6 +112,7 @@ RETURNING fencing_token;
 
 
 [8] DB Commit  (PostgreSQL batch write, 블록당 1회, READ COMMITTED)
+    - run_id·fence_token·state_version 검증 (만료된 이전 실행의 지연 Commit 거부)
     - 관계 변화 (relationships 테이블)
     - Agent 내부 상태 변화 (agent_states 테이블)
     - memory 저장 (agent_memories 테이블)
@@ -245,3 +244,4 @@ PostgreSQL + pgvector
 | v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
 | v2.0 | 2026-08-05 | TickScheduler·SimulationTickService·TickOrchestrator 책임 분리. 모듈 위치 갱신. |
 | v2.1 | 2026-08-05 | §2.1 실행 인수 잠금(PostgreSQL lease·fencing token) 추가. §6 격리 수준(Snapshot REPEATABLE READ, Commit READ COMMITTED) 확정. §7 재시도 정책(Agent 1회, Commit 2회, Tick 전체 0회) 확정. |
+| v2.2 | 2026-08-08 | §2.1 lease 설계 범위 보완 — simulation_ticks 테이블·전체 필드 목록, partial unique index, heartbeat 갱신·stale 처리, Commit Service run_id+fence_token 검증, 409 TICK_ALREADY_RUNNING, lease TTL 제약 추가. §3 [8] DB Commit에 run_id·fence_token·state_version 검증 항목 추가. |
