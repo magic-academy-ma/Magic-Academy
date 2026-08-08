@@ -244,4 +244,4 @@ PostgreSQL + pgvector
 | v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
 | v2.0 | 2026-08-05 | TickScheduler·SimulationTickService·TickOrchestrator 책임 분리. 모듈 위치 갱신. |
 | v2.1 | 2026-08-05 | §2.1 실행 인수 잠금(PostgreSQL lease·fencing token) 추가. §6 격리 수준(Snapshot REPEATABLE READ, Commit READ COMMITTED) 확정. §7 재시도 정책(Agent 1회, Commit 2회, Tick 전체 0회) 확정. |
-| v2.2 | 2026-08-08 | §2.1 lease 설계 범위 보완 — simulation_ticks 테이블·전체 필드 목록, partial unique index, heartbeat 갱신·stale 처리, Commit Service run_id+fence_token 검증, 409 TICK_ALREADY_RUNNING, lease TTL 제약 추가. §3 [8] DB Commit에 run_id·fence_token·state_version 검증 항목 추가. |
+| v2.2 | 2026-08-08 | §2.1 lease 설계 범위 보완 — simulation_ticks 테이블·전체 필드 목록, partial unique index, heartbeat 갱신·stale 처리, Commit Service run_id·fence_token 검증, 409 TICK_ALREADY_RUNNING, lease TTL 제약 추가. §3 [8] DB Commit에 run_id·fence_token·state_version 검증 항목 추가. |
