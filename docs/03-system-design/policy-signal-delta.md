@@ -314,12 +314,3 @@ Tick 결과에는 실제로 평가에 사용한 배포 Registry의 `policy_versi
 
 미결정 값을 Magic Layer, LLM 또는 구현자 임의 상수로 대체하지 않는다.
 
-## 변경 이력
-
-| 버전 | 날짜 | 변경 내용 | 작성자 |
-| --- | --- | --- | --- |
-| v0.1 | 2026-07-29 | 기존 Policy Engine의 signal·Action·Event 수치 규칙을 단일 하위 규칙표로 분리하고, 방향성·중복 제거·최종 clamp·policy_version 기준과 Magic Event Registry를 정리했다. STUDENT_MISSING은 사건별 duration override를 사용하고, 실제 기간 미등록 시 임시 비활성화를 거부하도록 정의했다. | 김가윤 |
-| v0.2 | 2026-08-03 | 공통 문서 템플릿에 맞게 중복 본문 제목을 제거하고 메타데이터·개요 및 목적 형식을 통일했다. | 김가윤 |
-| v0.3 | 2026-08-03 | MVP 일반 Event를 7종으로 확정하고, 동일 원인의 상충 후보는 Registry source 우선순위로 선택하되 동순위·미등록 충돌은 그룹 거부하도록 수정했다. Magic Event intensity를 확정 Registry 값으로 정리하고 실행 정책 버전을 policy-mvp-0.4로 올렸다. | 김가윤 |
-| v0.4 | 2026-08-05 | 재현성·중복 제거·규칙 버전 검증의 실행 주체를 Tick Engine의 `run_tick()`으로 정합화했다. | Codex |
-| v0.5 | 2026-08-05 | 재현성·중복 제거·규칙 버전 검증의 실행 조율 주체를 별도 `TickOrchestrator.run_tick()`으로 변경했다. | Codex |
