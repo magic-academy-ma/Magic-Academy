@@ -9,14 +9,14 @@ class AgentType(str, Enum):
 
 
 @dataclass
-class Agent:
+class TickAgent:
     id: str
     agent_type: AgentType
     is_active: bool
 
 
 @dataclass
-class Event:
+class TickEvent:
     id: str
     event_type: str
     participant_ids: set[str]
@@ -69,8 +69,8 @@ class TickEngine:
 
     async def run_tick(
         self,
-        agents: list[Agent],
-        event: Event,
+        agents: list[TickAgent],
+        event: TickEvent,
         snapshot: WorldSnapshot,
     ) -> TickResult:
         if self._running:
@@ -108,7 +108,7 @@ class TickEngine:
         finally:
             self._running = False
 
-    def _select_participants(self, agents: list[Agent], event: Event) -> list[Agent]:
+    def _select_participants(self, agents: list[TickAgent], event: TickEvent) -> list[TickAgent]:
         result = []
         for agent in agents:
             if not agent.is_active:

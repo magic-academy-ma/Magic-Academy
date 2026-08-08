@@ -10,9 +10,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.simulation.tick_engine import (
-    Agent,
+    TickAgent,
     AgentType,
-    Event,
+    TickEvent,
     TickConflictError,
     TickEngine,
     TickResult,

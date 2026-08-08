@@ -6,23 +6,23 @@ from app.simulation.tick_engine import (
     TickEngine,
     TickConflictError,
     TickRollbackError,
-    Agent,
+    TickAgent,
     AgentType,
-    Event,
+    TickEvent,
     WorldSnapshot,
 )
 
 
-def make_student(agent_id: str) -> Agent:
-    return Agent(id=agent_id, agent_type=AgentType.STUDENT, is_active=True)
+def make_student(agent_id: str) -> TickAgent:
+    return TickAgent(id=agent_id, agent_type=AgentType.STUDENT, is_active=True)
 
 
-def make_professor(agent_id: str) -> Agent:
-    return Agent(id=agent_id, agent_type=AgentType.PROFESSOR, is_active=True)
+def make_professor(agent_id: str) -> TickAgent:
+    return TickAgent(id=agent_id, agent_type=AgentType.PROFESSOR, is_active=True)
 
 
-def make_event(participant_ids: list[str]) -> Event:
-    return Event(id="evt-1", event_type="class", participant_ids=set(participant_ids))
+def make_event(participant_ids: list[str]) -> TickEvent:
+    return TickEvent(id="evt-1", event_type="class", participant_ids=set(participant_ids))
 
 
 def make_snapshot() -> WorldSnapshot:
@@ -149,7 +149,7 @@ async def test_inactive_agent_skipped():
     runtime = AsyncMock(return_value={"intent": "study"})
     engine = TickEngine(runtime=runtime)
 
-    inactive_student = Agent(id="s-inactive", agent_type=AgentType.STUDENT, is_active=False)
+    inactive_student = TickAgent(id="s-inactive", agent_type=AgentType.STUDENT, is_active=False)
     event = make_event(["s-inactive"])
     snapshot = make_snapshot()
 

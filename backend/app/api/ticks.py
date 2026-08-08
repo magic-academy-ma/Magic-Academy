@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.simulation.tick_engine import (
-    Agent,
     AgentType,
-    Event,
+    TickAgent,
     TickConflictError,
     TickEngine,
+    TickEvent,
     TickResult,
     TickRollbackError,
     WorldSnapshot,
@@ -51,10 +51,10 @@ def make_tick_router(engine: TickEngine) -> APIRouter:
     )
     async def run_tick(simulation_id: str, body: TickRequest) -> TickResponse:
         agents = [
-            Agent(id=a.id, agent_type=a.agent_type, is_active=a.is_active)
+            TickAgent(id=a.id, agent_type=a.agent_type, is_active=a.is_active)
             for a in body.agents
         ]
-        event = Event(
+        event = TickEvent(
             id=body.event.id,
             event_type=body.event.event_type,
             participant_ids=set(body.event.participant_ids),

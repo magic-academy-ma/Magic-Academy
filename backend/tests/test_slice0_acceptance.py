@@ -7,9 +7,9 @@ Tick Engine이 6-Agent roster를 올바르게 수신·처리할 수 있는지를
 import pytest
 
 from app.simulation.tick_engine import (
-    Agent,
+    TickAgent,
     AgentType,
-    Event,
+    TickEvent,
     TickEngine,
     WorldSnapshot,
 )
@@ -22,18 +22,18 @@ TOTAL_AGENT_COUNT = STUDENT_COUNT + PROFESSOR_COUNT
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
-def initial_roster() -> list[Agent]:
+def initial_roster() -> list[TickAgent]:
     """Slice 0 seed 후 기대하는 6-Agent roster (mock)"""
     students = [
-        Agent(id=f"student-0{i}", agent_type=AgentType.STUDENT, is_active=True)
+        TickAgent(id=f"student-0{i}", agent_type=AgentType.STUDENT, is_active=True)
         for i in range(1, STUDENT_COUNT + 1)
     ]
-    professor = Agent(id="professor-01", agent_type=AgentType.PROFESSOR, is_active=True)
+    professor = TickAgent(id="professor-01", agent_type=AgentType.PROFESSOR, is_active=True)
     return students + [professor]
 
 
-def class_event(participant_ids: set[str]) -> Event:
-    return Event(id="evt-class-1", event_type="class", participant_ids=participant_ids)
+def class_event(participant_ids: set[str]) -> TickEvent:
+    return TickEvent(id="evt-class-1", event_type="class", participant_ids=participant_ids)
 
 
 def initial_snapshot() -> WorldSnapshot:

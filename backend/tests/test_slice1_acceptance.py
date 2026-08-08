@@ -11,9 +11,9 @@ Slice 1 인수 조건 — 은혜님 파트 (Tick·Event 흐름)
 import pytest
 
 from app.simulation.tick_engine import (
-    Agent,
+    TickAgent,
     AgentType,
-    Event,
+    TickEvent,
     PolicyInput,
     TickConflictError,
     TickEngine,
@@ -23,16 +23,16 @@ from app.simulation.tick_engine import (
 )
 
 
-def student(sid: str) -> Agent:
-    return Agent(id=sid, agent_type=AgentType.STUDENT, is_active=True)
+def student(sid: str) -> TickAgent:
+    return TickAgent(id=sid, agent_type=AgentType.STUDENT, is_active=True)
 
 
-def professor(pid: str) -> Agent:
-    return Agent(id=pid, agent_type=AgentType.PROFESSOR, is_active=True)
+def professor(pid: str) -> TickAgent:
+    return TickAgent(id=pid, agent_type=AgentType.PROFESSOR, is_active=True)
 
 
-def class_event(*participant_ids: str) -> Event:
-    return Event(id="evt-1", event_type="class", participant_ids=set(participant_ids))
+def class_event(*participant_ids: str) -> TickEvent:
+    return TickEvent(id="evt-1", event_type="class", participant_ids=set(participant_ids))
 
 
 def snapshot() -> WorldSnapshot:
@@ -149,7 +149,7 @@ async def test_tick_result_skipped_agents_not_in_participants():
         return {"intent": "study"}
 
     active = student("s-active")
-    inactive = Agent(id="s-inactive", agent_type=AgentType.STUDENT, is_active=False)
+    inactive = TickAgent(id="s-inactive", agent_type=AgentType.STUDENT, is_active=False)
     event = class_event("s-active", "s-inactive")
 
     result: TickResult = await TickEngine(runtime=runtime).run_tick(
