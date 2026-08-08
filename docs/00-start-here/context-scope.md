@@ -20,11 +20,11 @@ updated: 2026-08-06
 | 파일 | 문자 수 | 예상 토큰 | 분류 |
 |------|------:|----------:|------|
 | `00-start-here/index.md` | 898 | ~225 | Always |
-| `00-start-here/what-is-decided.md` | 2,448 | ~612 | Always |
+| `00-start-here/what-is-decided.md` | 1,967 | ~492 | Always |
 | `00-start-here/what-is-pending.md` | 959 | ~240 | Always |
 | `00-start-here/context-quality.md` | 895 | ~224 | Always |
 | `02-domain/overview.md` | 913 | ~228 | Always |
-| `02-domain/agents.md` | 2,403 | ~601 | Always |
+| `02-domain/agents.md` | 2,004 | ~501 | Always |
 | `02-domain/relationships.md` | 1,220 | ~305 | Always |
 | `02-domain/organizations.md` | 960 | ~240 | Always |
 | `02-domain/events.md` | 1,280 | ~320 | Always |
@@ -47,10 +47,10 @@ updated: 2026-08-06
 | `_meta/SYNC.md` | — | ~1,020 | Skip |
 | `_meta/ai-native-env-design.md` | — | ~1,063 | Skip |
 
-> 측정일: 2026-08-06 (`wc -m`)
+> 측정일: 2026-08-06 (`wc -m`), what-is-decided.md·agents.md는 2026-08-08 재측정
 
-**총 Always Load 토큰**: ~3,648 토큰 (00-start-here/ + 02-domain/ 기준)  
-**전체 docs/ 토큰 (Skip 제외)**: ~22,450 토큰
+**총 Always Load 토큰**: ~3,428 토큰 (00-start-here/ + 02-domain/ 기준)  
+**전체 docs/ 토큰 (Skip 제외)**: ~22,230 토큰
 
 ---
 
