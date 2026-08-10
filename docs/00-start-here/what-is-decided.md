@@ -1,21 +1,10 @@
 ---
 title: 확정된 사항
 status: approved
-visibility: public
 updated: 2026-08-08
-source:
-  - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
-  - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
-  - "시스템 레이어 구조 (Confluence #6389788)"
-  - "Magic Layer 설계 (Confluence #6619141)"
-  - "2026-07-18 회의 — 타겟 유저 확정"
-  - "2026-07-20 회의 — 프롬프트 캐싱 시점 확정"
-  - "시스템 아키텍처 v2.3 (Confluence #8290305) — Agent 수 · Tick 단위 확정"
 ---
 
 # 확정된 사항
-
-> 출처: 2차 회의 (2026-07-07) · [Spec] MVP 핵심 설계 기준 (Confluence #6356994) · 2026-07-09 기술 스택 확정 회의 (Confluence #7405620)
 
 ---
 
@@ -35,8 +24,6 @@ source:
 ---
 
 ## 기술 스택
-
-> 출처: 2026-07-09 기술 스택 확정 회의 (Confluence #7405620)
 
 | 계층 | 기술 |
 |------|------|
