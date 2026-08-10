@@ -243,6 +243,44 @@ class EventParticipant(TimestampMixin, Base):
     result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
 
+class RuntimeResult(TimestampMixin, Base):
+    __tablename__ = "runtime_results"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_runtime_results_idempotency_key"),
+        CheckConstraint("tick_number >= 0", name="ck_runtime_results_tick_number"),
+        CheckConstraint("retry_count >= 0", name="ck_runtime_results_retry_count"),
+        CheckConstraint(
+            "status IN ('PROPOSED', 'FALLBACK', 'SKIPPED')",
+            name="ck_runtime_results_status",
+        ),
+        Index("idx_runtime_results_run_tick", "run_id", "tick_number", "agent_id"),
+        Index(
+            "idx_runtime_results_run_failures",
+            "run_id",
+            "tick_number",
+            postgresql_where=text("failure_reason IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    agent_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    intent: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    result_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class Relationship(TimestampMixin, Base):
     __tablename__ = "relationships"
     __table_args__ = (

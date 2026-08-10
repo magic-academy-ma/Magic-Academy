@@ -1,0 +1,103 @@
+from collections.abc import Sequence
+from typing import Callable
+
+from sqlalchemy.orm import Session
+from uuid6 import uuid7
+
+from app.domain.models import RuntimeResult
+from app.repositories import runtime_results as runtime_result_repository
+from app.services.runtime_results import (
+    IdempotencyConflictError,
+    RuntimeResultBatchSaveResult,
+    result_fingerprint,
+)
+from app.simulation.agent_runtime import AgentRuntimeResult
+
+
+class RuntimeBatchMismatchError(ValueError):
+    pass
+
+
+class DatabaseRuntimeResultSink:
+    def __init__(self, session_factory: Callable[[], Session]) -> None:
+        self._session_factory = session_factory
+
+    def save_batch(
+        self,
+        results: Sequence[AgentRuntimeResult],
+    ) -> RuntimeResultBatchSaveResult:
+        pending, duplicate_count = _prepare_batch(results)
+        if not pending:
+            return RuntimeResultBatchSaveResult(
+                new_count=0,
+                duplicate_count=duplicate_count,
+            )
+
+        with self._session_factory() as session:
+            with session.begin():
+                existing_rows = runtime_result_repository.list_by_idempotency_keys(
+                    session,
+                    list(pending),
+                )
+                existing_by_key = {
+                    row.idempotency_key: row for row in existing_rows
+                }
+                rows_to_add: list[RuntimeResult] = []
+                for key, (result, fingerprint) in pending.items():
+                    existing = existing_by_key.get(key)
+                    if existing is not None:
+                        if existing.result_fingerprint != fingerprint:
+                            raise IdempotencyConflictError(key)
+                        duplicate_count += 1
+                        continue
+                    rows_to_add.append(
+                        RuntimeResult(
+                            id=uuid7(),
+                            run_id=result.run_id,
+                            tick_number=result.tick_number,
+                            agent_id=result.agent_id,
+                            status=result.status.value,
+                            action_type=result.intent.action_type.value,
+                            intent=result.intent.model_dump(mode="json"),
+                            retry_count=result.retry_count,
+                            failure_reason=result.failure_reason,
+                            model=result.model,
+                            prompt_version=result.prompt_version,
+                            idempotency_key=key,
+                            result_fingerprint=fingerprint,
+                        )
+                    )
+                runtime_result_repository.add_all(session, rows_to_add)
+                session.flush()
+
+        return RuntimeResultBatchSaveResult(
+            new_count=len(rows_to_add),
+            duplicate_count=duplicate_count,
+        )
+
+
+def _prepare_batch(
+    results: Sequence[AgentRuntimeResult],
+) -> tuple[dict[str, tuple[AgentRuntimeResult, str]], int]:
+    pending: dict[str, tuple[AgentRuntimeResult, str]] = {}
+    duplicate_count = 0
+    batch_identity: tuple[str, int] | None = None
+    for result in results:
+        if not isinstance(result, AgentRuntimeResult):
+            raise TypeError("RuntimeResultSink only accepts AgentRuntimeResult values")
+        identity = (result.run_id, result.tick_number)
+        if batch_identity is None:
+            batch_identity = identity
+        elif identity != batch_identity:
+            raise RuntimeBatchMismatchError(
+                "save_batch accepts results from exactly one run and tick"
+            )
+        fingerprint = result_fingerprint(result)
+        existing = pending.get(result.idempotency_key)
+        if existing is not None:
+            if existing[1] != fingerprint:
+                raise IdempotencyConflictError(result.idempotency_key)
+            duplicate_count += 1
+            continue
+        pending[result.idempotency_key] = (result, fingerprint)
+    return pending, duplicate_count
