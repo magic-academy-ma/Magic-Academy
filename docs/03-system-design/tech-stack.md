@@ -3,7 +3,6 @@ title: 기술 스택 확정 — 선행조사 통합 결론
 source: confluence/05_TECH/tech-stack.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/10911784
 status: approved
-visibility: public
 updated: 2026-07-21
 source_updated: 2026-07-18
 ---

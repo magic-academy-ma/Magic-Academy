@@ -3,7 +3,6 @@ title: Policy Engine 설계
 source: confluence/05_TECH/policy-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/14090319/Policy+Engine
 status: draft
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-22
 ---

@@ -3,7 +3,6 @@ title: Magic Layer Agent 설계
 source: confluence/05_TECH/magic-layer.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/9371768/Magic+Layer+Agent
 status: approved
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-24
 ---

@@ -1,7 +1,6 @@
 ---
 title: AI Context 로딩 범위
 status: approved
-visibility: internal
 updated: 2026-08-10
 ---
 

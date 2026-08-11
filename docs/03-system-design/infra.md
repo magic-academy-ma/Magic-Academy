@@ -3,7 +3,6 @@ title: 인프라 — 배포 환경 및 운영 전략
 source: confluence/05_TECH/infra.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/6750218/Docker+Compose
 status: approved
-visibility: public
 updated: 2026-07-21
 source_updated: 2026-07-13
 ---

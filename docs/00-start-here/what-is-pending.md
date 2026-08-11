@@ -1,7 +1,6 @@
 ---
 title: 미정 사항
 status: approved
-visibility: internal
 updated: 2026-07-21
 ---
 

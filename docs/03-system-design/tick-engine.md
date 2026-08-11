@@ -3,7 +3,6 @@ title: Tick Engine 스펙
 source: confluence/05_TECH/tick-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/12910622/Tick+Engine
 status: approved
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-28
 ---

@@ -12,7 +12,6 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
 status: approved
-visibility: public
 updated: 2026-07-28
 ---
 

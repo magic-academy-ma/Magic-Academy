@@ -1,7 +1,6 @@
 ---
 title: AI Context 품질 기준
 status: approved
-visibility: public
 updated: 2026-07-23
 ---
 

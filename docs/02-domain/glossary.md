@@ -2,7 +2,6 @@
 title: 용어집
 source: local/CLAUDE.md + 2차 회의록 + docs/02-domain/*
 status: approved
-visibility: public
 updated: 2026-07-13
 ---
 

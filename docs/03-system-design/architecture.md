@@ -3,7 +3,6 @@ title: 시스템 아키텍처
 source: confluence/05_TECH/architecture.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
 status: approved
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-28
 ---

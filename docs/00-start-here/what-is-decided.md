@@ -1,7 +1,6 @@
 ---
 title: 확정된 사항
 status: approved
-visibility: internal
 updated: 2026-07-28
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"

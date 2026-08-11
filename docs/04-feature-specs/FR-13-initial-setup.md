@@ -1,7 +1,6 @@
 ---
 title: "FR-13 초기 설정 — Slice 0"
 status: approved
-visibility: public
 updated: 2026-08-06
 ---
 

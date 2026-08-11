@@ -2,7 +2,6 @@
 title: Agent Runtime 시스템 프롬프트
 source: docs/03-system-design/agent-runtime.md §10
 status: approved
-visibility: public
 updated: 2026-08-11
 ---
 

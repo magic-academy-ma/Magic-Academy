@@ -7,7 +7,6 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/17989637/MVP
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/17956886
 status: draft
-visibility: public
 updated: 2026-07-29
 source_updated: 2026-07-28
 ---
