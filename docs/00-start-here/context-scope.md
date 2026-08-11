@@ -1,7 +1,7 @@
 ---
 title: AI Context 로딩 범위
 status: approved
-visibility: public
+visibility: internal
 updated: 2026-08-10
 ---
 
@@ -52,7 +52,6 @@ updated: 2026-08-10
 | `05-team-rules/git-workflow-commit.md` | ~368 | 커밋 시 |
 | `05-team-rules/git-workflow-pr.md` | ~652 | PR 작성·리뷰 시 |
 | `05-team-rules/ai-usage.md` | ~332 | AI 사용 기록 작성 시 |
-| `decisions/README.md` | ~158 | ADR 작성 시 |
 
 **전체 docs/ 토큰 (2026-08-11 기준)**: ~20,645 토큰  
 **DB 스키마**: `docs/03-system-design/data-model.md` 삭제됨 → `backend/app/domain/models.py` 직접 참조
@@ -147,7 +146,7 @@ docs/05-team-rules/ai-usage.md
 
 | 파일 | 이유 |
 |------|------|
-| `docs/decisions/README.md` | ADR 양식·미결 목록. ADR 작성 시점에만 필요. |
+| ~~`docs/decisions/README.md`~~ | **삭제됨** (2026-08-12). ADR은 Confluence에 작성. |
 | ~~`docs/README.md`~~ | **삭제됨** (2026-08-10). `index.md`와 중복. 사람용 안내 파일. |
 | ~~`docs/_meta/SYNC.md`~~ | **삭제됨** (2026-08-10). Confluence 이관 큐·운영 정책. ~1,155 토큰. |
 | ~~`docs/_meta/ai-native-env-design.md`~~ | **삭제됨** (2026-08-10). 설계 과정 ADR. 결과는 다른 파일에 반영. ~1,055 토큰. |

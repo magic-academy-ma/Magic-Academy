@@ -1,7 +1,7 @@
 ---
 title: 확정된 사항
 status: approved
-visibility: public
+visibility: internal
 updated: 2026-07-28
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
@@ -43,27 +43,6 @@ source:
 - **User Persona**: 별도 Agent 아님. Student 중 1명을 지정하며 성격·성향 수정 가능. 직접 조종 불가.
 - **Student Agent memory 상한**: 최대 10 — §FR-02
 - **Magic Layer 실행 위치**: Event Master → Magic Layer → Agent Runtime
-
----
-
-## 기술 스택
-
-> 출처: 2026-07-09 기술 스택 확정 회의 (Confluence #7405620)
-
-| 계층 | 기술 |
-|------|------|
-| 백엔드 | FastAPI |
-| 에이전트 오케스트레이션 | LangGraph |
-| DB | PostgreSQL + pgvector |
-| 프론트엔드 | React |
-| 인프라 | Docker Compose |
-
----
-
-## 개발 환경
-
-- **GitHub Actions CI**: 구축 완료
-- **CodeRabbit**: AI PR 리뷰어 설치 완료
 
 ---
 
