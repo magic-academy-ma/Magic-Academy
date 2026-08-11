@@ -72,6 +72,7 @@ def make_tick_router(engine: TickEngine) -> APIRouter:
             raise HTTPException(status_code=409, detail="Tick is already running") from exc
         except TickRollbackError as exc:
             raise HTTPException(status_code=500, detail="Tick rolled back due to runtime failure") from exc
+        # TODO: 전체 에러 핸들링 리팩 시 RuntimeExecutionError 외 예외(코드 버그 등) 처리 추가
 
         return TickResponse(
             status=result.status,
