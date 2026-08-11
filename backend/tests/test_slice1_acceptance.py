@@ -19,6 +19,7 @@ from app.simulation.tick_engine import (
     TickEngine,
     TickResult,
     TickRollbackError,
+    RuntimeExecutionError,
     WorldSnapshot,
 )
 
@@ -183,7 +184,7 @@ async def test_tick_state_is_failed_on_rollback():
     """Runtime 실패로 rollback 시 TickRollbackError가 발생한다"""
 
     async def failing_runtime(agent, event, snapshot):
-        raise RuntimeError("timeout")
+        raise RuntimeExecutionError("timeout")
 
     s1 = student("s-1")
     event = class_event("s-1")

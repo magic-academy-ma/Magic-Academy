@@ -49,8 +49,12 @@ class TickConflictError(Exception):
     """Tick이 이미 실행 중일 때 발생"""
 
 
+class RuntimeExecutionError(Exception):
+    """Runtime 콜백의 예상된 실패 (타임아웃, LLM 오류 등)"""
+
+
 class TickRollbackError(Exception):
-    """Runtime 실패로 Tick 전체가 rollback될 때 발생"""
+    """RuntimeExecutionError로 Tick 전체가 rollback될 때 발생"""
 
 
 AgentRuntimeFn = Callable[..., Coroutine[Any, Any, dict]]
@@ -103,7 +107,7 @@ class TickEngine:
             )
         except TickConflictError:
             raise
-        except Exception as exc:
+        except RuntimeExecutionError as exc:
             raise TickRollbackError("Tick rolled back due to runtime failure") from exc
         finally:
             self._running = False

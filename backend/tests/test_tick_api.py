@@ -16,6 +16,7 @@ from app.simulation.tick_engine import (
     TickConflictError,
     TickEngine,
     TickResult,
+    RuntimeExecutionError,
     WorldSnapshot,
 )
 
@@ -110,7 +111,7 @@ def test_duplicate_tick_returns_409():
 
 def test_runtime_failure_returns_500():
     async def failing_runtime(agent, event, snapshot):
-        raise RuntimeError("LLM timeout")
+        raise RuntimeExecutionError("LLM timeout")
 
     client = TestClient(make_test_app(make_engine(runtime=failing_runtime)))
     response = client.post("/v1/tick/sim-1/run", json={

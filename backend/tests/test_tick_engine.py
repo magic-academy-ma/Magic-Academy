@@ -6,6 +6,7 @@ from app.simulation.tick_engine import (
     TickEngine,
     TickConflictError,
     TickRollbackError,
+    RuntimeExecutionError,
     TickAgent,
     AgentType,
     TickEvent,
@@ -96,7 +97,7 @@ async def test_duplicate_tick_raises_conflict():
 
 async def test_runtime_failure_triggers_rollback():
     async def failing_runtime(**kwargs):
-        raise RuntimeError("LLM timeout")
+        raise RuntimeExecutionError("LLM timeout")
 
     engine = TickEngine(runtime=failing_runtime)
     student = make_student("s-1")
@@ -129,7 +130,7 @@ async def test_tick_unlocks_after_failure():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            raise RuntimeError("first call fails")
+            raise RuntimeExecutionError("first call fails")
         return {"intent": "study"}
 
     engine = TickEngine(runtime=sometimes_failing)
@@ -141,6 +142,43 @@ async def test_tick_unlocks_after_failure():
         await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
 
     # 실패 후에도 lock이 해제돼 두 번째 Tick이 실행돼야 한다
+    await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
+    assert call_count == 2
+
+
+async def test_code_bug_propagates_without_wrapping():
+    """RuntimeExecutionError가 아닌 예외(코드 버그)는 TickRollbackError로 감싸지 않고 propagate한다"""
+    async def buggy_runtime(**kwargs):
+        raise TypeError("unexpected argument")
+
+    engine = TickEngine(runtime=buggy_runtime)
+    student = make_student("s-1")
+    event = make_event(["s-1"])
+    snapshot = make_snapshot()
+
+    with pytest.raises(TypeError):
+        await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
+
+
+async def test_tick_unlocks_after_code_bug():
+    """코드 버그로 Tick이 실패해도 lock이 해제된다"""
+    call_count = 0
+
+    async def buggy_then_ok(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TypeError("bug")
+        return {"intent": "study"}
+
+    engine = TickEngine(runtime=buggy_then_ok)
+    student = make_student("s-1")
+    event = make_event(["s-1"])
+    snapshot = make_snapshot()
+
+    with pytest.raises(TypeError):
+        await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
+
     await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
     assert call_count == 2
 
