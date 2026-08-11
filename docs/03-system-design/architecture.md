@@ -78,24 +78,6 @@ Frontend
 | Domain Services | Intent 수집 → Conflict Resolve → DB Commit | — | DB 직접 수정 담당 |
 | API Layer | REST + WebSocket 라우터 | — | FastAPI 내장 WS |
 
-### FastAPI 서버 모듈 구조
-
-```
-backend/
-└── app/
-    ├── main.py              # FastAPI 진입점
-    ├── api/                 # REST + WebSocket 라우터
-    ├── core/                # 설정, DB 연결, 미들웨어
-    ├── domain/              # 도메인 모델
-    ├── repositories/        # PostgreSQL + pgvector 접근
-    ├── services/            # 유즈케이스 조합
-    └── simulation/          # 시뮬레이션 엔진
-        ├── tick_engine.py
-        ├── agent_runtime.py
-        ├── event_master.py
-        └── magic_layer.py
-```
-
 ---
 
 ## 4. Tick 기준 데이터 흐름
@@ -108,50 +90,9 @@ backend/
 
 ### 4.2 활동 시간대 — 블록 실행 순서
 
-```
-[1] SimulationTickService
-    - tick 시작
-    - 현재 world state snapshot 생성
+SimulationTickService → Event Master → Magic Layer → Agent Runtime × 6 → Policy Engine → Conflict Resolver → DB Commit → WebSocket broadcast
 
-[2] Event Master Agent (Sonnet 4.6)
-    - 일반 대학 생활 이벤트 생성 (수업·과제·과팅·시험 등)
-    - 관련 학생 2~5명 선택, 사건 유형·장소·영향도 결정
-
-[3] Magic Layer (Haiku 4.5)
-    - ① Event Master 이벤트를 마법 세계관으로 변환 (매 tick)
-    - ② 30% 확률로 마법 특수 사건 추가 생성 (폭발·저주·실종 등)
-    - 생성된 이벤트는 동일 events 테이블에 source = 'magic_layer' 로 저장
-
-[4] Agent Runtime — 생활 Agent 6명 병렬 실행 (1단계 MVP)
-    - 입력: world state snapshot + 개인 memory + 관계 정보 + 현재 이벤트
-    - asyncio.gather() + semaphore(max=10) 동시 호출 제한
-    - Agent별 LangGraph 실행 (7노드):
-        Observe
-        → Retrieve Memory
-        → Evaluate Relationship / Emotion
-        → Decide Action
-        → Generate Intent
-        → Save Observation
-        → Reflection 조건 확인
-    - 각 Agent: DB 직접 수정 없이 Intent만 반환
-
-[5] Intent Collector
-    - 현재 단계의 생활 Agent Intent 수집
-
-[6] Conflict Resolver
-    - 같은 tick, 같은 관계에 복수 delta → 합산 후 clamp(-100, +100)
-    - 같은 Agent 상태에 복수 수정 → 마지막 값 우선 (덮어쓰기)
-    - 이벤트 중복 참여 → event_id 기준 dedup
-
-[7] Commit (PostgreSQL batch write)
-    - 관계 변화 저장
-    - Agent 상태 변화 저장
-    - memory 저장
-    - event log 저장
-
-[8] WebSocket broadcast
-    - tick 완료 결과를 변경분(delta)만 프론트엔드에 push
-```
+상세 실행 순서 및 각 단계 책임: `docs/03-system-design/tick-engine.md §3`
 
 ---
 
@@ -194,12 +135,3 @@ backend/
 
 ---
 
-## 7. 변경 이력
-
-| 버전 | 날짜 | 변경 내용 |
-| --- | --- | --- |
-| v1.0 | 2026-07-13 | 초안 작성 — 선행조사 11개 기반, 회의 출발점. 미확정 항목 §8 포함. |
-| v2.0 | 2026-07-18 | 구성 재편 — §1 시스템 개요 추가. Magic Layer 실행 위치 확정 반영. 레이어 방향도 추가. §5 주요 인터페이스 신설. 토큰 비용·미확정 항목 섹션 삭제. |
-| v2.1 | 2026-07-18 | 레이어 방향도 수정 — world state snapshot 공유 입력 및 수신 컴포넌트 명시. |
-| v2.2 | 2026-07-23 | Agent Runtime을 1단계 생활 Agent 6명, 2단계 13명, 3단계 25명으로 정정하고 아키텍처 도식·책임표·실행 흐름에 반영했다. Event Master와 Magic Layer는 생활 Agent 수에서 제외했다. |
-| v2.3 | 2026-07-28 | Tick 단위를 Tick Engine 스펙(#12910622) 기준으로 정정. 1 Tick = 8분 = 1블록, 1일 = 3블록 = 24분. |

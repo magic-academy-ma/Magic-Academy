@@ -107,45 +107,7 @@ Policy 계산 중 DB를 읽어 최신값을 다시 가져오지 않으며, Orche
 
 ### 4.2 출력: PolicyEvaluationResult
 
-```json
-{
-  "run_id": "sim-20260721-01",
-  "tick_number": 42,
-  "policy_version": "policy-mvp-0.1",
-  "status": "EVALUATED",
-  "accepted_intents": [
-    {
-      "agent_id": 3,
-      "action_type": "TALK",
-      "target_agent_id": 7
-    }
-  ],
-  "effect_candidates": [
-    {
-      "effect_id": "sim-20260721-01:42:3:reaction:TRUST_UP:7",
-      "source_type": "AGENT_REACTION",
-      "source_id": "3",
-      "rule_id": "REL_SIGNAL_TRUST_UP_MEDIUM",
-      "target_type": "RELATIONSHIP",
-      "source_agent_id": 3,
-      "target_agent_id": 7,
-      "metric": "trust",
-      "delta": 3,
-      "before": 21,
-      "after_preview": 24,
-      "reason": "TALK의 MEDIUM TRUST_UP 반응"
-    }
-  ],
-  "rejected_effects": [],
-  "warnings": []
-}
-```
-
-| status | 의미 |
-| --- | --- |
-| EVALUATED | 모든 입력을 정상 평가 |
-| PARTIAL | 일부 signal 또는 Event 효과를 거부하고 나머지만 반환 |
-| REJECTED | 필수 입력 또는 policy_version 오류로 전체 결과 거부 |
+> 출력 구조: `run_id`, `tick_number`, `policy_version`, `status`(EVALUATED / PARTIAL / REJECTED), `accepted_intents[]`(agent_id, action_type, target_agent_id), `effect_candidates[]`(effect_id, source_type, rule_id, target_type, source/target_agent_id, metric, delta, before, after_preview, reason), `rejected_effects[]`, `warnings[]`
 
 Policy Engine의 출력은 아직 확정된 변경이 아니다. Conflict Resolver가 최종 합성한 뒤 Orchestrator가 commit한다.
 
@@ -314,24 +276,6 @@ final_value = clamp(current_value + sum(accepted_deltas), min, max)
 
 ---
 
-## 11. 범위와 clamp
-
-| metric | 최소 | 최대 |
-| --- | --- | --- |
-| affection | -100 | 100 |
-| closeness | -100 | 100 |
-| trust | -100 | 100 |
-| tension | 0 | 100 |
-| rivalry | 0 | 100 |
-| dependency | 0 | 100 |
-| hunger | 0 | 100 |
-| fatigue | 0 | 100 |
-| stress | 0 | 100 |
-| satisfaction | 0 | 100 |
-| mood | -100 | 100 |
-
-clamp로 실제 반영량이 줄어든 경우 requested_delta와 applied_delta를 모두 로그에 남긴다.
-
 ---
 
 ## 12. 버전과 재현성
@@ -387,9 +331,3 @@ app/simulation/policy/
 
 ---
 
-## 변경 이력
-
-| 버전 | 날짜 | 변경 내용 |
-| --- | --- | --- |
-| v0.1 | 2026-07-23 | Agent Runtime v0.2와 Tick Engine 기준으로 Policy Engine 책임, 인터페이스, signal·action·event 기본 규칙, 버전·평가 기준 초안 작성 |
-| v0.2 | 2026-07-23 | Student 초기 MBTI 5종 확정 기준 반영. Big Five 수치 보정 제거하여 성격 이중 반영 방지 |

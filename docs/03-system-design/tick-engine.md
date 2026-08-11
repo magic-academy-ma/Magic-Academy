@@ -152,45 +152,7 @@ async def run_agents(agents, context):
 
 ---
 
-## 8. 모듈 위치
-
-```
-backend/app/simulation/
-├── tick_engine.py      # APScheduler 트리거, 블록 루프, 밤 스킵
-├── agent_runtime.py    # 생활 Agent 6명 병렬 실행 (확장 가능)
-├── event_master.py     # Event Master Agent 호출
-└── magic_layer.py      # Magic Layer 호출
-```
+---
 
 ---
 
-## 9. 의존성
-
-```
-Frontend (React)
-    ↕ WebSocket /v1/ws/simulations/{simulation_id}
-API Layer (FastAPI)
-    ↓
-Tick Engine (APScheduler + asyncio)  ← 이 스펙
-    ↓
-Event Master Agent → Magic Layer → Agent Runtime × 6 (MVP, 확장 가능)
-    ↓
-Domain Services (Intent Collector → Policy Engine → Conflict Resolver → DB Commit)
-    ↓
-PostgreSQL + pgvector
-```
-
-의존성 방향: 항상 위→아래 단방향.
-
----
-
-## 변경 이력
-
-| 버전 | 날짜 | 변경 내용 |
-| --- | --- | --- |
-| v1.0 | 2026-07-22 | 초안 작성 — Tick 루프 8단계 정의. D1/D2/D3 확정. |
-| v1.1 | 2026-07-22 | Tick 단위를 1 Tick=1블록(8분), 1일=3 Tick(24분)으로 정정. MVP 생활 Agent 수 6명 기준으로 통일. |
-| v1.2 | 2026-07-24 | Agent Runtime 출력 계약을 signal·Intent 1개·Memory 후보 방식으로 정리. Magic Layer 특수 사건 발생 기준을 world_state 조건 기반으로 확정. |
-| v1.3 | 2026-07-28 | Professor 조건부 실행, Event 저장 후보 반환과 batch commit 책임, delta 합산 및 clamp 규칙, WebSocket 상태값 표현 정정. |
-| v1.4 | 2026-07-28 | 자동·수동 야간 전환이 동일 로직을 사용하도록 정의. WebSocket 경로와 메시지 타입을 API 명세 §14 기준으로 통일. Tick batch commit 성공 이후에만 변경 메시지 발행. |
-| v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
