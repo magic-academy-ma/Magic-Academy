@@ -219,94 +219,44 @@ docs/
 
 ## 역할별 페르소나
 
-> **세션 시작 전**: 아래 본인 페르소나를 확인하고, 지정된 자동 로딩 문서를 읽는다.  
-> 은혜 선택 기준: 시스템 구현 → `@system` / Issue·스펙 → `@pm` / AI 환경 관리 → `@ai-native`  
-> 가윤 선택 기준: Agent 캐릭터·행동 설계 → `@agent-dev`  
-> 지유 선택 기준: DB·Docker·인프라 → `@infra` / Professor Agent 설계 → `@agent-dev`  
-> 혜정 선택 기준: Magic Layer·Frontend → `@magic-layer`  
-> 역할 침범 방지: 본인 영역 밖을 수정해야 할 경우 해당 페르소나 담당자에게 먼저 확인
+> **세션 시작 전**: 작업 유형에 맞는 페르소나를 선택하고, 지정된 문서를 로드한다.  
+> 기획·스펙 → `@pm` / Slice 구현 → `@dev` / 프론트엔드 → `@fe`  
+> 역할 경계 침범 방지: 본인 영역 밖을 수정해야 할 경우 해당 담당자에게 먼저 확인
 
-### @system — 은혜
-
-**주요 담당**: Event Master Agent, Tick Engine, 시스템 오케스트레이션
-
-**자동 로딩 문서**
-- `docs/02-domain/`
-- `docs/03-system-design/`
-- `docs/04-feature-specs/event-master/` (미구현, 추후 추가)
-- `docs/04-feature-specs/tick-engine/` (미구현, 추후 추가)
-
----
-
-### @pm — 은혜 (+ 공통)
+### @pm — 기획·스펙
 
 **주요 담당**: Issue 작성, 스펙 초안, 요구사항 명확화, 범위 관리
 
 **자동 로딩 문서**
 - `docs/01-product/`
+- `docs/02-domain/`
 - `docs/04-feature-specs/`
-- `docs/02-domain/`
+- `docs/05-team-rules/git-workflow-pr.md`
 
 ---
 
-### @ai-native — 은혜
+### @dev — Slice 구현 (공통)
 
-**주요 담당**: AGENTS.md·Skills 설계, AI context 문서 관리, Claude Code 설정
-
-**자동 로딩 문서**
-- `docs/00-start-here/`
-- `docs/05-team-rules/`
-- `docs/superpowers/` (미구현, 추후 추가)
-
----
-
-### @agent-dev — 가윤·지유 (공통)
-
-**주요 담당**: Agent 캐릭터·페르소나 정의, Agent 행동 설계, LangGraph 노드, Agent Runtime
+**주요 담당**: Slice 단위 기능 구현, 백엔드·DB·인프라 작업
 
 **자동 로딩 문서**
 - `docs/02-domain/`
-- `docs/03-system-design/`
-- `docs/04-feature-specs/agent-runtime/` (미구현, 추후 추가)
-- `docs/04-feature-specs/agent-design/` (미구현, 추후 추가)
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/<해당 컴포넌트>.md`  ← Slice마다 직접 로드
+- `docs/04-feature-specs/<해당 Slice>.md`     ← Slice마다 직접 로드
+- `docs/05-team-rules/conventions.md`
+- `docs/05-team-rules/definition-of-done.md`
+- `docs/05-team-rules/git-workflow-commit.md`
 
 ---
 
-### @magic-layer — 혜정
-
-**주요 담당**: Magic Layer Agent, Frontend (React Flow)
-
-**자동 로딩 문서**
-- `docs/02-domain/`
-- `docs/03-system-design/`
-- `docs/04-feature-specs/magic-layer/` (미구현, 추후 추가)
-
----
-
-### @infra — 지유
-
-**주요 담당**: PostgreSQL+pgvector, Docker, CI/CD
-
-**자동 로딩 문서**
-- `docs/03-system-design/data-model/`
-- `docs/05-team-rules/`
-
----
-
-### @backend — 공통 (4명)
-
-**주요 담당**: FastAPI 라우터, API 설계, 공통 BE 패턴
-
-**자동 로딩 문서**
-- `docs/03-system-design/api/`
-- `docs/05-team-rules/`
-
----
-
-### @fe — 공통 (4명)
+### @fe — 프론트엔드
 
 **주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 표시
 
 **자동 로딩 문서**
-- `docs/03-system-design/`
+- `docs/02-domain/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/user-flow.md`
 - `docs/04-feature-specs/` (FE 관련)
+- `docs/05-team-rules/conventions.md`
