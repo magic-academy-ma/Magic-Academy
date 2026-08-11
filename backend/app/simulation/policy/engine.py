@@ -1,4 +1,5 @@
 from app.simulation.policy.models import (
+    METRIC_RANGE,
     EffectCandidate,
     EffectTargetType,
     PolicyEvaluationInput,
@@ -10,20 +11,6 @@ from app.simulation.policy.types import RelationshipSignalType, StateSignalType
 from app.simulation.policy.validators import validate_runtime_result
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
-
-METRIC_RANGE: dict[str, tuple[int, int]] = {
-    "trust": (-100, 100),
-    "affection": (-100, 100),
-    "mood": (-100, 100),
-    "tension": (0, 100),
-    "closeness": (0, 100),
-    "rivalry": (0, 100),
-    "dependency": (0, 100),
-    "hunger": (0, 100),
-    "fatigue": (0, 100),
-    "stress": (0, 100),
-    "satisfaction": (0, 100),
-}
 
 RELATIONSHIP_SIGNAL_TO_METRIC: dict[RelationshipSignalType, str] = {
     RelationshipSignalType.TRUST_UP: "trust",
@@ -106,17 +93,18 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
         if runtime_result.reaction is None:
             continue
 
-        for signal in runtime_result.reaction.relationship_signals:
+        for idx, signal in enumerate(runtime_result.reaction.relationship_signals):
             metric = RELATIONSHIP_SIGNAL_TO_METRIC.get(signal.signal_type)
             if metric is None:
                 warnings.append(f"unknown relationship signal: {signal.signal_type}")
                 continue
             pair_key = (runtime_result.agent_id, signal.target_agent_id)
-            current = rel_index.get(pair_key, {}).get(metric, 0)
+            rel_snapshot = rel_index.get(pair_key)  # None이면 첫 만남 → 초기값 0
+            current = rel_snapshot.get(metric, 0) if rel_snapshot is not None else 0
             delta = get_relationship_delta(signal.signal_type, signal.intensity)
             after_preview = _clamp_preview(current, delta, metric)
             effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:rel:{signal.signal_type}:{signal.target_agent_id}",
+                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:rel:{signal.signal_type}:{signal.target_agent_id}:{idx}",
                 target_type=EffectTargetType.RELATIONSHIP,
                 source_agent_id=runtime_result.agent_id,
                 target_agent_id=signal.target_agent_id,

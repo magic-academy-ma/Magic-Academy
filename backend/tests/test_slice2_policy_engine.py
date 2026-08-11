@@ -109,11 +109,11 @@ def _make_eval_input(runtime_results, rel_snapshots=None, agent_snapshots=None):
         run_id="sim-test-1",
         tick_number=1,
         policy_version="policy-mvp-0.1",
-        agent_snapshots=agent_snapshots or {
+        agent_snapshots=agent_snapshots if agent_snapshots is not None else {
             "agent-a": AgentSnapshot(agent_id="agent-a", hunger=50, fatigue=20, stress=10, satisfaction=50),
             "agent-b": AgentSnapshot(agent_id="agent-b", hunger=50, fatigue=20, stress=10, satisfaction=50),
         },
-        relationship_snapshots=rel_snapshots or [
+        relationship_snapshots=rel_snapshots if rel_snapshots is not None else [
             RelationshipSnapshot(source_agent_id="agent-a", target_agent_id="agent-b", trust=20, tension=5),
             RelationshipSnapshot(source_agent_id="agent-b", target_agent_id="agent-a", trust=15, tension=3),
         ],
@@ -277,3 +277,49 @@ def test_summed_delta_clamped_at_range():
     ]
     committed = resolve_conflicts(candidates)
     assert committed[0].after_preview == 100
+
+
+def test_merged_candidates_join_rule_id_and_reason():
+    from app.simulation.policy.conflict import resolve_conflicts
+    from app.simulation.policy.models import EffectCandidate, EffectTargetType
+    c1 = EffectCandidate(
+        effect_id="e1", target_type=EffectTargetType.RELATIONSHIP,
+        source_agent_id="a", target_agent_id="b", metric="trust",
+        delta=3, before=20, after_preview=23,
+        rule_id="REL_TRUST_UP_MEDIUM", reason="MEDIUM 반응",
+    )
+    c2 = EffectCandidate(
+        effect_id="e2", target_type=EffectTargetType.RELATIONSHIP,
+        source_agent_id="a", target_agent_id="b", metric="trust",
+        delta=5, before=20, after_preview=25,
+        rule_id="REL_TRUST_UP_HIGH", reason="HIGH 반응",
+    )
+    committed = resolve_conflicts([c1, c2])
+    assert len(committed) == 1
+    assert committed[0].delta == 8
+    assert "REL_TRUST_UP_MEDIUM" in committed[0].rule_id
+    assert "REL_TRUST_UP_HIGH" in committed[0].rule_id
+    assert "MEDIUM 반응" in committed[0].reason
+    assert "HIGH 반응" in committed[0].reason
+
+
+def test_missing_relationship_snapshot_treats_as_neutral_zero():
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+
+    results = [AgentRuntimeResult(
+        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
+        reaction=AgentReaction(
+            valence="POSITIVE",
+            relationship_signals=[RelationshipSignal(
+                signal_type=RelationshipSignalType.TRUST_UP,
+                intensity=SignalIntensity.MEDIUM,
+                target_agent_id="agent-b",
+            )],
+        ),
+    )]
+    # 첫 만남 — relationship snapshot 없음
+    result = evaluate_policy(_make_eval_input(results, rel_snapshots=[]))
+    trust_effects = [e for e in result.effect_candidates if e.metric == "trust"]
+    assert len(trust_effects) == 1
+    assert trust_effects[0].before == 0
