@@ -232,7 +232,8 @@ docs/
 
 **자동 로딩 문서**
 - `docs/02-domain/`
-- `docs/03-system-design/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/tick-engine.md`
 - `docs/04-feature-specs/event-master/` (미구현, 추후 추가)
 - `docs/04-feature-specs/tick-engine/` (미구현, 추후 추가)
 
@@ -246,6 +247,7 @@ docs/
 - `docs/01-product/`
 - `docs/04-feature-specs/`
 - `docs/02-domain/`
+- `docs/05-team-rules/git-workflow-pr.md`
 
 ---
 
@@ -256,7 +258,6 @@ docs/
 **자동 로딩 문서**
 - `docs/00-start-here/`
 - `docs/05-team-rules/`
-- `docs/superpowers/` (미구현, 추후 추가)
 
 ---
 
@@ -266,7 +267,8 @@ docs/
 
 **자동 로딩 문서**
 - `docs/02-domain/`
-- `docs/03-system-design/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/agent-runtime.md`
 - `docs/04-feature-specs/agent-runtime/` (미구현, 추후 추가)
 - `docs/04-feature-specs/agent-design/` (미구현, 추후 추가)
 
@@ -278,7 +280,9 @@ docs/
 
 **자동 로딩 문서**
 - `docs/02-domain/`
-- `docs/03-system-design/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/magic-layer.md`
+- `docs/03-system-design/user-flow.md`
 - `docs/04-feature-specs/magic-layer/` (미구현, 추후 추가)
 
 ---
@@ -288,7 +292,9 @@ docs/
 **주요 담당**: PostgreSQL+pgvector, Docker, CI/CD
 
 **자동 로딩 문서**
-- `docs/03-system-design/data-model/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/infra.md`
+- `docs/03-system-design/tech-stack.md`
 - `docs/05-team-rules/`
 
 ---
@@ -298,7 +304,7 @@ docs/
 **주요 담당**: FastAPI 라우터, API 설계, 공통 BE 패턴
 
 **자동 로딩 문서**
-- `docs/03-system-design/api/`
+- `docs/03-system-design/architecture.md`
 - `docs/05-team-rules/`
 
 ---
@@ -308,5 +314,6 @@ docs/
 **주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 표시
 
 **자동 로딩 문서**
-- `docs/03-system-design/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/user-flow.md`
 - `docs/04-feature-specs/` (FE 관련)
