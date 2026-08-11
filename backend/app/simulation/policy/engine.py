@@ -7,7 +7,6 @@ from app.simulation.policy.models import (
 )
 from app.simulation.policy.registries.signal_policy import get_relationship_delta, get_state_delta
 from app.simulation.policy.types import RelationshipSignalType, StateSignalType
-from app.simulation.policy.validators import validate_runtime_result
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
 
@@ -97,16 +96,25 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
     has_rejection = False
 
     for runtime_result in inp.runtime_results:
-        errors = validate_runtime_result(runtime_result, inp.valid_agent_ids)
-        if errors:
-            rejected.append({"agent_id": runtime_result.agent_id, "reasons": errors})
-            has_rejection = True
-            continue
-
         if runtime_result.reaction is None:
             continue
 
         for signal in runtime_result.reaction.relationship_signals:
+            if signal.target_agent_id == runtime_result.agent_id:
+                rejected.append({
+                    "agent_id": runtime_result.agent_id,
+                    "reasons": [f"self-target relationship signal: agent {runtime_result.agent_id} → self"],
+                })
+                has_rejection = True
+                continue
+            if signal.target_agent_id not in inp.valid_agent_ids:
+                rejected.append({
+                    "agent_id": runtime_result.agent_id,
+                    "reasons": [f"invalid target agent_id: {signal.target_agent_id}"],
+                })
+                has_rejection = True
+                continue
+
             metric = RELATIONSHIP_SIGNAL_TO_METRIC.get(signal.signal_type)
             if metric is None:
                 warnings.append(f"unknown relationship signal: {signal.signal_type}")

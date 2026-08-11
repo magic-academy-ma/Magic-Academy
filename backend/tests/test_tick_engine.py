@@ -174,3 +174,51 @@ async def test_same_snapshot_passed_to_all_agents():
 
     assert len(received_snapshots) == 2
     assert received_snapshots[0] is received_snapshots[1]
+
+
+async def test_different_simulation_ids_run_concurrently():
+    """다른 simulation_id는 동시에 409 없이 실행 가능해야 한다."""
+    import asyncio as _asyncio
+
+    started: list[str] = []
+
+    async def tracking_runtime(agent, event, snapshot):
+        started.append(snapshot.simulation_id)
+        await _asyncio.sleep(0.01)
+        return {"intent": "study"}
+
+    engine = TickEngine(runtime=tracking_runtime)
+    student = make_student("s-1")
+    event = make_event(["s-1"])
+
+    snapshot_a = WorldSnapshot(simulation_id="sim-A", current_tick=0)
+    snapshot_b = WorldSnapshot(simulation_id="sim-B", current_tick=0)
+
+    task_a = _asyncio.create_task(engine.run_tick(agents=[student], event=event, snapshot=snapshot_a))
+    await _asyncio.sleep(0)
+    task_b = _asyncio.create_task(engine.run_tick(agents=[student], event=event, snapshot=snapshot_b))
+
+    await _asyncio.gather(task_a, task_b)
+    assert sorted(started) == ["sim-A", "sim-B"]
+
+
+async def test_same_simulation_id_blocks_concurrent_tick():
+    """같은 simulation_id는 동시에 실행되면 TickConflictError가 발생해야 한다."""
+    import asyncio as _asyncio
+
+    async def slow_runtime(**kwargs):
+        await _asyncio.sleep(0.05)
+        return {"intent": "study"}
+
+    engine = TickEngine(runtime=slow_runtime)
+    student = make_student("s-1")
+    event = make_event(["s-1"])
+    snapshot = make_snapshot()  # simulation_id = "sim-1"
+
+    first = _asyncio.create_task(engine.run_tick(agents=[student], event=event, snapshot=snapshot))
+    await _asyncio.sleep(0)
+
+    with pytest.raises(TickConflictError):
+        await engine.run_tick(agents=[student], event=event, snapshot=snapshot)
+
+    await first

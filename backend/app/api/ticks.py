@@ -50,6 +50,12 @@ def make_tick_router(engine: TickEngine) -> APIRouter:
         response_model=TickResponse,
     )
     async def run_tick(simulation_id: str, body: TickRequest) -> TickResponse:
+        if simulation_id != body.snapshot.simulation_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"URL simulation_id '{simulation_id}'와 body.snapshot.simulation_id '{body.snapshot.simulation_id}'가 일치하지 않습니다.",
+            )
+
         agents = [
             TickAgent(id=a.id, agent_type=a.agent_type, is_active=a.is_active)
             for a in body.agents

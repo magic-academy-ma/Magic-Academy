@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
@@ -65,7 +66,7 @@ class TickEngine:
     ) -> None:
         self._runtime = runtime
         self._policy = policy
-        self._running = False
+        self._running: set[str] = set()  # 실행 중인 simulation_id 집합
 
     async def run_tick(
         self,
@@ -73,17 +74,19 @@ class TickEngine:
         event: TickEvent,
         snapshot: WorldSnapshot,
     ) -> TickResult:
-        if self._running:
-            raise TickConflictError("Tick is already running")
+        simulation_id = snapshot.simulation_id
+        if simulation_id in self._running:
+            raise TickConflictError(f"Tick is already running for simulation {simulation_id}")
 
-        self._running = True
+        self._running.add(simulation_id)
         try:
             participants = self._select_participants(agents, event)
-            runtime_outputs: dict[str, dict] = {}
 
-            for agent in participants:
-                result = await self._runtime(agent=agent, event=event, snapshot=snapshot)
-                runtime_outputs[agent.id] = result
+            async def _run_one(agent: TickAgent) -> tuple[str, dict]:
+                return agent.id, await self._runtime(agent=agent, event=event, snapshot=snapshot)
+
+            pairs = await asyncio.gather(*[_run_one(a) for a in participants])
+            runtime_outputs: dict[str, dict] = dict(pairs)
 
             if self._policy and runtime_outputs:
                 policy_inputs = [
@@ -106,7 +109,7 @@ class TickEngine:
         except Exception as exc:
             raise TickRollbackError("Tick rolled back due to runtime failure") from exc
         finally:
-            self._running = False
+            self._running.discard(simulation_id)
 
     def _select_participants(self, agents: list[TickAgent], event: TickEvent) -> list[TickAgent]:
         result = []

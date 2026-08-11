@@ -94,7 +94,7 @@ def test_duplicate_tick_returns_409():
     engine = make_engine(runtime=slow_runtime)
 
     # 엔진을 이미 실행 중 상태로 만든다
-    engine._running = True
+    engine._running.add("sim-1")
 
     client = TestClient(make_test_app(engine))
     response = client.post("/v1/tick/sim-1/run", json={
@@ -132,3 +132,13 @@ def test_invalid_agent_type_returns_422():
         "snapshot": {"simulation_id": "sim-1", "current_tick": 0},
     })
     assert response.status_code == 422
+
+
+def test_mismatched_simulation_id_returns_400():
+    client = TestClient(make_test_app(make_engine()))
+    response = client.post("/v1/tick/sim-1/run", json={
+        "agents": [{"id": "s-1", "agent_type": "student", "is_active": True}],
+        "event": {"id": "evt-1", "event_type": "class", "participant_ids": ["s-1"]},
+        "snapshot": {"simulation_id": "sim-DIFFERENT", "current_tick": 0},
+    })
+    assert response.status_code == 400
