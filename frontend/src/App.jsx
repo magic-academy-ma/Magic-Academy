@@ -49,6 +49,36 @@ function AuthPanel({ onLogin }) {
   );
 }
 
+// 서버 응답의 code/HTTP status를 프론트에서 보여줄 오류 종류로 분류한다.
+// NOTE: ticks/advance 스펙(§4.2)에 정의된 코드(UNAUTHORIZED/RESOURCE_NOT_FOUND/CONFLICT) 기준.
+// "재시도 실패"는 백엔드가 별도 code로 내려주는 필드가 아직 확정되지 않아, 우선 CONFLICT(409)를
+// "지금은 재시도할 수 없는 상태"로 간주해 매핑했다. 실제 재시도 관련 code가 확정되면 이 매핑만
+// 바꾸면 되도록 분리해뒀다.
+function classifyTickError(requestError) {
+  const status = requestError?.status;
+  const code = requestError?.code;
+
+  if (status === 401) {
+    return { type: "AUTH", message: requestError.message };
+  }
+  if (status === 404 || code === "RESOURCE_NOT_FOUND") {
+    return { type: "NOT_FOUND", message: "Simulation을 찾을 수 없습니다." };
+  }
+  if (status === 409 || code === "CONFLICT") {
+    return {
+      type: "RETRY_FAILURE",
+      message: "Simulation이 현재 Tick을 진행할 수 있는 상태가 아닙니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+  if (status >= 500) {
+    return {
+      type: "RUNTIME",
+      message: "Tick 실행 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    };
+  }
+  return { type: "GENERIC", message: requestError?.message || "알 수 없는 오류가 발생했습니다." };
+}
+
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [simulation, setSimulation] = useState(null);
@@ -58,12 +88,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [tickLoading, setTickLoading] = useState(false);
+  const [tickResult, setTickResult] = useState(null);
+  const [tickError, setTickError] = useState(null); // { type, message }
+
   function resetSession() {
     setAuth(null);
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
     setError("");
+    setTickResult(null);
+    setTickError(null);
   }
 
   if (!auth) return <AuthPanel onLogin={setAuth} />;
@@ -111,6 +147,46 @@ export default function App() {
     }
   }
 
+  async function runTick() {
+    setTickLoading(true);
+    setTickError(null);
+    setTickResult(null);
+
+    try {
+      const result = await apiRequest(
+        `/v1/simulations/${simulation.id}/ticks/advance`,
+        {
+          token: auth.access_token,
+          method: "POST",
+          headers: {
+            "X-Internal-Api-Key": import.meta.env.VITE_INTERNAL_API_KEY,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      setTickResult(result.data ?? result);
+    } catch (requestError) {
+      const classified = classifyTickError(requestError);
+      if (classified.type === "AUTH") {
+        resetSession();
+        return;
+      }
+      setTickError(classified);
+    } finally {
+      setTickLoading(false);
+    }
+  }
+
+  // NOTE: 현재 API 명세(§4.2 ticks/advance 응답)에는 Agent별 행동/발화/판단 근거 필드가
+  // 없다. Agent Runtime Internal API spec §3.2(AgentRuntimeResult)에는 이미
+  // action_type / utterance / motivation_summary / decision_explanation이 정의되어 있으므로,
+  // 백엔드가 이를 ticks/advance 응답에 `agent_results`라는 이름으로 얹어준다고 가정하고
+  // 미리 대응해뒀다. 실제 필드명이 확정되면 아래 한 줄만 바꾸면 된다.
+  const agentResults = tickResult?.agent_results ?? [];
+  const tickSucceeded = tickResult?.status === "COMPLETED";
+  const tickFailed = tickResult && !tickSucceeded;
+
   return (
     <div className="app-shell">
       <header><strong>Magic Academy</strong><div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div></header>
@@ -139,6 +215,70 @@ export default function App() {
                 <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
               </>}
             </aside>
+            <div className="panel tick-panel">
+              <h2>Tick</h2>
+
+              <button type="button" onClick={runTick} disabled={tickLoading}>
+                {tickLoading ? "Tick 실행 중..." : "Tick 실행"}
+              </button>
+
+              {tickError && (
+                <p className={`message error tick-error-${tickError.type.toLowerCase()}`} role="alert">
+                  {tickError.message}
+                </p>
+              )}
+
+              {tickError && tickError.type !== "AUTH" && (
+                <button type="button" onClick={runTick} disabled={tickLoading}>
+                  다시 시도
+                </button>
+              )}
+
+              {tickFailed && (
+                <p className="message error" role="alert">
+                  Tick이 완료되지 않았습니다 (상태: {tickResult.status}).
+                </p>
+              )}
+
+              {tickSucceeded && (
+                <div className="tick-result">
+                  <h3>실행 결과</h3>
+                  <p>이전 Tick: {tickResult.previous_tick}</p>
+                  <p>현재 Tick: {tickResult.current_tick}</p>
+                  <p>현재 Day: {tickResult.current_day}</p>
+                  <p>상태: {tickResult.status}</p>
+
+                  <h4>Agent 행동</h4>
+                  {agentResults.length === 0 ? (
+                    <p className="message">
+                      이번 Tick에서 표시할 Agent 행동 결과가 없습니다.
+                    </p>
+                  ) : (
+                    <ul className="agent-result-list">
+                      {agentResults.map((agentResult) => (
+                        <li key={agentResult.agent_id} className="agent-result">
+                          <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
+                          <span className="action-type">{agentResult.action_type}</span>
+                          {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
+                          {agentResult.motivation_summary && (
+                            <p className="motivation">{agentResult.motivation_summary}</p>
+                          )}
+                          {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
+                            <ul className="influencing-factors">
+                              {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
+                                <li key={idx}>
+                                  [{factor.source}] {factor.description} ({factor.direction})
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
         )}
       </main>
