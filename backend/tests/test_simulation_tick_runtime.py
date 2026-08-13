@@ -341,6 +341,170 @@ def test_invalid_snapshot_rows_stop_before_adapter(runtime_db, monkeypatch, fail
     assert adapter.calls == []
 
 
+def test_event_from_other_simulation_stops_before_adapter(runtime_db) -> None:
+    db, simulation, other_simulation, _, _ = runtime_db
+    other_location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == other_simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(other_simulation.id, other_location_id)
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="does not belong"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [],
+            make_schedule(other_location_id),
+        )
+
+    assert adapter.calls == []
+
+
+def test_participant_from_other_simulation_stops_before_adapter(runtime_db) -> None:
+    db, simulation, other_simulation, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    other_agent_id = db.scalar(
+        select(Agent.id).where(
+            Agent.simulation_id == other_simulation.id,
+            Agent.fixture_key == "student-01",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    participant = EventParticipant(
+        id=uuid4(), event_id=event.id, agent_id=other_agent_id, result={}
+    )
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="is not valid"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [participant],
+            make_schedule(location_id),
+        )
+
+    assert adapter.calls == []
+
+
+def test_participant_event_mismatch_stops_before_adapter(runtime_db) -> None:
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    participant = EventParticipant(
+        id=uuid4(), event_id=uuid4(), agent_id=uuid4(), result={}
+    )
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="event_id does not match"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [participant],
+            make_schedule(location_id),
+        )
+
+    assert adapter.calls == []
+
+
+def test_unknown_participant_mapping_key_stops_before_adapter(runtime_db) -> None:
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="unknown Event"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [],
+            make_schedule(location_id),
+            event_participants={uuid4(): []},
+        )
+
+    assert adapter.calls == []
+
+
+def test_duplicate_event_id_stops_before_adapter(runtime_db) -> None:
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="duplicate Event.id"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [],
+            make_schedule(location_id),
+            events=[event, deepcopy(event)],
+        )
+
+    assert adapter.calls == []
+
+
+@pytest.mark.parametrize("location_kind", ["other_simulation", "inactive", "missing"])
+def test_invalid_event_location_stops_before_adapter(runtime_db, location_kind) -> None:
+    db, simulation, other_simulation, _, inactive_location = runtime_db
+    if location_kind == "other_simulation":
+        location_id = db.scalar(
+            select(Location.id).where(
+                Location.simulation_id == other_simulation.id,
+                Location.code == "classroom",
+            )
+        )
+    elif location_kind == "inactive":
+        location_id = inactive_location.id
+    else:
+        location_id = None
+    event = make_event(simulation.id, location_id)
+    adapter = SpyAdapter()
+
+    with pytest.raises(RuntimeSnapshotError, match="invalid runtime Location"):
+        run_phase(
+            SimulationTickService(adapter),
+            db,
+            simulation,
+            event,
+            [],
+            make_schedule(location_id or uuid4()),
+        )
+
+    assert adapter.calls == []
+
+
 class CountingSink(InMemoryRuntimeResultSink):
     def __init__(self) -> None:
         super().__init__()
