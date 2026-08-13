@@ -47,6 +47,7 @@ class SchemaModelTests(unittest.TestCase):
             "uq_agent_states_agent_id",
             "uq_relationships_pair",
             "uq_runtime_results_idempotency_key",
+            "uq_runtime_results_run_tick_agent",
             "uq_organizations_simulation_type_name",
             "uq_organizations_simulation_id_id",
             "uq_organization_memberships_active",

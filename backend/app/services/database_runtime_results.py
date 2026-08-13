@@ -4,7 +4,6 @@ from typing import Callable
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.domain.models import RuntimeResult
 from app.repositories import runtime_results as runtime_result_repository
 from app.services.runtime_results import (
     IdempotencyConflictError,
@@ -35,43 +34,45 @@ class DatabaseRuntimeResultSink:
 
         with self._session_factory() as session:
             with session.begin():
-                existing_rows = runtime_result_repository.list_by_idempotency_keys(
+                rows_to_insert = [
+                    {
+                        "id": uuid7(),
+                        "run_id": result.run_id,
+                        "tick_number": result.tick_number,
+                        "agent_id": result.agent_id,
+                        "status": result.status.value,
+                        "action_type": result.intent.action_type.value,
+                        "intent": result.intent.model_dump(mode="json"),
+                        "retry_count": result.retry_count,
+                        "failure_reason": result.failure_reason,
+                        "model": result.model,
+                        "prompt_version": result.prompt_version,
+                        "idempotency_key": key,
+                        "result_fingerprint": fingerprint,
+                    }
+                    for key, (result, fingerprint) in pending.items()
+                ]
+                inserted_keys = (
+                    runtime_result_repository.insert_all_on_idempotency_conflict_do_nothing(
+                        session,
+                        rows_to_insert,
+                    )
+                )
+                stored_rows = runtime_result_repository.list_by_idempotency_keys(
                     session,
                     list(pending),
                 )
-                existing_by_key = {
-                    row.idempotency_key: row for row in existing_rows
+                stored_by_key = {
+                    row.idempotency_key: row for row in stored_rows
                 }
-                rows_to_add: list[RuntimeResult] = []
                 for key, (result, fingerprint) in pending.items():
-                    existing = existing_by_key.get(key)
-                    if existing is not None:
-                        if existing.result_fingerprint != fingerprint:
-                            raise IdempotencyConflictError(key)
-                        duplicate_count += 1
-                        continue
-                    rows_to_add.append(
-                        RuntimeResult(
-                            id=uuid7(),
-                            run_id=result.run_id,
-                            tick_number=result.tick_number,
-                            agent_id=result.agent_id,
-                            status=result.status.value,
-                            action_type=result.intent.action_type.value,
-                            intent=result.intent.model_dump(mode="json"),
-                            retry_count=result.retry_count,
-                            failure_reason=result.failure_reason,
-                            model=result.model,
-                            prompt_version=result.prompt_version,
-                            idempotency_key=key,
-                            result_fingerprint=fingerprint,
-                        )
-                    )
-                runtime_result_repository.add_all(session, rows_to_add)
-                session.flush()
+                    stored = stored_by_key.get(key)
+                    if stored is None or stored.result_fingerprint != fingerprint:
+                        raise IdempotencyConflictError(key)
+                duplicate_count += len(pending) - len(inserted_keys)
 
         return RuntimeResultBatchSaveResult(
-            new_count=len(rows_to_add),
+            new_count=len(inserted_keys),
             duplicate_count=duplicate_count,
         )
 
@@ -91,6 +92,11 @@ def _prepare_batch(
         elif identity != batch_identity:
             raise RuntimeBatchMismatchError(
                 "save_batch accepts results from exactly one run and tick"
+            )
+        expected_key = f"{result.run_id}:{result.tick_number}:{result.agent_id}"
+        if result.idempotency_key != expected_key:
+            raise ValueError(
+                "idempotency_key must match run_id:tick_number:agent_id"
             )
         fingerprint = result_fingerprint(result)
         existing = pending.get(result.idempotency_key)

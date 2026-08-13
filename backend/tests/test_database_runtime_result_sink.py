@@ -1,4 +1,6 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import UUID, uuid4
 
 import pytest
@@ -138,6 +140,39 @@ def test_database_sink_treats_same_result_as_idempotent_noop(session_factory) ->
 
     assert saved.new_count == 0
     assert saved.duplicate_count == 1
+
+
+def test_database_sink_treats_concurrent_same_result_as_idempotent_noop(
+    session_factory,
+) -> None:
+    start_barrier = Barrier(2)
+
+    def synchronized_session_factory():
+        session = session_factory()
+        start_barrier.wait()
+        return session
+
+    sink = DatabaseRuntimeResultSink(synchronized_session_factory)
+    result = make_result()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        saves = list(executor.map(lambda _: sink.save_batch([result]), range(2)))
+
+    assert sum(save.new_count for save in saves) == 1
+    assert sum(save.duplicate_count for save in saves) == 1
+    with session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 1
+
+
+def test_database_sink_rejects_noncanonical_idempotency_key(session_factory) -> None:
+    sink = DatabaseRuntimeResultSink(session_factory)
+    result = make_result().model_copy(update={"idempotency_key": "another-key"})
+
+    with pytest.raises(
+        ValueError,
+        match="idempotency_key must match run_id:tick_number:agent_id",
+    ):
+        sink.save_batch([result])
 
 
 def test_database_sink_rejects_same_key_with_different_result(session_factory) -> None:

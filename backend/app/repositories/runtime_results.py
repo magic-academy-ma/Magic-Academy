@@ -1,6 +1,8 @@
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.domain.models import RuntimeResult
@@ -53,5 +55,16 @@ def list_errors_by_run(session: Session, run_id: str) -> list[RuntimeResult]:
     )
 
 
-def add_all(session: Session, rows: Sequence[RuntimeResult]) -> None:
-    session.add_all(rows)
+def insert_all_on_idempotency_conflict_do_nothing(
+    session: Session,
+    rows: Sequence[dict[str, Any]],
+) -> set[str]:
+    if not rows:
+        return set()
+    statement = (
+        insert(RuntimeResult)
+        .values(list(rows))
+        .on_conflict_do_nothing(index_elements=[RuntimeResult.idempotency_key])
+        .returning(RuntimeResult.idempotency_key)
+    )
+    return set(session.scalars(statement).all())

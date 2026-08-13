@@ -247,6 +247,12 @@ class RuntimeResult(TimestampMixin, Base):
     __tablename__ = "runtime_results"
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_runtime_results_idempotency_key"),
+        UniqueConstraint(
+            "run_id",
+            "tick_number",
+            "agent_id",
+            name="uq_runtime_results_run_tick_agent",
+        ),
         CheckConstraint("tick_number >= 0", name="ck_runtime_results_tick_number"),
         CheckConstraint("retry_count >= 0", name="ck_runtime_results_retry_count"),
         CheckConstraint(

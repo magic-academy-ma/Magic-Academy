@@ -45,6 +45,12 @@ def upgrade() -> None:
             name="ck_runtime_results_status",
         ),
         sa.UniqueConstraint("idempotency_key", name="uq_runtime_results_idempotency_key"),
+        sa.UniqueConstraint(
+            "run_id",
+            "tick_number",
+            "agent_id",
+            name="uq_runtime_results_run_tick_agent",
+        ),
     )
     op.create_index(
         "idx_runtime_results_run_tick",
