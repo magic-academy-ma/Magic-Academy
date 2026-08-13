@@ -2,6 +2,7 @@
 title: 조직 정의
 status: approved
 updated: 2026-08-08
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 조직 (Organization)

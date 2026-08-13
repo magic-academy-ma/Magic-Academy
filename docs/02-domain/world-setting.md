@@ -40,7 +40,7 @@ updated: 2026-08-06
 
 학생 Agent는 매 tick 현재 상태값, 성격, Memory, 다른 Agent와의 관계, 현재 위치, 진행 중인 이벤트를 바탕으로 행동을 결정한다.
 
-Intent 종류 (TALK / MOVE / STUDY / REST / EAT / PARTICIPATE / AVOID), 상태값 (배고픔·피로도·스트레스·만족도·기분) 정의, Memory 규칙 (상한 10개, 유형 4종, 검색, 초과 처리): `docs/03-system-design/agent-runtime.md` 참조.  
+Intent 종류 (`docs/03-system-design/agent-runtime.md §3.3 MVP Action Type` 참조), 상태값 (배고픔·피로도·스트레스·만족도·기분) 정의, Memory 규칙 (상한 10개, 유형 4종, 검색, 초과 처리): `docs/03-system-design/agent-runtime.md` 참조.  
 상태값 범위 및 설명: `docs/02-domain/agents.md §공통 내부 상태` 참조.
 
 ### 2.2 기본 Student Agent 생성

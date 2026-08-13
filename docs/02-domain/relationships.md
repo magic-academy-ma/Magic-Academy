@@ -2,6 +2,7 @@
 title: 관계 정의
 status: approved
 updated: 2026-07-13
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 관계 (Relationship)
