@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from app.services.runtime_results import (
     IdempotencyConflictError,
@@ -211,3 +212,14 @@ def test_sink_contract_contains_no_raw_llm_response() -> None:
     stored = sink.get(result.idempotency_key).model_dump(mode="json")
     assert "current_llm_response" not in stored
     assert "raw_response" not in stored
+
+
+def test_sink_rejects_noncanonical_key_without_storing_result() -> None:
+    sink = InMemoryRuntimeResultSink()
+    result = make_result()
+    invalid_result = result.model_copy(update={"idempotency_key": "wrong:key"})
+
+    with pytest.raises(ValidationError, match="run_id:tick_number:agent_id"):
+        sink.save_batch([invalid_result])
+
+    assert sink.list_results() == []

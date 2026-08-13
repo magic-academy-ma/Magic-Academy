@@ -289,6 +289,13 @@ class AgentRuntimeResult(StrictModel):
             raise ValueError("idempotency_key must be non-blank without surrounding whitespace")
         return value
 
+    @model_validator(mode="after")
+    def validate_canonical_idempotency_key(self) -> "AgentRuntimeResult":
+        expected = f"{self.run_id}:{self.tick_number}:{self.agent_id}"
+        if self.idempotency_key != expected:
+            raise ValueError("idempotency_key must match run_id:tick_number:agent_id")
+        return self
+
 
 STUDENT_ACTIONS = set(ActionType) - {ActionType.TEACH_CLASS}
 PROFESSOR_ACTIONS = set(ActionType) - {ActionType.ATTEND_CLASS}

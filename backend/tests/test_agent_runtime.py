@@ -403,6 +403,26 @@ def test_blank_idempotency_key_is_rejected(
         )
 
 
+def test_noncanonical_idempotency_key_is_rejected(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    candidate = validate_intent_candidate(valid_response(runtime_input), runtime_input)
+
+    with pytest.raises(ValidationError, match="run_id:tick_number:agent_id"):
+        AgentRuntimeResult(
+            run_id=runtime_input.run_id,
+            tick_number=runtime_input.tick_number,
+            agent_id=runtime_input.agent.agent_id,
+            status=RuntimeStatus.PROPOSED,
+            intent=candidate,
+            retry_count=0,
+            failure_reason=None,
+            model="mock-llm",
+            prompt_version="agent-runtime-10.1",
+            idempotency_key="different:3:key",
+        )
+
+
 def test_runtime_input_rejects_schedule_event_type_mismatch() -> None:
     with pytest.raises(ValidationError, match="schedule_type"):
         AgentRuntimeInput(

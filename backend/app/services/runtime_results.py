@@ -39,6 +39,7 @@ class InMemoryRuntimeResultSink:
         for result in results:
             if not isinstance(result, AgentRuntimeResult):
                 raise TypeError("RuntimeResultSink only accepts AgentRuntimeResult values")
+            result = AgentRuntimeResult.model_validate(result.model_dump())
             key = result.idempotency_key
             fingerprint = _result_fingerprint(result)
 
