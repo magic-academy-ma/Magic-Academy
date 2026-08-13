@@ -365,7 +365,6 @@ def valid_intent_response(event_id: UUID, location_id: UUID) -> dict:
         "motivation_summary": "예정된 수업에 참석한다.",
         "reaction": {
             "valence": "NEUTRAL",
-            "intensity": "LOW",
             "relationship_signals": [],
             "state_signals": [],
         },

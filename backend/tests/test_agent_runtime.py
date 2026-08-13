@@ -85,6 +85,70 @@ def test_valid_attend_class_response(runtime_input: AgentRuntimeInput) -> None:
     assert candidate.target_agent_id is None
     assert candidate.target_location_id == LOCATION_IDS[0]
     assert candidate.related_event_id == CLASS_EVENT_ID
+    assert candidate.reaction.state_signals[0].signal_type.value == "FATIGUE_UP"
+    assert candidate.reaction.state_signals[0].intensity.value == "LOW"
+
+
+def test_typed_relationship_signal_accepts_valid_other_agent(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    response = valid_response(runtime_input)
+    response["reaction"]["relationship_signals"] = [
+        {
+            "signal_type": "TRUST_UP",
+            "intensity": "HIGH",
+            "target_agent_id": str(STUDENT_IDS[1]),
+        }
+    ]
+
+    candidate = validate_intent_candidate(response, runtime_input)
+
+    signal = candidate.reaction.relationship_signals[0]
+    assert signal.signal_type.value == "TRUST_UP"
+    assert signal.intensity.value == "HIGH"
+    assert signal.target_agent_id == STUDENT_IDS[1]
+
+
+def test_relationship_signal_rejects_target_outside_valid_agents(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    response = valid_response(runtime_input)
+    response["reaction"]["relationship_signals"] = [
+        {
+            "signal_type": "TRUST_UP",
+            "intensity": "LOW",
+            "target_agent_id": "30000000-0000-0000-0000-000000000001",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="relationship signal target_agent_id"):
+        validate_intent_candidate(response, runtime_input)
+
+
+def test_relationship_signal_rejects_self_target(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    response = valid_response(runtime_input)
+    response["reaction"]["relationship_signals"] = [
+        {
+            "signal_type": "TRUST_UP",
+            "intensity": "LOW",
+            "target_agent_id": str(runtime_input.agent.agent_id),
+        }
+    ]
+
+    with pytest.raises(ValueError, match="cannot target the acting agent"):
+        validate_intent_candidate(response, runtime_input)
+
+
+def test_reaction_rejects_legacy_common_intensity(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    response = valid_response(runtime_input)
+    response["reaction"]["intensity"] = "LOW"
+
+    with pytest.raises(ValidationError, match="intensity"):
+        validate_intent_candidate(response, runtime_input)
 
 
 def test_output_must_be_one_intent_object(runtime_input: AgentRuntimeInput) -> None:
@@ -277,7 +341,15 @@ def test_mock_client_accepts_injected_response(runtime_input: AgentRuntimeInput)
 
 
 def test_runtime_result_serializes_uuid_as_json_string(runtime_input: AgentRuntimeInput) -> None:
-    candidate = validate_intent_candidate(valid_response(runtime_input), runtime_input)
+    response = valid_response(runtime_input)
+    response["reaction"]["relationship_signals"] = [
+        {
+            "signal_type": "TRUST_UP",
+            "intensity": "MEDIUM",
+            "target_agent_id": str(STUDENT_IDS[1]),
+        }
+    ]
+    candidate = validate_intent_candidate(response, runtime_input)
     result = AgentRuntimeResult(
         run_id=runtime_input.run_id,
         tick_number=runtime_input.tick_number,
@@ -296,6 +368,19 @@ def test_runtime_result_serializes_uuid_as_json_string(runtime_input: AgentRunti
     serialized = result.model_dump(mode="json")
     assert serialized["agent_id"] == str(STUDENT_IDS[0])
     assert serialized["intent"]["related_event_id"] == str(CLASS_EVENT_ID)
+    assert serialized["intent"]["reaction"] == {
+        "valence": "NEUTRAL",
+        "relationship_signals": [
+            {
+                "signal_type": "TRUST_UP",
+                "intensity": "MEDIUM",
+                "target_agent_id": str(STUDENT_IDS[1]),
+            }
+        ],
+        "state_signals": [
+            {"signal_type": "FATIGUE_UP", "intensity": "LOW"}
+        ],
+    }
 
 
 @pytest.mark.parametrize("idempotency_key", ["", "   ", "\t\n", " key-with-spaces "])

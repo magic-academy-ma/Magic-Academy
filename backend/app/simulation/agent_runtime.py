@@ -75,7 +75,7 @@ class Intensity(StrEnum):
     HIGH = "HIGH"
 
 
-class RelationshipSignal(StrEnum):
+class RelationshipSignalType(StrEnum):
     TRUST_UP = "TRUST_UP"
     TRUST_DOWN = "TRUST_DOWN"
     AFFECTION_UP = "AFFECTION_UP"
@@ -90,7 +90,7 @@ class RelationshipSignal(StrEnum):
     DEPENDENCY_DOWN = "DEPENDENCY_DOWN"
 
 
-class StateSignal(StrEnum):
+class StateSignalType(StrEnum):
     HUNGER_UP = "HUNGER_UP"
     HUNGER_DOWN = "HUNGER_DOWN"
     FATIGUE_UP = "FATIGUE_UP"
@@ -208,11 +208,21 @@ class AgentRuntimeInput(StrictModel):
         return self
 
 
-class Reaction(StrictModel):
-    valence: ReactionValence
+class RelationshipSignal(StrictModel):
+    signal_type: RelationshipSignalType
     intensity: Intensity
-    relationship_signals: list[RelationshipSignal]
-    state_signals: list[StateSignal]
+    target_agent_id: UUID
+
+
+class StateSignal(StrictModel):
+    signal_type: StateSignalType
+    intensity: Intensity
+
+
+class AgentReaction(StrictModel):
+    valence: ReactionValence
+    relationship_signals: list[RelationshipSignal] = Field(default_factory=list)
+    state_signals: list[StateSignal] = Field(default_factory=list)
 
 
 class ActionAlternative(StrictModel):
@@ -248,7 +258,7 @@ class IntentCandidate(StrictModel):
     related_event_id: UUID | None
     utterance: str | None
     motivation_summary: str
-    reaction: Reaction
+    reaction: AgentReaction
     decision_explanation: DecisionExplanation
     memory_candidates: list[MemoryCandidate]
 
@@ -308,6 +318,11 @@ def validate_intent_candidate(
     valid_event_ids = {event.event_id for event in runtime_input.events}
     if candidate.related_event_id is not None and candidate.related_event_id not in valid_event_ids:
         raise ValueError("related_event_id is not included in runtime events")
+    for signal in candidate.reaction.relationship_signals:
+        if signal.target_agent_id not in runtime_input.valid_agent_ids:
+            raise ValueError("relationship signal target_agent_id is not included in valid_agent_ids")
+        if signal.target_agent_id == runtime_input.agent.agent_id:
+            raise ValueError("relationship signal cannot target the acting agent")
     for memory in candidate.memory_candidates:
         if any(
             agent_id not in runtime_input.valid_agent_ids
@@ -381,9 +396,10 @@ class MockLLMClient:
             ),
             "reaction": {
                 "valence": "NEUTRAL",
-                "intensity": "LOW",
                 "relationship_signals": [],
-                "state_signals": ["FATIGUE_UP"],
+                "state_signals": [
+                    {"signal_type": "FATIGUE_UP", "intensity": "LOW"}
+                ],
             },
             "decision_explanation": {
                 "alternatives": [
@@ -621,9 +637,8 @@ def _wait_intent(motivation_summary: str) -> IntentCandidate:
         related_event_id=None,
         utterance=None,
         motivation_summary=motivation_summary,
-        reaction=Reaction(
+        reaction=AgentReaction(
             valence=ReactionValence.NEUTRAL,
-            intensity=Intensity.LOW,
             relationship_signals=[],
             state_signals=[],
         ),
