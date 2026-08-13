@@ -84,79 +84,41 @@ def make_schedule() -> ScheduleSummary:
     )
 
 
-def test_active_students_are_selected_without_events() -> None:
+def test_preselected_ids_control_execution_and_preserve_caller_order() -> None:
     candidates = [
-        make_agent(STUDENT_IDS[2]),
         make_agent(STUDENT_IDS[0]),
         make_agent(STUDENT_IDS[1]),
-        make_agent(STUDENT_IDS[3], active=False),
+        make_agent(PROFESSOR_ID, agent_type="professor"),
     ]
 
     selected = RuntimeTargetSelector().select(
         candidates,
-        schedule_requires_professor=False,
-        events=[],
+        preselected_agent_ids=[PROFESSOR_ID, STUDENT_IDS[0]],
     )
 
-    assert [agent.agent_id for agent in selected] == STUDENT_IDS[:3]
+    assert [agent.agent_id for agent in selected] == [PROFESSOR_ID, STUDENT_IDS[0]]
 
 
-def test_schedule_requirement_selects_professor() -> None:
-    professor = make_agent(PROFESSOR_ID, agent_type="professor")
+def test_inactive_preselected_agent_is_not_filtered() -> None:
+    inactive_student = make_agent(STUDENT_IDS[0], active=False)
 
     selected = RuntimeTargetSelector().select(
-        [professor],
-        schedule_requires_professor=True,
-        events=[],
+        [inactive_student],
+        preselected_agent_ids=[inactive_student.agent_id],
     )
 
-    assert selected == (professor,)
+    assert selected == (inactive_student,)
 
 
-@pytest.mark.parametrize("event_type", ["class", "exam", "random_incident"])
-@pytest.mark.parametrize("position", [0, 1, 2])
-def test_event_participation_selects_professor_regardless_of_type_or_position(
-    event_type: str, position: int
-) -> None:
-    professor = make_agent(PROFESSOR_ID, agent_type="professor")
-    participants = [STUDENT_IDS[0], STUDENT_IDS[1]]
-    participants.insert(position, PROFESSOR_ID)
+def test_non_preselected_students_are_not_returned() -> None:
+    candidates = [make_agent(agent_id) for agent_id in STUDENT_IDS]
 
     selected = RuntimeTargetSelector().select(
-        [professor],
-        schedule_requires_professor=False,
-        events=[make_event(event_type=event_type, participants=participants)],
+        candidates,
+        preselected_agent_ids=[STUDENT_IDS[0]],
     )
 
-    assert selected == (professor,)
-
-
-def test_professor_without_schedule_or_event_condition_is_excluded() -> None:
-    professor = make_agent(PROFESSOR_ID, agent_type="professor")
-
-    selected = RuntimeTargetSelector().select(
-        [professor],
-        schedule_requires_professor=False,
-        events=[make_event(participants=[])],
-    )
-
-    assert selected == ()
-
-
-def test_duplicate_selection_paths_and_events_select_professor_once() -> None:
-    professor = make_agent(PROFESSOR_ID, agent_type="professor")
-    second_event_id = UUID("20000000-0000-0000-0000-000000000002")
-
-    selected = RuntimeTargetSelector().select(
-        [professor, professor.model_copy(deep=True)],
-        schedule_requires_professor=True,
-        events=[
-            make_event(participants=[PROFESSOR_ID]),
-            make_event(event_id=second_event_id, participants=[PROFESSOR_ID]),
-        ],
-    )
-
-    assert selected == (professor,)
+    assert [agent.agent_id for agent in selected] == [STUDENT_IDS[0]]
 
 
 def test_conflicting_duplicate_agent_is_rejected() -> None:
@@ -166,34 +128,35 @@ def test_conflicting_duplicate_agent_is_rejected() -> None:
     with pytest.raises(ValueError, match="conflicting agent candidates"):
         RuntimeTargetSelector().select(
             [first, conflicting],
-            schedule_requires_professor=False,
-            events=[],
+            preselected_agent_ids=[first.agent_id],
         )
 
 
-def test_selection_is_sorted_deterministic_and_does_not_mutate_inputs() -> None:
+def test_selection_is_deterministic_and_does_not_mutate_inputs() -> None:
     candidates = [make_agent(STUDENT_IDS[2]), make_agent(STUDENT_IDS[0])]
-    events = [make_event(participants=[STUDENT_IDS[2], STUDENT_IDS[0]])]
     original_candidates = deepcopy(candidates)
-    original_events = deepcopy(events)
+    selected_ids = [STUDENT_IDS[0], STUDENT_IDS[2]]
     selector = RuntimeTargetSelector()
 
-    first = selector.select(candidates, schedule_requires_professor=False, events=events)
-    second = selector.select(candidates, schedule_requires_professor=False, events=events)
+    first = selector.select(candidates, preselected_agent_ids=selected_ids)
+    second = selector.select(candidates, preselected_agent_ids=selected_ids)
 
     assert first == second
     assert [agent.agent_id for agent in first] == [STUDENT_IDS[0], STUDENT_IDS[2]]
     assert candidates == original_candidates
-    assert events == original_events
 
 
-def test_schedule_requires_professor_rejects_truthy_string() -> None:
-    with pytest.raises(TypeError, match="schedule_requires_professor"):
+def test_duplicate_preselected_id_is_rejected() -> None:
+    with pytest.raises(ValueError, match="must not contain duplicates"):
         RuntimeTargetSelector().select(
-            [make_agent(PROFESSOR_ID, agent_type="professor")],
-            schedule_requires_professor="true",
-            events=[],
+            [make_agent(STUDENT_IDS[0])],
+            preselected_agent_ids=[STUDENT_IDS[0], STUDENT_IDS[0]],
         )
+
+
+def test_preselected_id_missing_from_snapshot_is_rejected() -> None:
+    with pytest.raises(ValueError, match="is not a runtime candidate"):
+        RuntimeTargetSelector().select([], preselected_agent_ids=[STUDENT_IDS[0]])
 
 
 class RecordingAssembler:
@@ -238,7 +201,7 @@ class RecordingMockLLMClient(MockLLMClient):
         return super().generate(runtime_input)
 
 
-def test_orchestrator_selects_assembles_and_runs_in_sorted_order() -> None:
+def test_orchestrator_assembles_and_runs_preselected_batch_in_caller_order() -> None:
     candidates = [make_agent(STUDENT_IDS[2]), make_agent(STUDENT_IDS[0])]
     events = [make_event(participants=[STUDENT_IDS[2], STUDENT_IDS[0]])]
     valid_agent_ids = list(reversed(STUDENT_IDS)) + [PROFESSOR_ID]
@@ -247,13 +210,13 @@ def test_orchestrator_selects_assembles_and_runs_in_sorted_order() -> None:
     runtime = RecordingRuntime()
     sink = InMemoryRuntimeResultSink()
 
-    batch = RuntimeOrchestrator(runtime, sink, context_assembler=assembler).select_and_run(
+    batch = RuntimeOrchestrator(runtime, sink, context_assembler=assembler).run_preselected(
         run_id="slice-1-run",
         tick_number=3,
         block="MORNING",
         agent_candidates=candidates,
+        preselected_agent_ids=[STUDENT_IDS[0], STUDENT_IDS[2]],
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=events,
         valid_agent_ids=valid_agent_ids,
         valid_location_ids=valid_location_ids,
@@ -279,13 +242,13 @@ def test_execution_with_missing_schedule_event_propagates_validation_error() -> 
     )
 
     with pytest.raises(ValidationError, match="schedule event_id"):
-        orchestrator.select_and_run(
+        orchestrator.run_preselected(
             run_id="slice-1-run",
             tick_number=3,
             block="MORNING",
             agent_candidates=[make_agent(STUDENT_IDS[0])],
+            preselected_agent_ids=[STUDENT_IDS[0]],
             schedule=make_schedule(),
-            schedule_requires_professor=False,
             events=[],
             valid_agent_ids=STUDENT_IDS,
             valid_location_ids=LOCATION_IDS,
@@ -302,13 +265,13 @@ def test_inactive_participating_professor_is_skipped_and_saved() -> None:
     batch = RuntimeOrchestrator(
         AgentRuntime(llm_client),
         sink,
-    ).select_and_run(
+    ).run_preselected(
         run_id="slice-1-run",
         tick_number=3,
         block="MORNING",
         agent_candidates=[professor, student],
+        preselected_agent_ids=[student.agent_id, professor.agent_id],
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=[event],
         valid_agent_ids=[student.agent_id, professor.agent_id],
         valid_location_ids=LOCATION_IDS,

@@ -41,23 +41,22 @@ class RuntimeOrchestrator:
         self._context_assembler = context_assembler or AgentContextAssembler()
         self._target_selector = RuntimeTargetSelector()
 
-    def select_and_run(
+    def run_preselected(
         self,
         *,
         run_id: str,
         tick_number: int,
         block: Block,
         agent_candidates: Sequence[AgentContext],
+        preselected_agent_ids: Sequence[UUID],
         schedule: ScheduleSummary,
-        schedule_requires_professor: bool,
         events: Sequence[EventSummary],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
     ) -> RuntimeBatchExecutionResult:
         selected_agents = self._target_selector.select(
             agent_candidates,
-            schedule_requires_professor=schedule_requires_professor,
-            events=events,
+            preselected_agent_ids=preselected_agent_ids,
         )
         runtime_inputs = tuple(
             self._context_assembler.assemble(

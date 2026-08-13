@@ -104,13 +104,19 @@ class SpyAdapter:
 
 
 def run_phase(service, db, simulation, event, participants, schedule, **overrides):
+    slice_one_student_id = db.scalar(
+        select(Agent.id).where(
+            Agent.simulation_id == simulation.id,
+            Agent.fixture_key == "student-01",
+        )
+    )
     values = {
         "simulation_id": simulation.id,
         "run_id": RUN_ID,
         "tick_number": 3,
         "block": "MORNING",
+        "preselected_agent_ids": [slice_one_student_id],
         "schedule": schedule,
-        "schedule_requires_professor": False,
         "events": [event],
         "event_participants": {event.id: participants},
     }
@@ -223,7 +229,7 @@ def test_runtime_phase_preserves_caller_inputs_and_does_not_mutate_orm(runtime_d
     assert call["tick_number"] == 3
     assert call["block"] == "MORNING"
     assert call["schedule"] is schedule
-    assert call["schedule_requires_professor"] is False
+    assert call["preselected_agent_ids"] == [agent.id]
     assert call["events"] is events
     assert call["event_participants"] is participants
     assert (
@@ -258,8 +264,8 @@ def test_missing_state_stops_before_adapter(runtime_db) -> None:
             run_id=RUN_ID,
             tick_number=3,
             block="MORNING",
+            preselected_agent_ids=[],
             schedule=make_schedule(uuid4()),
-            schedule_requires_professor=False,
             events=[],
             event_participants={},
         )
@@ -285,8 +291,8 @@ def test_null_state_location_stops_before_adapter(runtime_db) -> None:
             run_id=RUN_ID,
             tick_number=3,
             block="MORNING",
+            preselected_agent_ids=[],
             schedule=make_schedule(uuid4()),
-            schedule_requires_professor=False,
             events=[],
             event_participants={},
         )
@@ -326,8 +332,8 @@ def test_invalid_snapshot_rows_stop_before_adapter(runtime_db, monkeypatch, fail
             run_id=RUN_ID,
             tick_number=3,
             block="MORNING",
+            preselected_agent_ids=[],
             schedule=make_schedule(uuid4()),
-            schedule_requires_professor=False,
             events=[],
             event_participants={},
         )
@@ -423,11 +429,55 @@ def test_runtime_phase_integrates_runtime_and_sink_once(runtime_db) -> None:
         event,
         participants,
         make_schedule(location_id),
+        preselected_agent_ids=[
+            next(agent.id for agent in agents if agent.fixture_key == "student-01"),
+            professor.id,
+        ],
     )
 
     statuses_by_agent = {result.agent_id: result.status for result in batch.results}
     assert statuses_by_agent[professor.id] == RuntimeStatus.SKIPPED
-    assert sum(status == RuntimeStatus.PROPOSED for status in statuses_by_agent.values()) == 5
+    assert sum(status == RuntimeStatus.PROPOSED for status in statuses_by_agent.values()) == 1
     assert professor.id not in llm_client.agent_ids
-    assert len(llm_client.agent_ids) == 5
+    assert len(llm_client.agent_ids) == 1
     assert sink.call_count == 1
+
+
+def test_inactive_slice_one_student_is_skipped_without_llm_and_saved(runtime_db) -> None:
+    db, simulation, _, _, _ = runtime_db
+    student = db.scalar(
+        select(Agent).where(
+            Agent.simulation_id == simulation.id,
+            Agent.fixture_key == "student-01",
+        )
+    )
+    student.active_status = "inactive_temporary"
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    db.commit()
+    event = make_event(simulation.id, location_id)
+    sink = CountingSink()
+    llm_client = RecordingMockLLMClient(valid_intent_response(event.id, location_id))
+    service = SimulationTickService(
+        RuntimeInputAdapter(RuntimeOrchestrator(AgentRuntime(llm_client), sink))
+    )
+
+    batch = run_phase(
+        service,
+        db,
+        simulation,
+        event,
+        [],
+        make_schedule(location_id),
+    )
+
+    assert len(batch.results) == 1
+    assert batch.results[0].agent_id == student.id
+    assert batch.results[0].status == RuntimeStatus.SKIPPED
+    assert llm_client.agent_ids == []
+    assert sink.call_count == 1
+    assert sink.list_results() == [batch.results[0]]

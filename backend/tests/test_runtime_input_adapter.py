@@ -155,8 +155,7 @@ def test_user_persona_is_normalized_to_student_and_selected() -> None:
 
     selected = RuntimeTargetSelector().select(
         [context],
-        schedule_requires_professor=False,
-        events=[],
+        preselected_agent_ids=[context.agent_id],
     )
 
     assert context.agent_type == "student"
@@ -237,12 +236,12 @@ class SpyOrchestrator:
         self.calls: list[dict] = []
         self.result = object()
 
-    def select_and_run(self, **values):
+    def run_preselected(self, **values):
         self.calls.append(deepcopy(values))
         return self.result
 
 
-def test_adapter_preserves_inputs_and_delegates_to_select_and_run() -> None:
+def test_adapter_preserves_inputs_and_delegates_to_preselected_batch() -> None:
     agent = make_agent()
     state = make_state()
     event = make_event()
@@ -273,9 +272,9 @@ def test_adapter_preserves_inputs_and_delegates_to_select_and_run() -> None:
         tick_number=3,
         block="MORNING",
         agents=agents,
+        preselected_agent_ids=[STUDENT_ID],
         agent_states=states,
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=events,
         event_participants=participants,
         valid_agent_ids=valid_agent_ids,
@@ -286,9 +285,9 @@ def test_adapter_preserves_inputs_and_delegates_to_select_and_run() -> None:
         tick_number=3,
         block="MORNING",
         agents=agents,
+        preselected_agent_ids=[STUDENT_ID],
         agent_states=states,
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=events,
         event_participants=participants,
         valid_agent_ids=valid_agent_ids,
@@ -301,7 +300,7 @@ def test_adapter_preserves_inputs_and_delegates_to_select_and_run() -> None:
     assert orchestrator.calls[0]["valid_agent_ids"] == valid_agent_ids
     assert orchestrator.calls[0]["valid_location_ids"] == valid_location_ids
     assert orchestrator.calls[0]["schedule"] == make_schedule()
-    assert orchestrator.calls[0]["schedule_requires_professor"] is False
+    assert orchestrator.calls[0]["preselected_agent_ids"] == [STUDENT_ID]
     assert orchestrator.calls[0]["events"][0].event_id == CLASS_EVENT_ID
     assert tuple(
         orm_values(value)
@@ -327,9 +326,9 @@ def test_adapter_preserves_candidate_order_without_selecting_or_sorting() -> Non
         tick_number=3,
         block="MORNING",
         agents=[professor, student],
+        preselected_agent_ids=[STUDENT_ID],
         agent_states={PROFESSOR_ID: make_state(PROFESSOR_ID), STUDENT_ID: make_state()},
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=[make_event()],
         event_participants={},
         valid_agent_ids=[STUDENT_ID, PROFESSOR_ID],
@@ -342,17 +341,17 @@ def test_adapter_preserves_candidate_order_without_selecting_or_sorting() -> Non
     ] == [PROFESSOR_ID, STUDENT_ID]
 
 
-@pytest.mark.parametrize("invalid_value", [1, 0, "true", "false"])
-def test_schedule_requires_professor_requires_exact_bool(invalid_value: object) -> None:
-    with pytest.raises(TypeError, match="schedule_requires_professor"):
+@pytest.mark.parametrize("invalid_value", [1, "student-01", None])
+def test_preselected_agent_ids_require_uuids(invalid_value: object) -> None:
+    with pytest.raises(TypeError, match="preselected_agent_ids"):
         RuntimeInputAdapter(SpyOrchestrator()).run(
             run_id="slice-1-run",
             tick_number=3,
             block="MORNING",
             agents=[],
+            preselected_agent_ids=[invalid_value],
             agent_states={},
             schedule=make_schedule(),
-            schedule_requires_professor=invalid_value,
             events=[],
             event_participants={},
             valid_agent_ids=[],
@@ -388,9 +387,9 @@ def test_adapter_to_runtime_integration_proposes_student_and_skips_professor() -
         tick_number=3,
         block="MORNING",
         agents=[professor, student],
+        preselected_agent_ids=[STUDENT_ID, PROFESSOR_ID],
         agent_states={STUDENT_ID: make_state(), PROFESSOR_ID: make_state(PROFESSOR_ID)},
         schedule=make_schedule(),
-        schedule_requires_professor=False,
         events=[event],
         event_participants={
             CLASS_EVENT_ID: [

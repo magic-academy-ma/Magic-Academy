@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from app.simulation.agent_runtime import AgentContext, EventSummary
+from app.simulation.agent_runtime import AgentContext
 
 
 class RuntimeTargetSelector:
@@ -9,12 +9,8 @@ class RuntimeTargetSelector:
         self,
         agent_candidates: Sequence[AgentContext],
         *,
-        schedule_requires_professor: bool,
-        events: Sequence[EventSummary],
+        preselected_agent_ids: Sequence[UUID],
     ) -> tuple[AgentContext, ...]:
-        if type(schedule_requires_professor) is not bool:
-            raise TypeError("schedule_requires_professor must be a bool")
-
         candidates_by_id: dict[UUID, AgentContext] = {}
         for candidate in agent_candidates:
             existing = candidates_by_id.get(candidate.agent_id)
@@ -22,24 +18,11 @@ class RuntimeTargetSelector:
                 raise ValueError(f"conflicting agent candidates for {candidate.agent_id}")
             candidates_by_id[candidate.agent_id] = candidate
 
-        event_participant_ids = {
-            participant_id
-            for event in events
-            for participant_id in event.participant_agent_ids
-        }
-        selected = [
-            candidate
-            for candidate in candidates_by_id.values()
-            if (
-                candidate.agent_type == "student"
-                and candidate.active_status
-            )
-            or (
-                candidate.agent_type == "professor"
-                and (
-                    schedule_requires_professor
-                    or candidate.agent_id in event_participant_ids
-                )
-            )
+        if len(set(preselected_agent_ids)) != len(preselected_agent_ids):
+            raise ValueError("preselected_agent_ids must not contain duplicates")
+        missing_ids = [
+            agent_id for agent_id in preselected_agent_ids if agent_id not in candidates_by_id
         ]
-        return tuple(sorted(selected, key=lambda candidate: str(candidate.agent_id)))
+        if missing_ids:
+            raise ValueError(f"preselected Agent {missing_ids[0]} is not a runtime candidate")
+        return tuple(candidates_by_id[agent_id] for agent_id in preselected_agent_ids)

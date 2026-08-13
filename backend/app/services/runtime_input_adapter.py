@@ -99,16 +99,15 @@ class RuntimeInputAdapter:
         tick_number: int,
         block: Block,
         agents: Sequence[Agent],
+        preselected_agent_ids: Sequence[UUID],
         agent_states: Mapping[UUID, AgentState],
         schedule: ScheduleSummary,
-        schedule_requires_professor: bool,
         events: Sequence[Event],
         event_participants: Mapping[UUID, Sequence[EventParticipant]],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
     ) -> RuntimeBatchExecutionResult:
-        if type(schedule_requires_professor) is not bool:
-            raise TypeError("schedule_requires_professor must be a bool")
+        self._validate_uuid_sequence("preselected_agent_ids", preselected_agent_ids)
         self._validate_uuid_sequence("valid_agent_ids", valid_agent_ids)
         self._validate_uuid_sequence("valid_location_ids", valid_location_ids)
 
@@ -117,13 +116,13 @@ class RuntimeInputAdapter:
             for agent in agents
         )
         event_summaries = self.to_event_summaries(events, event_participants)
-        return self._orchestrator.select_and_run(
+        return self._orchestrator.run_preselected(
             run_id=run_id,
             tick_number=tick_number,
             block=block,
             agent_candidates=agent_candidates,
+            preselected_agent_ids=preselected_agent_ids,
             schedule=schedule,
-            schedule_requires_professor=schedule_requires_professor,
             events=event_summaries,
             valid_agent_ids=valid_agent_ids,
             valid_location_ids=valid_location_ids,
