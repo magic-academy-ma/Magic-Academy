@@ -85,8 +85,10 @@ class TickEngine:
             async def _run_one(agent: TickAgent) -> tuple[str, dict]:
                 return agent.id, await self._runtime(agent=agent, event=event, snapshot=snapshot)
 
-            pairs = await asyncio.gather(*[_run_one(a) for a in participants])
-            runtime_outputs: dict[str, dict] = dict(pairs)
+            tasks: list[asyncio.Task[tuple[str, dict]]] = []
+            async with asyncio.TaskGroup() as tg:
+                tasks = [tg.create_task(_run_one(a)) for a in participants]
+            runtime_outputs: dict[str, dict] = dict(t.result() for t in tasks)
 
             if self._policy and runtime_outputs:
                 policy_inputs = [

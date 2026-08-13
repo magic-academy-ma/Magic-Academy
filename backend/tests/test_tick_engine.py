@@ -202,6 +202,33 @@ async def test_different_simulation_ids_run_concurrently():
     assert sorted(started) == ["sim-A", "sim-B"]
 
 
+async def test_sibling_tasks_cancelled_before_lock_release():
+    """하나 실패 시 형제 태스크가 취소·종료된 후에 잠금이 해제돼야 한다."""
+    sibling_cancelled = False
+
+    async def runtime_with_sibling(agent, event, snapshot):
+        if agent.id == "s-fail":
+            raise RuntimeError("intentional failure")
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            nonlocal sibling_cancelled
+            sibling_cancelled = True
+            raise
+        return {}
+
+    engine = TickEngine(runtime=runtime_with_sibling)
+    agents = [make_student("s-fail"), make_student("s-slow")]
+    event = make_event(["s-fail", "s-slow"])
+    snapshot = make_snapshot()
+
+    with pytest.raises(TickRollbackError):
+        await engine.run_tick(agents=agents, event=event, snapshot=snapshot)
+
+    assert sibling_cancelled
+    assert "sim-1" not in engine._running
+
+
 async def test_same_simulation_id_blocks_concurrent_tick():
     """같은 simulation_id는 동시에 실행되면 TickConflictError가 발생해야 한다."""
     import asyncio as _asyncio
