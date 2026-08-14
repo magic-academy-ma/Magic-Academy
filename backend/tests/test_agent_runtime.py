@@ -12,6 +12,7 @@ from app.simulation.agent_runtime import (
     MockLLMClient,
     RuntimeStatus,
     ScheduleSummary,
+    SignalIntensity,
     validate_intent_candidate,
 )
 
@@ -86,7 +87,7 @@ def test_valid_attend_class_response(runtime_input: AgentRuntimeInput) -> None:
     assert candidate.target_location_id == LOCATION_IDS[0]
     assert candidate.related_event_id == CLASS_EVENT_ID
     assert candidate.reaction.state_signals[0].signal_type.value == "FATIGUE_UP"
-    assert candidate.reaction.state_signals[0].intensity.value == "LOW"
+    assert candidate.reaction.state_signals[0].intensity is SignalIntensity.LOW
 
 
 def test_typed_relationship_signal_accepts_valid_other_agent(
@@ -105,7 +106,7 @@ def test_typed_relationship_signal_accepts_valid_other_agent(
 
     signal = candidate.reaction.relationship_signals[0]
     assert signal.signal_type.value == "TRUST_UP"
-    assert signal.intensity.value == "HIGH"
+    assert signal.intensity is SignalIntensity.HIGH
     assert signal.target_agent_id == STUDENT_IDS[1]
 
 

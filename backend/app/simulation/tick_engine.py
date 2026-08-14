@@ -2,6 +2,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
+from app.simulation.agent_runtime import (
+    AgentReaction,
+    AgentRuntimeResult,
+    RelationshipSignal,
+    RelationshipSignalType,
+    SignalIntensity,
+    StateSignal,
+    StateSignalType,
+)
+
 
 class AgentType(str, Enum):
     STUDENT = "student"
@@ -34,7 +44,7 @@ class PolicyInput:
     """Runtime 결과를 Policy로 전달하는 단위"""
     agent_id: str
     event_id: str
-    runtime_result: dict[str, Any]
+    runtime_result: AgentRuntimeResult
 
 
 @dataclass
@@ -42,7 +52,7 @@ class TickResult:
     """Tick 실행 결과"""
     status: str  # "completed" | "failed"
     participant_ids: list[str]
-    runtime_outputs: dict[str, dict[str, Any]]
+    runtime_outputs: dict[str, AgentRuntimeResult]
 
 
 class TickConflictError(Exception):
@@ -57,7 +67,7 @@ class TickRollbackError(Exception):
     """RuntimeExecutionError로 Tick 전체가 rollback될 때 발생"""
 
 
-AgentRuntimeFn = Callable[..., Coroutine[Any, Any, dict]]
+AgentRuntimeFn = Callable[..., Coroutine[Any, Any, AgentRuntimeResult]]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
 
@@ -83,7 +93,7 @@ class TickEngine:
         self._running = True
         try:
             participants = self._select_participants(agents, event)
-            runtime_outputs: dict[str, dict] = {}
+            runtime_outputs: dict[str, AgentRuntimeResult] = {}
 
             for agent in participants:
                 result = await self._runtime(agent=agent, event=event, snapshot=snapshot)
