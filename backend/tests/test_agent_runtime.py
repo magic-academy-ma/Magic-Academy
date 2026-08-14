@@ -9,6 +9,7 @@ from app.simulation.agent_runtime import (
     AgentRuntimeInput,
     AgentRuntimeResult,
     EventSummary,
+    MemoryType,
     MockLLMClient,
     RuntimeStatus,
     ScheduleSummary,
@@ -243,6 +244,33 @@ def test_memory_importance_must_be_between_one_and_ten(
     response["memory_candidates"][0]["importance"] = importance
     with pytest.raises(ValidationError):
         validate_intent_candidate(response, runtime_input)
+
+
+def test_reflection_memory_candidate_is_accepted(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    response = valid_response(runtime_input)
+    response["memory_candidates"][0]["memory_type"] = "REFLECTION"
+
+    candidate = validate_intent_candidate(response, runtime_input)
+
+    assert candidate.memory_candidates[0].memory_type is MemoryType.REFLECTION
+
+
+@pytest.mark.parametrize(
+    "memory_type",
+    [MemoryType.OBSERVATION, MemoryType.CONVERSATION, MemoryType.PLAN],
+)
+def test_existing_memory_types_remain_valid(
+    runtime_input: AgentRuntimeInput,
+    memory_type: MemoryType,
+) -> None:
+    response = valid_response(runtime_input)
+    response["memory_candidates"][0]["memory_type"] = memory_type.value
+
+    candidate = validate_intent_candidate(response, runtime_input)
+
+    assert candidate.memory_candidates[0].memory_type is memory_type
 
 
 def test_decision_explanation_structure_is_validated(runtime_input: AgentRuntimeInput) -> None:

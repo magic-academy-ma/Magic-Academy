@@ -106,6 +106,7 @@ class StateSignalType(StrEnum):
 class MemoryType(StrEnum):
     OBSERVATION = "OBSERVATION"
     CONVERSATION = "CONVERSATION"
+    REFLECTION = "REFLECTION"
     PLAN = "PLAN"
 
 
