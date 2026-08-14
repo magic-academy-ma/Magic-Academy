@@ -2,11 +2,12 @@ import { useState } from "react";
 import { apiRequest } from "./api/client.js";
 import "./App.css";
 
-function AuthPanel({ onLogin }) {
+function AuthPanel({ onLogin, notice }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ username: "", display_name: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
 
   async function submit(event) {
     event.preventDefault();
@@ -36,6 +37,7 @@ function AuthPanel({ onLogin }) {
       <form className="panel auth-panel" onSubmit={submit}>
         <h1>Magic Academy</h1>
         <p>Slice 0 통합 환경</p>
+        {notice && <p className="message error" role="alert">{notice}</p>}
         <label>아이디<input required minLength="3" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label>
         {mode === "register" && <label>표시 이름<input required value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>}
         <label>비밀번호<input required minLength="8" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
@@ -64,10 +66,10 @@ function classifyTickError(requestError) {
   if (status === 404 || code === "RESOURCE_NOT_FOUND") {
     return { type: "NOT_FOUND", message: "Simulation을 찾을 수 없습니다." };
   }
-  if (status === 409 || code === "CONFLICT") {
+  if (status === 409 || code === "TICK_ALREADY_RUNNING") {
     return {
-      type: "RETRY_FAILURE",
-      message: "Simulation이 현재 Tick을 진행할 수 있는 상태가 아닙니다. 잠시 후 다시 시도해 주세요.",
+      type: "TICK_ALREADY_RUNNING",
+      message: "이미 진행 중인 Tick이 있습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
   if (status >= 500) {
@@ -91,8 +93,9 @@ export default function App() {
   const [tickLoading, setTickLoading] = useState(false);
   const [tickResult, setTickResult] = useState(null);
   const [tickError, setTickError] = useState(null); // { type, message }
-
-  function resetSession() {
+  const [sessionNotice, setSessionNotice] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
+  function resetSession(notice = "") {
     setAuth(null);
     setSimulation(null);
     setAgents([]);
@@ -100,9 +103,10 @@ export default function App() {
     setError("");
     setTickResult(null);
     setTickError(null);
+    setAuthNotice(notice);
   }
 
-  if (!auth) return <AuthPanel onLogin={setAuth} />;
+  if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
 
   async function loadAgents(simulationId) {
     setLoading(true);
@@ -158,9 +162,6 @@ export default function App() {
         {
           token: auth.access_token,
           method: "POST",
-          headers: {
-            "X-Internal-Api-Key": import.meta.env.VITE_INTERNAL_API_KEY,
-          },
           body: JSON.stringify({}),
         }
       );
@@ -169,7 +170,7 @@ export default function App() {
     } catch (requestError) {
       const classified = classifyTickError(requestError);
       if (classified.type === "AUTH") {
-        resetSession();
+        resetSession(classified.message);
         return;
       }
       setTickError(classified);
@@ -177,12 +178,9 @@ export default function App() {
       setTickLoading(false);
     }
   }
-
-  // NOTE: 현재 API 명세(§4.2 ticks/advance 응답)에는 Agent별 행동/발화/판단 근거 필드가
-  // 없다. Agent Runtime Internal API spec §3.2(AgentRuntimeResult)에는 이미
-  // action_type / utterance / motivation_summary / decision_explanation이 정의되어 있으므로,
-  // 백엔드가 이를 ticks/advance 응답에 `agent_results`라는 이름으로 얹어준다고 가정하고
-  // 미리 대응해뒀다. 실제 필드명이 확정되면 아래 한 줄만 바꾸면 된다.
+  // agent_results: agent_id, agent_name, runtime_status(PROPOSED/FALLBACK/SKIPPED),
+  // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
+  // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
@@ -255,26 +253,46 @@ export default function App() {
                     </p>
                   ) : (
                     <ul className="agent-result-list">
-                      {agentResults.map((agentResult) => (
-                        <li key={agentResult.agent_id} className="agent-result">
-                          <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
-                          <span className="action-type">{agentResult.action_type}</span>
-                          {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
-                          {agentResult.motivation_summary && (
-                            <p className="motivation">{agentResult.motivation_summary}</p>
-                          )}
-                          {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
-                            <ul className="influencing-factors">
-                              {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
-                                <li key={idx}>
-                                  [{factor.source}] {factor.description} ({factor.direction})
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
+										  {agentResults.map((agentResult) => {
+										    const status = agentResult.runtime_status;
+										    return (
+										      <li key={agentResult.agent_id} className={`agent-result status-${status?.toLowerCase()}`}>
+										        <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
+										        <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
+										          {status === "PROPOSED" && "정상 진행"}
+										          {status === "FALLBACK" && "재시도 실패 → Fallback 적용"}
+										          {status === "SKIPPED" && "이번 Tick 미참여"}
+										        </span>
+										        {status === "SKIPPED" ? (
+										          <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
+										        ) : (
+										          <>
+										            <span className="action-type">{agentResult.action_type}</span>
+										            {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
+										            {agentResult.motivation_summary && (
+										              <p className="motivation">{agentResult.motivation_summary}</p>
+										            )}
+										            {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
+										              <ul className="influencing-factors">
+										                {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
+										                  <li key={idx}>
+										                    [{factor.source}] {factor.description} ({factor.direction})
+										                  </li>
+										                ))}
+										              </ul>
+										            )}
+										          </>
+										        )}
+										        {status === "FALLBACK" && (
+										          <p className="fallback-info">
+										            재시도 {agentResult.retry_count}회 실패
+										            {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
+										          </p>
+										        )}
+										      </li>
+										    );
+										  })}
+										</ul>
                   )}
                 </div>
               )}
