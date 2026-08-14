@@ -4,7 +4,9 @@ from threading import Barrier
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.models import RuntimeResult
@@ -116,10 +118,11 @@ def make_result(
 
 
 def test_database_sink_saves_tick_batch_and_repository_reads_it(session_factory) -> None:
-    sink = DatabaseRuntimeResultSink(session_factory)
     results = [make_result(0), make_result(1, status=RuntimeStatus.FALLBACK)]
 
-    saved = sink.save_batch(results)
+    with session_factory() as session:
+        with session.begin():
+            saved = DatabaseRuntimeResultSink(session).save_batch(results)
 
     assert saved.new_count == 2
     assert saved.duplicate_count == 0
@@ -132,11 +135,16 @@ def test_database_sink_saves_tick_batch_and_repository_reads_it(session_factory)
 
 
 def test_database_sink_treats_same_result_as_idempotent_noop(session_factory) -> None:
-    sink = DatabaseRuntimeResultSink(session_factory)
     result = make_result()
-    sink.save_batch([result])
+    with session_factory() as session:
+        with session.begin():
+            DatabaseRuntimeResultSink(session).save_batch([result])
 
-    saved = sink.save_batch([result.model_copy(deep=True)])
+    with session_factory() as session:
+        with session.begin():
+            saved = DatabaseRuntimeResultSink(session).save_batch(
+                [result.model_copy(deep=True)]
+            )
 
     assert saved.new_count == 0
     assert saved.duplicate_count == 1
@@ -147,16 +155,16 @@ def test_database_sink_treats_concurrent_same_result_as_idempotent_noop(
 ) -> None:
     start_barrier = Barrier(2)
 
-    def synchronized_session_factory():
-        session = session_factory()
-        start_barrier.wait()
-        return session
-
-    sink = DatabaseRuntimeResultSink(synchronized_session_factory)
     result = make_result()
 
+    def save_concurrently(_):
+        with session_factory() as session:
+            with session.begin():
+                start_barrier.wait()
+                return DatabaseRuntimeResultSink(session).save_batch([result])
+
     with ThreadPoolExecutor(max_workers=2) as executor:
-        saves = list(executor.map(lambda _: sink.save_batch([result]), range(2)))
+        saves = list(executor.map(save_concurrently, range(2)))
 
     assert sum(save.new_count for save in saves) == 1
     assert sum(save.duplicate_count for save in saves) == 1
@@ -165,34 +173,55 @@ def test_database_sink_treats_concurrent_same_result_as_idempotent_noop(
 
 
 def test_database_sink_rejects_noncanonical_idempotency_key(session_factory) -> None:
-    sink = DatabaseRuntimeResultSink(session_factory)
     result = make_result().model_copy(update={"idempotency_key": "another-key"})
 
-    with pytest.raises(
-        ValueError,
-        match="idempotency_key must match run_id:tick_number:agent_id",
-    ):
-        sink.save_batch([result])
+    with session_factory() as session:
+        with pytest.raises(ValidationError, match="run_id:tick_number:agent_id"):
+            with session.begin():
+                DatabaseRuntimeResultSink(session).save_batch([result])
 
 
 def test_database_sink_rejects_same_key_with_different_result(session_factory) -> None:
-    sink = DatabaseRuntimeResultSink(session_factory)
     result = make_result()
-    sink.save_batch([result])
+    with session_factory() as session:
+        with session.begin():
+            DatabaseRuntimeResultSink(session).save_batch([result])
     changed = result.model_copy(deep=True)
     changed.intent.motivation_summary = "different result"
 
-    with pytest.raises(IdempotencyConflictError):
-        sink.save_batch([changed])
+    with session_factory() as session:
+        with pytest.raises(IdempotencyConflictError):
+            with session.begin():
+                DatabaseRuntimeResultSink(session).save_batch([changed])
+
+
+def test_database_sink_participates_in_caller_transaction(session_factory) -> None:
+    result = make_result()
+
+    with session_factory() as session:
+        with pytest.raises(RuntimeError, match="later Tick phase failed"):
+            with session.begin():
+                DatabaseRuntimeResultSink(session).save_batch([result])
+                raise RuntimeError("later Tick phase failed")
+
+    with session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 0
 
 
 def test_database_sink_rolls_back_whole_batch_when_one_insert_fails(session_factory) -> None:
-    sink = DatabaseRuntimeResultSink(session_factory)
     valid = make_result(0)
-    missing_agent = make_result(1).model_copy(update={"agent_id": uuid4()})
+    missing_agent_id = uuid4()
+    missing_agent = make_result(1).model_copy(
+        update={
+            "agent_id": missing_agent_id,
+            "idempotency_key": f"runtime-db-run:3:{missing_agent_id}",
+        }
+    )
 
-    with pytest.raises(Exception):
-        sink.save_batch([valid, missing_agent])
+    with session_factory() as session:
+        with pytest.raises(IntegrityError):
+            with session.begin():
+                DatabaseRuntimeResultSink(session).save_batch([valid, missing_agent])
 
     with session_factory() as session:
         assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 0
