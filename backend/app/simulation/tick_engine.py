@@ -57,7 +57,11 @@ class TickRollbackError(Exception):
     """RuntimeExecutionError로 Tick 전체가 rollback될 때 발생"""
 
 
-AgentRuntimeFn = Callable[..., Coroutine[Any, Any, dict]]
+# (agents, event, snapshot) → {agent_id: result} batch 방식 1회 호출
+AgentRuntimeFn = Callable[
+    [list[TickAgent], TickEvent, WorldSnapshot],
+    Coroutine[Any, Any, dict[str, Any]],
+]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
 
@@ -69,6 +73,7 @@ class TickEngine:
     ) -> None:
         self._runtime = runtime
         self._policy = policy
+        # TODO: PR #60 연결 후 DB 기반 상태 전이로 교체
         self._running = False
 
     async def run_tick(
@@ -76,18 +81,21 @@ class TickEngine:
         agents: list[TickAgent],
         event: TickEvent,
         snapshot: WorldSnapshot,
+        *,
+        schedule_requires_professor: bool = False,
     ) -> TickResult:
         if self._running:
             raise TickConflictError("Tick is already running")
 
         self._running = True
         try:
-            participants = self._select_participants(agents, event)
-            runtime_outputs: dict[str, dict] = {}
+            participants = self._select_participants(
+                agents, event, schedule_requires_professor=schedule_requires_professor
+            )
+            runtime_outputs: dict[str, Any] = {}
 
-            for agent in participants:
-                result = await self._runtime(agent=agent, event=event, snapshot=snapshot)
-                runtime_outputs[agent.id] = result
+            if participants:
+                runtime_outputs = await self._runtime(participants, event, snapshot)
 
             if self._policy and runtime_outputs:
                 policy_inputs = [
@@ -112,12 +120,22 @@ class TickEngine:
         finally:
             self._running = False
 
-    def _select_participants(self, agents: list[TickAgent], event: TickEvent) -> list[TickAgent]:
+    def _select_participants(
+        self,
+        agents: list[TickAgent],
+        event: TickEvent,
+        *,
+        schedule_requires_professor: bool = False,
+    ) -> list[TickAgent]:
+        """
+        실행 대상 선정. is_active 여부와 무관하게 선정하고 Runtime에 전달.
+        비활성 Agent는 Runtime이 LLM 호출 없이 SKIPPED 결과를 반환.
+        """
         result = []
         for agent in agents:
-            if not agent.is_active:
-                continue
-            if agent.id not in event.participant_ids:
-                continue
-            result.append(agent)
+            if agent.agent_type == AgentType.STUDENT:
+                result.append(agent)
+            elif agent.agent_type == AgentType.PROFESSOR:
+                if schedule_requires_professor or agent.id in event.participant_ids:
+                    result.append(agent)
         return result

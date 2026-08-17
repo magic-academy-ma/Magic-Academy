@@ -1,42 +1,22 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import require_user_role
+from app.domain.models import User
+from app.services.simulations import require_owned_simulation
 from app.simulation.tick_engine import (
-    AgentType,
-    TickAgent,
     TickConflictError,
     TickEngine,
-    TickEvent,
     TickResult,
     TickRollbackError,
-    WorldSnapshot,
 )
 
 
-class AgentIn(BaseModel):
-    id: str
-    agent_type: AgentType
-    is_active: bool
-
-
-class EventIn(BaseModel):
-    id: str
-    event_type: str
-    participant_ids: list[str]
-
-
-class SnapshotIn(BaseModel):
-    simulation_id: str
-    current_tick: int
-
-
-class TickRequest(BaseModel):
-    agents: list[AgentIn]
-    event: EventIn
-    snapshot: SnapshotIn
-
-
-class TickResponse(BaseModel):
+class TickAdvanceResponse(BaseModel):
     status: str
     participant_ids: list[str]
     runtime_outputs: dict[str, dict]
@@ -46,35 +26,29 @@ def make_tick_router(engine: TickEngine) -> APIRouter:
     router = APIRouter(tags=["ticks"])
 
     @router.post(
-        "/tick/{simulation_id}/run",
-        response_model=TickResponse,
+        "/simulations/{simulation_id}/ticks/advance",
+        response_model=TickAdvanceResponse,
     )
-    async def run_tick(simulation_id: str, body: TickRequest) -> TickResponse:
-        agents = [
-            TickAgent(id=a.id, agent_type=a.agent_type, is_active=a.is_active)
-            for a in body.agents
-        ]
-        event = TickEvent(
-            id=body.event.id,
-            event_type=body.event.event_type,
-            participant_ids=set(body.event.participant_ids),
-        )
-        snapshot = WorldSnapshot(
-            simulation_id=body.snapshot.simulation_id,
-            current_tick=body.snapshot.current_tick,
-        )
+    async def advance_tick(
+        simulation_id: UUID,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_user_role),
+    ) -> TickAdvanceResponse:
+        require_owned_simulation(db, simulation_id, current_user)
 
+        # TODO: PR #39 연결 후 DB에서 agents, events 조회 및 TickEngine 호출
         try:
             result: TickResult = await engine.run_tick(
-                agents=agents, event=event, snapshot=snapshot
+                agents=[],
+                event=None,  # type: ignore[arg-type]
+                snapshot=None,  # type: ignore[arg-type]
             )
         except TickConflictError as exc:
             raise HTTPException(status_code=409, detail="Tick is already running") from exc
         except TickRollbackError as exc:
             raise HTTPException(status_code=500, detail="Tick rolled back due to runtime failure") from exc
-        # TODO: 전체 에러 핸들링 리팩 시 RuntimeExecutionError 외 예외(코드 버그 등) 처리 추가
 
-        return TickResponse(
+        return TickAdvanceResponse(
             status=result.status,
             participant_ids=result.participant_ids,
             runtime_outputs=result.runtime_outputs,
