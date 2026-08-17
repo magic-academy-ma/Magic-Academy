@@ -1,4 +1,5 @@
 import json
+from hashlib import sha256
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -41,7 +42,7 @@ class InMemoryRuntimeResultSink:
                 raise TypeError("RuntimeResultSink only accepts AgentRuntimeResult values")
             result = AgentRuntimeResult.model_validate(result.model_dump())
             key = result.idempotency_key
-            fingerprint = _result_fingerprint(result)
+            fingerprint = result_fingerprint(result)
 
             if key in pending_fingerprints:
                 if pending_fingerprints[key] != fingerprint:
@@ -79,10 +80,11 @@ class InMemoryRuntimeResultSink:
         return [result.model_copy(deep=True) for result in self._results.values()]
 
 
-def _result_fingerprint(result: AgentRuntimeResult) -> str:
-    return json.dumps(
+def result_fingerprint(result: AgentRuntimeResult) -> str:
+    serialized = json.dumps(
         result.model_dump(mode="json"),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     )
+    return sha256(serialized.encode("utf-8")).hexdigest()
