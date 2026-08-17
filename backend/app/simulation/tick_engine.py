@@ -2,6 +2,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
+from app.simulation.agent_runtime import (
+    AgentReaction,
+    AgentRuntimeResult,
+    RelationshipSignal,
+    RelationshipSignalType,
+    SignalIntensity,
+    StateSignal,
+    StateSignalType,
+)
+
 
 class AgentType(str, Enum):
     STUDENT = "student"
@@ -34,7 +44,7 @@ class PolicyInput:
     """Runtime 결과를 Policy로 전달하는 단위"""
     agent_id: str
     event_id: str
-    runtime_result: dict[str, Any]
+    runtime_result: AgentRuntimeResult
 
 
 @dataclass
@@ -42,7 +52,7 @@ class TickResult:
     """Tick 실행 결과"""
     status: str  # "completed" | "failed"
     participant_ids: list[str]
-    runtime_outputs: dict[str, dict[str, Any]]
+    runtime_outputs: dict[str, AgentRuntimeResult]
 
 
 class TickConflictError(Exception):
@@ -60,7 +70,7 @@ class TickRollbackError(Exception):
 # (agents, event, snapshot) → {agent_id: result} batch 방식 1회 호출
 AgentRuntimeFn = Callable[
     [list[TickAgent], TickEvent, WorldSnapshot],
-    Coroutine[Any, Any, dict[str, Any]],
+    Coroutine[Any, Any, dict[str, AgentRuntimeResult]],
 ]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
@@ -92,7 +102,7 @@ class TickEngine:
             participants = self._select_participants(
                 agents, event, schedule_requires_professor=schedule_requires_professor
             )
-            runtime_outputs: dict[str, Any] = {}
+            runtime_outputs: dict[str, AgentRuntimeResult] = {}
 
             if participants:
                 runtime_outputs = await self._runtime(participants, event, snapshot)

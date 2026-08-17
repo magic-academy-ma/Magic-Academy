@@ -11,6 +11,7 @@ Slice 1 인수 조건 — 은혜님 파트 (Tick·Event 흐름)
 """
 import pytest
 
+from app.simulation.agent_runtime import AgentRuntimeResult
 from app.simulation.tick_engine import (
     AgentType,
     PolicyInput,
@@ -25,20 +26,76 @@ from app.simulation.tick_engine import (
 )
 
 
+AGENT_IDS = {
+    "s-1": "00000000-0000-0000-0000-000000000001",
+    "s-2": "00000000-0000-0000-0000-000000000002",
+    "p-1": "00000000-0000-0000-0000-000000000003",
+    "s-active": "00000000-0000-0000-0000-000000000004",
+    "s-inactive": "00000000-0000-0000-0000-000000000005",
+}
+
+
+def agent_id(alias: str) -> str:
+    return AGENT_IDS[alias]
+
+
 def student(sid: str, *, is_active: bool = True) -> TickAgent:
-    return TickAgent(id=sid, agent_type=AgentType.STUDENT, is_active=is_active)
+    return TickAgent(id=agent_id(sid), agent_type=AgentType.STUDENT, is_active=is_active)
 
 
 def professor(pid: str, *, is_active: bool = True) -> TickAgent:
-    return TickAgent(id=pid, agent_type=AgentType.PROFESSOR, is_active=is_active)
+    return TickAgent(id=agent_id(pid), agent_type=AgentType.PROFESSOR, is_active=is_active)
 
 
 def class_event(*participant_ids: str) -> TickEvent:
-    return TickEvent(id="evt-1", event_type="class", participant_ids=set(participant_ids))
+    return TickEvent(
+        id="evt-1",
+        event_type="class",
+        participant_ids={agent_id(item) for item in participant_ids},
+    )
 
 
 def snapshot() -> WorldSnapshot:
     return WorldSnapshot(simulation_id="sim-1", current_tick=1, data={})
+
+
+def make_runtime_result(
+    agent: TickAgent, *, status: str = "PROPOSED"
+) -> AgentRuntimeResult:
+    return AgentRuntimeResult.model_validate(
+        {
+            "run_id": "slice-1-run",
+            "tick_number": 1,
+            "agent_id": agent.id,
+            "status": status,
+            "intent": {
+                "action_type": "STUDY",
+                "target_agent_id": None,
+                "target_location_id": None,
+                "related_event_id": None,
+                "utterance": None,
+                "motivation_summary": "수업 내용을 복습한다.",
+                "reaction": {"valence": "NEUTRAL"},
+                "decision_explanation": {
+                    "alternatives": [
+                        {
+                            "action_type": "STUDY",
+                            "description": "복습한다.",
+                            "relative_priority": "HIGH",
+                            "selected": True,
+                        }
+                    ],
+                    "influencing_factors": [],
+                },
+                "memory_candidates": [],
+            },
+            "retry_count": 0,
+            "failure_reason": None,
+            "model": "mock-llm",
+            "prompt_version": "slice-1-test",
+            "idempotency_key": f"slice-1-run:1:{agent.id}",
+        }
+    )
 
 
 # ── Runtime 결과 → Policy 전달 ────────────────────────────────────────────────
@@ -47,9 +104,12 @@ def snapshot() -> WorldSnapshot:
 async def test_runtime_result_passed_to_policy():
     """Runtime 결과가 PolicyInput에 담겨 Policy 콜백으로 전달된다"""
     policy_inputs: list[PolicyInput] = []
+    expected_result: AgentRuntimeResult | None = None
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": "study", "reaction": {"trust": +5}} for a in agents}
+        nonlocal expected_result
+        expected_result = make_runtime_result(agents[0])
+        return {agents[0].id: expected_result}
 
     async def policy(inputs: list[PolicyInput]) -> None:
         policy_inputs.extend(inputs)
@@ -62,8 +122,8 @@ async def test_runtime_result_passed_to_policy():
     )
 
     assert len(policy_inputs) == 1
-    assert policy_inputs[0].agent_id == "s-1"
-    assert policy_inputs[0].runtime_result == {"intent": "study", "reaction": {"trust": +5}}
+    assert policy_inputs[0].agent_id == agent_id("s-1")
+    assert policy_inputs[0].runtime_result is expected_result
 
 
 async def test_all_participants_results_passed_to_policy():
@@ -71,7 +131,7 @@ async def test_all_participants_results_passed_to_policy():
     received: list[PolicyInput] = []
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": "attend"} for a in agents}
+        return {agent.id: make_runtime_result(agent) for agent in agents}
 
     async def policy(inputs: list[PolicyInput]) -> None:
         received.extend(inputs)
@@ -84,7 +144,10 @@ async def test_all_participants_results_passed_to_policy():
     )
 
     assert len(received) == 2
-    assert {p.agent_id for p in received} == {"s-1", "p-1"}
+    assert {p.agent_id for p in received} == {
+        agent_id("s-1"),
+        agent_id("p-1"),
+    }
 
 
 async def test_policy_receives_event_context():
@@ -92,7 +155,7 @@ async def test_policy_receives_event_context():
     received: list[PolicyInput] = []
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": "study"} for a in agents}
+        return {agent.id: make_runtime_result(agent) for agent in agents}
 
     async def policy(inputs: list[PolicyInput]) -> None:
         received.extend(inputs)
@@ -114,7 +177,7 @@ async def test_tick_result_contains_participant_ids():
     """TickResult에 Runtime batch에 전달된 Agent ID 목록이 담긴다"""
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": "study"} for a in agents}
+        return {agent.id: make_runtime_result(agent) for agent in agents}
 
     # Student는 모두 포함, Professor는 Event 미참여 시 제외
     agents = [student("s-1"), professor("p-1")]
@@ -124,15 +187,15 @@ async def test_tick_result_contains_participant_ids():
         agents=agents, event=event, snapshot=snapshot()
     )
 
-    assert "s-1" in result.participant_ids
-    assert "p-1" not in result.participant_ids
+    assert agent_id("s-1") in result.participant_ids
+    assert agent_id("p-1") not in result.participant_ids
 
 
 async def test_tick_result_contains_runtime_outputs():
     """TickResult에 각 Agent의 Runtime 결과가 담긴다"""
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": f"action-{a.id}"} for a in agents}
+        return {agent.id: make_runtime_result(agent) for agent in agents}
 
     agents = [student("s-1"), student("s-2")]
     event = class_event("s-1", "s-2")
@@ -141,8 +204,8 @@ async def test_tick_result_contains_runtime_outputs():
         agents=agents, event=event, snapshot=snapshot()
     )
 
-    assert result.runtime_outputs["s-1"] == {"intent": "action-s-1"}
-    assert result.runtime_outputs["s-2"] == {"intent": "action-s-2"}
+    assert result.runtime_outputs[agent_id("s-1")].agent_id.hex.endswith("0001")
+    assert result.runtime_outputs[agent_id("s-2")].agent_id.hex.endswith("0002")
 
 
 async def test_inactive_agent_in_runtime_batch_with_skipped_result():
@@ -152,13 +215,13 @@ async def test_inactive_agent_in_runtime_batch_with_skipped_result():
 
     async def runtime(agents, event, snap):
         result = {}
-        for a in agents:
-            if not a.is_active:
-                result[a.id] = {"status": "SKIPPED"}
+        for agent in agents:
+            if not agent.is_active:
+                result[agent.id] = make_runtime_result(agent, status="SKIPPED")
             else:
                 nonlocal llm_call_count
                 llm_call_count += 1
-                result[a.id] = {"intent": "study"}
+                result[agent.id] = make_runtime_result(agent)
         return result
 
     active = student("s-active")
@@ -170,10 +233,10 @@ async def test_inactive_agent_in_runtime_batch_with_skipped_result():
     )
 
     # 비활성 Agent도 participant_ids에 포함
-    assert "s-inactive" in result.participant_ids
-    assert "s-active" in result.participant_ids
+    assert agent_id("s-inactive") in result.participant_ids
+    assert agent_id("s-active") in result.participant_ids
     # SKIPPED 결과가 runtime_outputs에 포함
-    assert result.runtime_outputs["s-inactive"] == {"status": "SKIPPED"}
+    assert result.runtime_outputs[agent_id("s-inactive")].status.value == "SKIPPED"
     # LLM 호출은 활성 Agent에만
     assert llm_call_count == 1
 
@@ -185,7 +248,7 @@ async def test_tick_state_transitions_on_success():
     """Tick 완료 후 TickResult status가 completed다"""
 
     async def runtime(agents, event, snap):
-        return {a.id: {"intent": "study"} for a in agents}
+        return {agent.id: make_runtime_result(agent) for agent in agents}
 
     s1 = student("s-1")
     event = class_event("s-1")
