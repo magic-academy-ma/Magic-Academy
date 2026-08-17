@@ -1,9 +1,4 @@
-// AgentMemoryList.jsx
-// Issue #73 - Task 4
-// 위치: frontend/src/components/AgentMemoryList.jsx
-//
-// 초안: retrieved_memories 실제 값 확정 전, 더미 데이터로 UI만 구성.
-// 스키마 확정 후 DUMMY_DATA를 제거하고 실제 API 응답(props)으로 교체하세요.
+// TODO: 스키마 확정 후 DUMMY_DATA 제거하고 실제 API 응답으로 교체 (Issue #73)
 
 import React from "react";
 
