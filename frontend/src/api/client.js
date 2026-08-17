@@ -1,4 +1,7 @@
+import { handleMockRequest } from "../mocks/handlers.js";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true" || (typeof window !== "undefined" && window.localStorage?.getItem("VITE_USE_MOCK") === "true");
 
 const ERROR_MESSAGES = {
   401: "로그인이 필요하거나 만료되었습니다.",
@@ -8,6 +11,10 @@ const ERROR_MESSAGES = {
 };
 
 export async function apiRequest(path, { token, ...options } = {}) {
+  if (USE_MOCK) {
+    return handleMockRequest(path, options);
+  }
+
   const headers = { "Content-Type": "application/json", ...options.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
