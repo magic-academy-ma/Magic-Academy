@@ -2,6 +2,7 @@
 title: 확정된 사항
 status: approved
 updated: 2026-08-08
+visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"

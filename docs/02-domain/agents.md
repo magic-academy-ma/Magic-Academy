@@ -2,12 +2,19 @@
 title: Agent 정의
 status: approved
 updated: 2026-07-28
+visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "Magic Layer 설계 (Confluence #6619141)"
   - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
   - "시스템 아키텍처 v2.3 (Confluence #8290305)"
   - "Agent Runtime 설계 (Confluence #11894790)"
+canonical:
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/6356994
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/6619141
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
+  - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
+source_updated: 2026-07-28
 ---
 
 # Agent 정의

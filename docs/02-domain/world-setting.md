@@ -2,6 +2,10 @@
 title: "[전제 조건] Magic Academy 세계관 설정"
 status: draft
 updated: 2026-08-06
+visibility: public
+source: confluence/01-product-planning/world-setting.md
+canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/10911745
+source_updated: 2026-08-06
 ---
 
 # [전제 조건] Magic Academy 세계관 설정

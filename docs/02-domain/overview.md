@@ -2,6 +2,7 @@
 title: 도메인 개요
 status: approved
 updated: 2026-07-13
+visibility: public
 source: local/CLAUDE.md + 2차 회의록
 ---
 

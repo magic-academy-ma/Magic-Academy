@@ -2,6 +2,7 @@
 title: AI Context 로딩 범위
 status: approved
 updated: 2026-08-10
+visibility: public
 ---
 
 # AI Context 로딩 범위
@@ -47,7 +48,7 @@ updated: 2026-08-10
 
 > 측정일: 2026-08-10 (`wc -m`)
 
-**총 Always Load 토큰**: ~2,433 토큰 (00-start-here/ 4종 + 02-domain/ 6종)  
+**총 Always Load 토큰**: ~2,741 토큰 (00-start-here/ 4종 + 02-domain/ 6종)  
 **전체 docs/ 토큰 (Skip 제외)**: ~19,417 토큰
 
 ---
