@@ -4,8 +4,8 @@ source: confluence/02_PRODUCT_PLANNING/functional-requirements.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/16777846
 status: draft
 visibility: public
-updated: 2026-07-29
-source_updated: 2026-07-28
+updated: 2026-08-06
+source_updated: 2026-08-05
 ---
 
 | ID | 기능 | 핵심 요구사항 | MVP | 상태 |
@@ -26,11 +26,12 @@ source_updated: 2026-07-28
 | FR-14 | 설정 공유 | 저장 설정을 권한 정책에 따라 공유 | ✓ | 검토 중 |
 | FR-15 | 설정 가져오기 | 공유받은 설정으로 새 Simulation 생성 | ✓ | 검토 중 |
 | FR-16 | Replay | 저장된 Tick Event·상태·관계 변화를 시간순 재생 | ✓ | 검토 중 |
-| FR-17 | 시점 복원 | 특정 Tick snapshot에서 원본을 덮어쓰지 않는 새 분기 생성 | ✓ | 검토 중 |
+| FR-17 | 시점 복원 | 특정 Tick snapshot 조회·복원 전용. 새 실행 생성·이력 변경 없음. 분기 생성 MVP 제외 | ✓ | 확정 |
 | FR-18 | 캠페인·테스트 시나리오 | 고정 사건·종료 조건을 가진 실행 시나리오 | ✓ | 검토 중 |
 | FR-19 | 인증·접근 제어 | Bearer token 인증, 사용자별 Simulation·설정·Replay·분기 접근 제어 | ✓ | 검토 중 |
 | FR-20 | Magic Layer | world_state 조건 충족 시에만 특수 사건 후보 생성. 수치·기간은 Policy가 결정 | ✓ | 확정 |
 | FR-21 | 대표 캠페인 | 10 Tick 정상 완료. 사용자 중단은 ABORTED이며 결과 판정 없음 | ✓ | 검토 중 |
+| FR-22 | LLM 실행 쿼터 | Tick당 Agent별 LLM 호출 횟수 및 비용 상한 설정 | ✓ | 확정 |
 
 ---
 
