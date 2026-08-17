@@ -45,10 +45,17 @@ class MemoryItem:
     """MemoryRepository가 생산하고 Runtime에 전달되는 기억 단위."""
     id: str
     content: str
+<<<<<<< HEAD
     memory_type: str  # "observation" | "conversation" | "reflection" | "plan"
     importance: int   # 0–100
     created_tick: int
     event_id: str | None
+=======
+    memory_type: str
+    importance: int
+    created_tick: int  # TODO: retrieval_traces 확정 후 출처 재확인 (ERD엔 없는 필드)
+    event_id: str | None = None
+>>>>>>> 00c864a (fix: MemoryTrace/AgentMemoryItem에 memory_type, importance 필드 추가)
 
 
 @dataclass
