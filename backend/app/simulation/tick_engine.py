@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
+from app.simulation.agent_runtime import (
+    AgentReaction,
+    AgentRuntimeResult,
+    RelationshipSignal,
+    RelationshipSignalType,
+    SignalIntensity,
+    StateSignal,
+    StateSignalType,
+)
+
 
 class AgentType(str, Enum):
     STUDENT = "student"
@@ -35,7 +45,7 @@ class PolicyInput:
     """Runtime 결과를 Policy로 전달하는 단위"""
     agent_id: str
     event_id: str
-    runtime_result: dict[str, Any]
+    runtime_result: AgentRuntimeResult
 
 
 # ─── Slice 3: Memory 타입 ──────────────────────────────────────────────────────
@@ -66,7 +76,7 @@ class TickResult:
     """Tick 실행 결과"""
     status: str  # "completed" | "failed"
     participant_ids: list[str]
-    runtime_outputs: dict[str, Any]
+    runtime_outputs: dict[str, AgentRuntimeResult]
     retrieval_traces: dict[str, list[str]] = field(default_factory=dict)
     created_memory_ids: dict[str, list[str]] = field(default_factory=dict)
 
@@ -86,7 +96,7 @@ class TickRollbackError(Exception):
 # (agents, event, snapshot) → {agent_id: result} batch 방식 1회 호출
 AgentRuntimeFn = Callable[
     [list[TickAgent], TickEvent, WorldSnapshot],
-    Coroutine[Any, Any, dict[str, Any]],
+    Coroutine[Any, Any, dict[str, AgentRuntimeResult]],
 ]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
@@ -132,7 +142,6 @@ class TickEngine:
             participants = self._select_participants(
                 agents, event, schedule_requires_professor=schedule_requires_professor
             )
-
             # pre-tick: Memory 조회 및 snapshot 주입
             retrieval_traces: dict[str, list[str]] = {}
             if self._memory_retriever:
@@ -145,7 +154,7 @@ class TickEngine:
                     retrieval_traces[agent.id] = [m.id for m in memories]
                 snapshot.data["memories"] = all_memories
 
-            runtime_outputs: dict[str, Any] = {}
+            runtime_outputs: dict[str, AgentRuntimeResult] = {}
             if participants:
                 runtime_outputs = await self._runtime(participants, event, snapshot)
 
@@ -154,7 +163,7 @@ class TickEngine:
                     PolicyInput(
                         agent_id=agent_id,
                         event_id=event.id,
-                        runtime_result=output if isinstance(output, dict) else vars(output),
+                        runtime_result=output,
                     )
                     for agent_id, output in runtime_outputs.items()
                 ]
