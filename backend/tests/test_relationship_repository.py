@@ -2,7 +2,7 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.domain.models import Agent, Relationship, Simulation, User
@@ -197,7 +197,7 @@ def test_apply_deltas_creates_missing_directional_pair(relationship_db) -> None:
         assert get_pair(session, target_agent_id, source_agent_id) is None
 
 
-def test_apply_deltas_rejects_inconsistent_resolver_result(relationship_db) -> None:
+def test_apply_deltas_rejects_delta_exceeding_requested_total(relationship_db) -> None:
     session_factory, _, source_agent_id, target_agent_id = relationship_db
     invalid = make_delta(
         source_agent_id,
@@ -209,3 +209,61 @@ def test_apply_deltas_rejects_inconsistent_resolver_result(relationship_db) -> N
     with session_factory() as session:
         with pytest.raises(InvalidRelationshipDeltaError):
             apply_deltas(session, [invalid])
+
+
+def test_apply_deltas_rejects_after_value_inconsistent_with_applied_delta(
+    relationship_db,
+) -> None:
+    session_factory, _, source_agent_id, target_agent_id = relationship_db
+    invalid = make_delta(
+        source_agent_id,
+        target_agent_id,
+        requested_total=5,
+        applied_delta=5,
+        after=27,
+    )
+    with session_factory() as session:
+        with pytest.raises(
+            InvalidRelationshipDeltaError,
+            match="after = before \\+ applied_delta",
+        ):
+            apply_deltas(session, [invalid])
+
+
+def test_apply_deltas_loads_agent_simulations_in_one_query(relationship_db) -> None:
+    session_factory, _, source_agent_id, target_agent_id = relationship_db
+    statements: list[str] = []
+
+    def record_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    engine = session_factory.kw["bind"]
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        with session_factory() as session:
+            apply_deltas(
+                session,
+                [
+                    make_delta(source_agent_id, target_agent_id),
+                    make_delta(
+                        source_agent_id,
+                        target_agent_id,
+                        metric="affection",
+                        before=10,
+                        requested_total=2,
+                        applied_delta=2,
+                        after=12,
+                        resolution_id="resolution-2",
+                    ),
+                ],
+            )
+            session.rollback()
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+
+    agent_queries = [
+        statement
+        for statement in statements
+        if "FROM agents" in statement and "agents.simulation_id" in statement
+    ]
+    assert len(agent_queries) == 1

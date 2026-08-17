@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import TypeAlias
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -7,26 +7,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.domain.models import Agent, Relationship
+from app.domain.relationship_metrics import (
+    RELATIONSHIP_METRIC_RANGES,
+    RelationshipMetric,
+)
 
 
-RelationshipMetric: TypeAlias = Literal[
-    "affection",
-    "closeness",
-    "trust",
-    "tension",
-    "rivalry",
-    "dependency",
-]
 RelationshipRow: TypeAlias = Relationship
-
-METRIC_RANGES: dict[str, tuple[int, int]] = {
-    "affection": (-100, 100),
-    "closeness": (-100, 100),
-    "trust": (-100, 100),
-    "tension": (0, 100),
-    "rivalry": (0, 100),
-    "dependency": (0, 100),
-}
 
 
 class RelationshipNotFoundError(LookupError):
@@ -70,8 +57,11 @@ def get_pair(
 
 
 def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
+    if not deltas:
+        return
+
     seen: set[tuple[UUID, UUID, str]] = set()
-    pending: list[tuple[Relationship, RelationshipDelta]] = []
+    related_agent_ids: set[UUID] = set()
 
     for delta in deltas:
         key = (delta.source_agent_id, delta.target_agent_id, delta.metric)
@@ -81,7 +71,7 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
             )
         seen.add(key)
 
-        bounds = METRIC_RANGES.get(delta.metric)
+        bounds = RELATIONSHIP_METRIC_RANGES.get(delta.metric)
         if bounds is None:
             raise InvalidRelationshipDeltaError(
                 f"unsupported relationship metric: {delta.metric}"
@@ -108,13 +98,17 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
             raise InvalidRelationshipDeltaError(
                 f"resolved {delta.metric} value {delta.after} is outside {bounds}"
             )
+        related_agent_ids.update((delta.source_agent_id, delta.target_agent_id))
 
-        source_simulation_id = session.scalar(
-            select(Agent.simulation_id).where(Agent.id == delta.source_agent_id)
-        )
-        target_simulation_id = session.scalar(
-            select(Agent.simulation_id).where(Agent.id == delta.target_agent_id)
-        )
+    agent_simulation_ids = dict(
+        session.execute(
+            select(Agent.id, Agent.simulation_id).where(Agent.id.in_(related_agent_ids))
+        ).all()
+    )
+    pending: list[tuple[Relationship, RelationshipDelta]] = []
+    for delta in deltas:
+        source_simulation_id = agent_simulation_ids.get(delta.source_agent_id)
+        target_simulation_id = agent_simulation_ids.get(delta.target_agent_id)
         if source_simulation_id is None or target_simulation_id is None:
             raise RelationshipNotFoundError(
                 f"relationship agent not found: {delta.source_agent_id} -> {delta.target_agent_id}"
