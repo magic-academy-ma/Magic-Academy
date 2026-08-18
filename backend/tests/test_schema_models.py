@@ -125,6 +125,24 @@ class SchemaModelTests(unittest.TestCase):
             self.assertIn("BETWEEN -50 AND 50", expression)
             self.assertIn("% 5 = 0", expression)
 
+    def test_relationship_metric_constraints_match_slice_two_contract(self) -> None:
+        relationships = Base.metadata.tables["relationships"]
+        constraints = {
+            constraint.name: str(constraint.sqltext)
+            for constraint in relationships.constraints
+            if isinstance(constraint, CheckConstraint)
+        }
+        for metric in ("affection", "closeness", "trust"):
+            self.assertIn(
+                "BETWEEN -100 AND 100",
+                constraints[f"ck_relationships_{metric}"],
+            )
+        for metric in ("tension", "rivalry", "dependency"):
+            self.assertIn(
+                "BETWEEN 0 AND 100",
+                constraints[f"ck_relationships_{metric}"],
+            )
+
     def test_embedding_column_is_deferred_until_dimension_is_decided(self) -> None:
         self.assertNotIn("embedding", Base.metadata.tables["agent_memories"].c)
 
