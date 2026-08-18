@@ -15,6 +15,7 @@ Magic Academy에서 사용 가능한 Claude Skills 목록을 출력한다.
 |--------|------|-----------|
 | /help | 이 목록 출력 | 전체 |
 | /issue-writer | 작업 내용 받아 GitHub Issue 초안 생성 | @pm, 전체 |
+| /pr-writer | 브랜치 diff와 커밋 내역 분석 후 PR 템플릿 초안 생성 및 Draft PR 등록 | 전체 |
 | /pr-review | diff 분석 후 [Must]/[Question]/[Suggest]/[Nit]/[Good] 태그 기반 리뷰 | 전체 |
 | /spec-draft | 기능 설명 또는 Figma URL을 받아 스펙 초안 생성 (모드 A/B) | 전체 |
 | /slice-plan | Slice 구현 전 작업 분할 및 파일 변경 계획 수립 | @dev, 전체 |
