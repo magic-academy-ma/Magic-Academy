@@ -1,15 +1,15 @@
 """add vector embedding and cosine HNSW index to agent memories
 
-Revision ID: 20260814_0004
-Revises: 20260806_0003
+Revision ID: 20260814_0005
+Revises: 20260810_0004
 """
 
 from alembic import op
 from pgvector.sqlalchemy import Vector
 import sqlalchemy as sa
 
-revision = "20260814_0004"
-down_revision = "20260806_0003"
+revision = "20260814_0005"
+down_revision = "20260810_0004"
 branch_labels = None
 depends_on = None
 
