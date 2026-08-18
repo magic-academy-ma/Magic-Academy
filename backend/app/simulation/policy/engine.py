@@ -116,7 +116,7 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 reason=f"{runtime_result.action_type}의 {signal.intensity} {signal.signal_type} 반응",
             ))
 
-        for signal in runtime_result.reaction.state_signals:
+        for idx, signal in enumerate(runtime_result.reaction.state_signals):
             metric = STATE_SIGNAL_TO_METRIC.get(signal.signal_type)
             if metric is None:
                 warnings.append(f"unknown state signal: {signal.signal_type}")
@@ -125,7 +125,7 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
             delta = get_state_delta(signal.signal_type, signal.intensity)
             after_preview = _clamp_preview(current, delta, metric)
             effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:state:{signal.signal_type}",
+                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:state:{signal.signal_type}:{idx}",
                 target_type=EffectTargetType.AGENT_STATE,
                 source_agent_id=runtime_result.agent_id,
                 target_agent_id=None,

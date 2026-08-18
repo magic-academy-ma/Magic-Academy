@@ -27,7 +27,7 @@ def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate
 
     result = []
     for resolved in groups.values():
-        lo, hi = METRIC_RANGE.get(resolved.metric, (0, 100))
+        lo, hi = METRIC_RANGE[resolved.metric]
         resolved.after_preview = max(lo, min(hi, resolved.before + resolved.delta))
         result.append(resolved)
 

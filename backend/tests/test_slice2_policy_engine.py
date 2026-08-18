@@ -323,3 +323,48 @@ def test_missing_relationship_snapshot_treats_as_neutral_zero():
     trust_effects = [e for e in result.effect_candidates if e.metric == "trust"]
     assert len(trust_effects) == 1
     assert trust_effects[0].before == 0
+
+
+def test_multiple_state_signals_have_unique_effect_ids():
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, StateSignal
+
+    results = [AgentRuntimeResult(
+        agent_id="agent-a", action_type="STUDY", target_agent_id=None,
+        reaction=AgentReaction(
+            valence="POSITIVE",
+            state_signals=[
+                StateSignal(signal_type=StateSignalType.STRESS_DOWN, intensity=SignalIntensity.LOW),
+                StateSignal(signal_type=StateSignalType.STRESS_DOWN, intensity=SignalIntensity.HIGH),
+            ],
+        ),
+    )]
+    result = evaluate_policy(_make_eval_input(results))
+    stress_effects = [e for e in result.effect_candidates if e.metric == "stress"]
+    assert len(stress_effects) == 2
+    assert stress_effects[0].effect_id != stress_effects[1].effect_id
+    assert stress_effects[0].effect_id.endswith(":0")
+    assert stress_effects[1].effect_id.endswith(":1")
+
+
+def test_resolve_conflicts_raises_key_error_for_unknown_metric():
+    from app.simulation.policy.conflict import resolve_conflicts
+    from app.simulation.policy.models import EffectCandidate, EffectTargetType
+
+    candidates = [
+        EffectCandidate(
+            effect_id="test:a:b:unknown_metric",
+            target_type=EffectTargetType.RELATIONSHIP,
+            source_agent_id="a",
+            target_agent_id="b",
+            metric="unknown_metric",
+            delta=5,
+            before=10,
+            after_preview=15,
+            rule_id="TEST",
+            reason="test",
+        )
+    ]
+    with pytest.raises(KeyError):
+        resolve_conflicts(candidates)
+
