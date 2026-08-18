@@ -19,16 +19,16 @@ visibility: public
 
 | 파일 | 문자 수 | 예상 토큰 | 분류 |
 |------|------:|----------:|------|
-| `00-start-here/index.md` | 879 | ~219 | Always |
-| `00-start-here/what-is-decided.md` | 881 | ~220 | Always |
-| `00-start-here/what-is-pending.md` | 799 | ~199 | Always |
-| `00-start-here/context-quality.md` | 531 | ~132 | Always |
-| `02-domain/overview.md` | 877 | ~219 | Always |
-| `02-domain/agents.md` | 1,491 | ~372 | Always |
-| `02-domain/relationships.md` | 1,168 | ~292 | Always |
-| `02-domain/organizations.md` | 783 | ~195 | Always |
-| `02-domain/events.md` | 1,108 | ~277 | Always |
-| `02-domain/time-and-space.md` | 1,234 | ~308 | Always |
+| `00-start-here/index.md` | 898 | ~225 | Always |
+| `00-start-here/what-is-decided.md` | 1,221 | ~305 | Always |
+| `00-start-here/what-is-pending.md` | 799 | ~200 | Always |
+| `00-start-here/context-quality.md` | 531 | ~133 | Always |
+| `02-domain/overview.md` | 929 | ~232 | Always |
+| `02-domain/agents.md` | 2,086 | ~522 | Always |
+| `02-domain/relationships.md` | 1,220 | ~305 | Always |
+| `02-domain/organizations.md` | 835 | ~209 | Always |
+| `02-domain/events.md` | 1,160 | ~290 | Always |
+| `02-domain/time-and-space.md` | 1,286 | ~322 | Always |
 | `05-team-rules/conventions.md` | 1,267 | ~317 | Task |
 | `05-team-rules/definition-of-done.md` | 1,127 | ~282 | Task |
 | `05-team-rules/git-workflow-commit.md` | 1,473 | ~368 | Task (구현·커밋 시) |
@@ -36,20 +36,20 @@ visibility: public
 | `05-team-rules/dev-workflow.md` | 1,709 | ~427 | Task (외부 게시 작업 시) |
 | `05-team-rules/ai-usage.md` | 1,330 | ~333 | Task |
 | `decisions/README.md` | 632 | ~158 | Task |
-| `02-domain/world-setting.md` | 9,318 | ~2,329 | Task (세계관·Magic Layer 구현 시) |
+| `02-domain/world-setting.md` | 9,499 | ~2,375 | Task (세계관·Magic Layer 구현 시) |
 | `03-system-design/event-master.md` | 12,752 | ~3,188 | Task (Event Master 구현 시) |
 | `03-system-design/policy-signal-delta.md` | 12,144 | ~3,036 | Task (Policy Engine 구현 시) |
 | `04-feature-specs/mvp-feature-spec.md` | 10,767 | ~2,692 | Task (MVP 기능 구현 시) |
 | `04-feature-specs/inspector.md` | 6,167 | ~1,542 | Task (Inspector 구현 시) |
 | `01-product/simulation-parameters.md` | 6,636 | ~1,659 | Task (파라미터 관련 구현 시) |
-| `README.md` | — | ~211 | Skip |
-| `_meta/SYNC.md` | — | ~1,020 | Skip |
-| `_meta/ai-native-env-design.md` | — | ~1,063 | Skip |
+| `README.md` | 1,243 | ~311 | Skip |
+| `_meta/SYNC.md` | 6,659 | ~1,665 | Skip |
+| `_meta/ai-native-env-design.md` | 4,216 | ~1,054 | Skip |
 
-> 측정일: 2026-08-10 (`wc -m`)
+> 측정일: 2026-08-19 (`wc -m`)
 
 **총 Always Load 토큰**: ~2,741 토큰 (00-start-here/ 4종 + 02-domain/ 6종)  
-**전체 docs/ 토큰 (Skip 제외)**: ~19,417 토큰
+**전체 docs/ 토큰 (Skip 제외)**: ~19,770 토큰
 
 ---
 
