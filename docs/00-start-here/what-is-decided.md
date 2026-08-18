@@ -2,7 +2,7 @@
 title: 확정된 사항
 status: approved
 visibility: public
-updated: 2026-07-28
+updated: 2026-08-08
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
@@ -29,59 +29,8 @@ source:
 
 ## Agent 구성 (MVP)
 
-> 출처: [Spec] MVP 핵심 설계 기준 §FR-01~FR-09 · Magic Layer 설계 (Confluence #6619141)
-
-| Agent | 수량 | 비고 |
-|-------|------|------|
-| Student Agent | 1단계 5명 (User Persona 1명 포함) | 2단계 이상 확장 예정 — §FR-01 |
-| Professor Agent | 1단계 1명 | 2단계 이상 확장 예정 — §FR-01 |
-| Event Master Agent | 1 | 시스템 컴포넌트 (생활 Agent 수 제외) — §FR-05, FR-09 |
-| Magic Layer | 1 | 시스템 컴포넌트 (생활 Agent 수 제외), Magic Layer 운영 |
-
-- **1단계 생활 Agent**: Student 5명 + Professor 1명 = 총 6명
-
-- **User Persona**: 별도 Agent 아님. Student 중 1명을 지정하며 성격·성향 수정 가능. 직접 조종 불가.
-- **Student Agent memory 상한**: 최대 10 — §FR-02
-- **Magic Layer 실행 위치**: Event Master → Magic Layer → Agent Runtime
-
----
-
-## 세계관 카테고리
-
-시간 / 공간 / 조직 / 관계 / 사건 / 배경
-
-### 시간
-
-- **Time Tick**: 1 Tick = 8분 = 1블록, 1일 = 3블록 = 24분
-- 수업 시간·점심 시간 구분, 밤 시간은 스킵 가능
-- 시뮬레이션은 입학 시점부터 Tick 기반으로 진행
-
-### 공간
-
-교실 · 식당 · 도서관 · 연구실 · 기숙사
-
-### 조직
-
-- 기숙사 2개
-- 동아리 3개
-- 전공 4개 × 학생 5명 = 20명, 학년 4학년까지 전공별 랜덤 배정
-- 총학생회 4~5명
-- **규칙**: 소속이 같으면 친밀도 UP
-
-### 관계
-
-| 구분 | 목록 |
-|------|------|
-| 척도 | 호감도 · 친밀도 · 신뢰도 · 긴장도(갈등) · 경쟁 · 의존도 |
-| 유형 | 친구 · 선후배 · 라이벌 · 고백 · 배신 · 화해 |
-
-### 사건 (MVP 포함)
-
-수업(시간표) · 조별 과제 · 과팅/미팅 · MT · 중간·기말고사(→장학금) · 축제 · 교수님 납치(→대학원 직행) · 랜덤 날씨(이벤트 전 징조)
-
-### 배경
-
-랜덤 날씨, 한국식 학기제, 장학금·상/벌점 기반 학교 운영
+1단계 생활 Agent: Student 5명 (User Persona 1명 포함) + Professor 1명. 시스템 컴포넌트: Event Master Agent · Magic Layer 각 1개.  
+상세: `docs/02-domain/agents.md`
 
 ---
 

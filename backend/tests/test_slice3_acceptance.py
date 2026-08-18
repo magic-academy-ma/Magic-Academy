@@ -34,17 +34,20 @@ async def test_e2e_memory_created_in_tick_n():
     """Tick N에서 memory_candidate를 반환하면 MemoryStoreFn이 호출된다"""
     stored: list = []
 
-    async def runtime(agent, event, snapshot):
-        return AgentRuntimeResult(
-            agent_id=agent.id,
-            action_type="STUDY",
-            target_agent_id=None,
-            memory_candidate=MemoryCandidateItem(
-                content="마법 수업에서 새로운 주문을 익혔다",
-                memory_type="observation",
-                importance=55,
-            ),
-        )
+    async def runtime(agents, event, snapshot):
+        return {
+            agent.id: AgentRuntimeResult(
+                agent_id=agent.id,
+                action_type="STUDY",
+                target_agent_id=None,
+                memory_candidate=MemoryCandidateItem(
+                    content="마법 수업에서 새로운 주문을 익혔다",
+                    memory_type="observation",
+                    importance=55,
+                ),
+            )
+            for agent in agents
+        }
 
     async def store(agent_id, event_id, candidate, tick):
         stored.append((agent_id, candidate.content, tick))
@@ -69,9 +72,10 @@ async def test_e2e_memory_used_in_tick_n_plus_1():
         return [MemoryItem(id="mem-tick1", content="마법 수업에서 새로운 주문을 익혔다",
                            memory_type="observation", importance=55, created_tick=1, event_id="evt-1")]
 
-    async def runtime(agent, event, snapshot):
-        received.append(snapshot.data.get("memories", {}).get(agent.id, []))
-        return AgentRuntimeResult(agent_id=agent.id, action_type="PRACTICE", target_agent_id=None)
+    async def runtime(agents, event, snapshot):
+        for agent in agents:
+            received.append(snapshot.data.get("memories", {}).get(agent.id, []))
+        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="PRACTICE", target_agent_id=None) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     result = await engine.run_tick(
@@ -87,8 +91,8 @@ async def test_e2e_memory_used_in_tick_n_plus_1():
 async def test_e2e_no_memory_retriever_does_not_break():
     """memory_retriever가 없어도 Tick이 정상 완료된다"""
 
-    async def runtime(agent, event, snapshot):
-        return AgentRuntimeResult(agent_id=agent.id, action_type="WAIT", target_agent_id=None)
+    async def runtime(agents, event, snapshot):
+        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="WAIT", target_agent_id=None) for agent in agents}
 
     engine = TickEngine(runtime=runtime)
     result = await engine.run_tick(
@@ -104,12 +108,17 @@ async def test_e2e_no_memory_retriever_does_not_break():
 
 async def test_e2e_slice0_1_2_regression():
     """누적 회귀: Slice 0~2 인수 조건이 여전히 통과한다"""
+    import sys
+    from pathlib import Path
+
+    backend_dir = Path(__file__).resolve().parent.parent
     result = subprocess.run(
-        ["python", "-m", "pytest",
+        [sys.executable, "-m", "pytest",
          "tests/test_slice0_acceptance.py",
          "tests/test_slice1_acceptance.py",
          "tests/test_slice2_policy_engine.py",
          "-v", "--tb=short"],
         capture_output=True, text=True,
+        cwd=backend_dir,
     )
     assert result.returncode == 0, f"Slice 0~2 회귀 실패:\n{result.stdout}\n{result.stderr}"

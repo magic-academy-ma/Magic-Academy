@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
@@ -74,11 +75,19 @@ class TickConflictError(Exception):
     """Tick이 이미 실행 중일 때 발생"""
 
 
+class RuntimeExecutionError(Exception):
+    """Runtime 콜백의 예상된 실패 (타임아웃, LLM 오류 등)"""
+
+
 class TickRollbackError(Exception):
-    """Runtime 실패로 Tick 전체가 rollback될 때 발생"""
+    """RuntimeExecutionError로 Tick 전체가 rollback될 때 발생"""
 
 
-AgentRuntimeFn = Callable[..., Coroutine[Any, Any, Any]]
+# (agents, event, snapshot) → {agent_id: result} batch 방식 1회 호출
+AgentRuntimeFn = Callable[
+    [list[TickAgent], TickEvent, WorldSnapshot],
+    Coroutine[Any, Any, dict[str, Any]],
+]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
 MemoryRetrieverFn = Callable[
@@ -104,20 +113,25 @@ class TickEngine:
         self._policy = policy
         self._memory_retriever = memory_retriever
         self._memory_store = memory_store
-        self._running = False
+        self._running: set[str] = set()  # 실행 중인 simulation_id 집합
 
     async def run_tick(
         self,
         agents: list[TickAgent],
         event: TickEvent,
         snapshot: WorldSnapshot,
+        *,
+        schedule_requires_professor: bool = False,
     ) -> TickResult:
-        if self._running:
-            raise TickConflictError("Tick is already running")
+        simulation_id = snapshot.simulation_id
+        if simulation_id in self._running:
+            raise TickConflictError(f"Tick is already running for simulation {simulation_id}")
 
-        self._running = True
+        self._running.add(simulation_id)
         try:
-            participants = self._select_participants(agents, event)
+            participants = self._select_participants(
+                agents, event, schedule_requires_professor=schedule_requires_professor
+            )
 
             # pre-tick: Memory 조회 및 snapshot 주입
             retrieval_traces: dict[str, list[str]] = {}
@@ -132,9 +146,8 @@ class TickEngine:
                 snapshot.data["memories"] = all_memories
 
             runtime_outputs: dict[str, Any] = {}
-            for agent in participants:
-                result = await self._runtime(agent=agent, event=event, snapshot=snapshot)
-                runtime_outputs[agent.id] = result
+            if participants:
+                runtime_outputs = await self._runtime(participants, event, snapshot)
 
             if self._policy and runtime_outputs:
                 policy_inputs = [
@@ -166,17 +179,27 @@ class TickEngine:
             )
         except TickConflictError:
             raise
-        except Exception as exc:
+        except RuntimeExecutionError as exc:
             raise TickRollbackError("Tick rolled back due to runtime failure") from exc
         finally:
-            self._running = False
+            self._running.discard(simulation_id)
 
-    def _select_participants(self, agents: list[TickAgent], event: TickEvent) -> list[TickAgent]:
+    def _select_participants(
+        self,
+        agents: list[TickAgent],
+        event: TickEvent,
+        *,
+        schedule_requires_professor: bool = False,
+    ) -> list[TickAgent]:
+        """
+        실행 대상 선정. is_active 여부와 무관하게 선정하고 Runtime에 전달.
+        비활성 Agent는 Runtime이 LLM 호출 없이 SKIPPED 결과를 반환.
+        """
         result = []
         for agent in agents:
-            if not agent.is_active:
-                continue
-            if agent.id not in event.participant_ids:
-                continue
-            result.append(agent)
+            if agent.agent_type == AgentType.STUDENT:
+                result.append(agent)
+            elif agent.agent_type == AgentType.PROFESSOR:
+                if schedule_requires_professor or agent.id in event.participant_ids:
+                    result.append(agent)
         return result

@@ -277,3 +277,40 @@ def test_summed_delta_clamped_at_range():
     ]
     committed = resolve_conflicts(candidates)
     assert committed[0].after_preview == 100
+
+
+# ── signal 단위 거부 ────────────────────────────────────────────────────────────
+
+def test_invalid_signal_does_not_reject_valid_signals_of_same_agent():
+    """잘못된 signal 하나가 같은 agent의 정상 signal까지 거부하면 안 된다."""
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.models import PolicyStatus
+    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+
+    # agent-a → self (잘못된 signal) + agent-a → agent-b (정상 signal)
+    results = [AgentRuntimeResult(
+        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
+        reaction=AgentReaction(
+            valence="POSITIVE",
+            relationship_signals=[
+                RelationshipSignal(
+                    signal_type=RelationshipSignalType.TRUST_UP,
+                    intensity=SignalIntensity.MEDIUM,
+                    target_agent_id="agent-a",   # self-target: 잘못된 signal
+                ),
+                RelationshipSignal(
+                    signal_type=RelationshipSignalType.TRUST_UP,
+                    intensity=SignalIntensity.MEDIUM,
+                    target_agent_id="agent-b",   # 정상 signal
+                ),
+            ],
+        ),
+    )]
+    result = evaluate_policy(_make_eval_input(results))
+    assert result.status == PolicyStatus.PARTIAL
+    # 잘못된 signal은 rejected에 기록
+    assert len(result.rejected_effects) == 1
+    # 정상 signal은 effect_candidates에 포함
+    trust_effects = [e for e in result.effect_candidates if e.metric == "trust"]
+    assert len(trust_effects) == 1
+    assert trust_effects[0].target_agent_id == "agent-b"

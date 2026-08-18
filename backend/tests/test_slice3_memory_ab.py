@@ -22,10 +22,13 @@ def make_snapshot(tick: int = 2):
 async def test_memory_presence_changes_action_type():
     """Memory 있을 때 TALK, 없을 때 STUDY — 동일 Runtime에서 행동 차이 검증"""
 
-    async def memory_aware_runtime(agent, event, snapshot):
-        memories = snapshot.data.get("memories", {}).get(agent.id, [])
-        action = "TALK" if memories else "STUDY"
-        return AgentRuntimeResult(agent_id=agent.id, action_type=action, target_agent_id=None)
+    async def memory_aware_runtime(agents, event, snapshot):
+        outputs = {}
+        for agent in agents:
+            memories = snapshot.data.get("memories", {}).get(agent.id, [])
+            action = "TALK" if memories else "STUDY"
+            outputs[agent.id] = AgentRuntimeResult(agent_id=agent.id, action_type=action, target_agent_id=None)
+        return outputs
 
     async def retriever_with(agent_id, tick, query):
         return [MemoryItem(id="m-1", content="협력 기억", memory_type="observation",
@@ -61,8 +64,8 @@ async def test_retrieval_trace_matches_passed_ids():
             MemoryItem(id="m-b", content="기억B", memory_type="observation", importance=40, created_tick=2, event_id=None),
         ]
 
-    async def runtime(agent, event, snapshot):
-        return AgentRuntimeResult(agent_id=agent.id, action_type="STUDY", target_agent_id=None)
+    async def runtime(agents, event, snapshot):
+        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="STUDY", target_agent_id=None) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     result = await engine.run_tick(
