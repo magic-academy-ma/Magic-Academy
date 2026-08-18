@@ -245,4 +245,28 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('이미 진행 중인 Tick이 있습니다')
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
+    it('does not treat a 409 with a different error code as TICK_ALREADY_RUNNING', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response({
+      error: { code: 'SIMULATION_LOCKED', message: '시뮬레이션이 잠겨 있습니다.' },
+    }, 409))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('시뮬레이션이 잠겨 있습니다.')
+    expect(screen.queryByText('이미 진행 중인 Tick이 있습니다')).not.toBeInTheDocument()
+  })
+
+  it('sends the tick advance request without a request body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+    await screen.findByText('이번 Tick에서 표시할 Agent 행동 결과가 없습니다.')
+
+    const tickCall = fetchMock.mock.calls.find(([url]) => url.includes('/ticks/advance'))
+    expect(tickCall[1]).not.toHaveProperty('body')
+  })
 })

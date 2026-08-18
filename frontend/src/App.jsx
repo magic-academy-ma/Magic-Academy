@@ -66,7 +66,7 @@ function classifyTickError(requestError) {
   if (status === 404 || code === "RESOURCE_NOT_FOUND") {
     return { type: "NOT_FOUND", message: "Simulation을 찾을 수 없습니다." };
   }
-  if (status === 409 || code === "TICK_ALREADY_RUNNING") {
+  if (code === "TICK_ALREADY_RUNNING") {
     return {
       type: "TICK_ALREADY_RUNNING",
       message: "이미 진행 중인 Tick이 있습니다. 잠시 후 다시 시도해 주세요.",
@@ -162,7 +162,6 @@ export default function App() {
         {
           token: auth.access_token,
           method: "POST",
-          body: JSON.stringify({}),
         }
       );
 
