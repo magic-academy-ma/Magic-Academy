@@ -4,13 +4,15 @@ Slice 0 인수 조건 — 은혜님 파트 (Tick Engine 진입 조건)
 지유님(통합 Owner)의 Slice 0 구현 완료 후 이 테스트들이 전부 통과해야 한다.
 Tick Engine이 6-Agent roster를 올바르게 수신·처리할 수 있는지를 검증한다.
 """
+import asyncio
 import pytest
 
 from app.simulation.tick_engine import (
-    TickAgent,
     AgentType,
-    TickEvent,
+    TickAgent,
+    TickConflictError,
     TickEngine,
+    TickEvent,
     WorldSnapshot,
 )
 
@@ -67,12 +69,12 @@ def test_all_agents_active_at_simulation_start():
 
 
 async def test_tick_engine_runs_all_students_in_class_event():
-    """수업 Event에서 Student 5명 전원이 Runtime을 실행한다"""
+    """수업 Event에서 Student 5명 전원이 Runtime batch에 포함된다"""
     called_ids: list[str] = []
 
-    async def runtime(agent, event, snapshot):
-        called_ids.append(agent.id)
-        return {"intent": "attend"}
+    async def runtime(agents, event, snapshot):
+        called_ids.extend(a.id for a in agents)
+        return {a.id: {"intent": "attend"} for a in agents}
 
     roster = initial_roster()
     student_ids = {a.id for a in roster if a.agent_type == AgentType.STUDENT}
@@ -86,15 +88,14 @@ async def test_tick_engine_runs_all_students_in_class_event():
 
 
 async def test_professor_not_called_when_not_in_class_event():
-    """Professor가 수업 Event 참여자가 아닐 때 Runtime을 호출하지 않는다"""
-    called_types: list[AgentType] = []
+    """Professor가 수업 Event 참여자가 아닐 때 Runtime batch에 포함되지 않는다"""
+    received_types: list[AgentType] = []
 
-    async def runtime(agent, event, snapshot):
-        called_types.append(agent.agent_type)
-        return {"intent": "attend"}
+    async def runtime(agents, event, snapshot):
+        received_types.extend(a.agent_type for a in agents)
+        return {a.id: {"intent": "attend"} for a in agents}
 
     roster = initial_roster()
-    # Professor를 제외한 Student만 참여자로 지정
     student_ids = {a.id for a in roster if a.agent_type == AgentType.STUDENT}
     event = class_event(participant_ids=student_ids)
 
@@ -102,16 +103,16 @@ async def test_professor_not_called_when_not_in_class_event():
         agents=roster, event=event, snapshot=initial_snapshot()
     )
 
-    assert AgentType.PROFESSOR not in called_types
+    assert AgentType.PROFESSOR not in received_types
 
 
 async def test_professor_called_when_in_class_event():
-    """Professor가 수업 Event 참여자일 때 Runtime을 실행한다"""
-    called_types: list[AgentType] = []
+    """Professor가 수업 Event 참여자일 때 Runtime batch에 포함된다"""
+    received_types: list[AgentType] = []
 
-    async def runtime(agent, event, snapshot):
-        called_types.append(agent.agent_type)
-        return {"intent": "lecture"}
+    async def runtime(agents, event, snapshot):
+        received_types.extend(a.agent_type for a in agents)
+        return {a.id: {"intent": "lecture"} for a in agents}
 
     roster = initial_roster()
     all_ids = {a.id for a in roster}
@@ -121,17 +122,17 @@ async def test_professor_called_when_in_class_event():
         agents=roster, event=event, snapshot=initial_snapshot()
     )
 
-    assert AgentType.PROFESSOR in called_types
-    assert called_types.count(AgentType.PROFESSOR) == 1
+    assert AgentType.PROFESSOR in received_types
+    assert received_types.count(AgentType.PROFESSOR) == 1
 
 
 async def test_same_snapshot_delivered_to_all_participants():
-    """모든 참여 Agent가 동일한 WorldSnapshot을 전달받는다"""
-    received: list[WorldSnapshot] = []
+    """Runtime batch 호출 시 모든 참여 Agent에게 동일한 WorldSnapshot이 전달된다"""
+    received_snapshot: list[WorldSnapshot] = []
 
-    async def runtime(agent, event, snapshot):
-        received.append(snapshot)
-        return {"intent": "attend"}
+    async def runtime(agents, event, snapshot):
+        received_snapshot.append(snapshot)
+        return {a.id: {"intent": "attend"} for a in agents}
 
     roster = initial_roster()
     all_ids = {a.id for a in roster}
@@ -142,18 +143,16 @@ async def test_same_snapshot_delivered_to_all_participants():
         agents=roster, event=event, snapshot=snapshot
     )
 
-    assert len(received) == TOTAL_AGENT_COUNT
-    assert all(s is snapshot for s in received)
+    # batch 방식에서 snapshot은 1회 전달되며 원본과 동일해야 한다
+    assert len(received_snapshot) == 1
+    assert received_snapshot[0] is snapshot
 
 
 async def test_tick_engine_rejects_second_tick_while_running():
     """Tick 실행 중 두 번째 Tick 요청을 거부한다 (중복 실행 방지)"""
-    import asyncio
-    from app.simulation.tick_engine import TickConflictError
-
-    async def slow_runtime(agent, event, snapshot):
+    async def slow_runtime(agents, event, snapshot):
         await asyncio.sleep(0.05)
-        return {"intent": "attend"}
+        return {a.id: {"intent": "attend"} for a in agents}
 
     engine = TickEngine(runtime=slow_runtime)
     roster = initial_roster()

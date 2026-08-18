@@ -50,11 +50,19 @@ class TickConflictError(Exception):
     """Tick이 이미 실행 중일 때 발생"""
 
 
+class RuntimeExecutionError(Exception):
+    """Runtime 콜백의 예상된 실패 (타임아웃, LLM 오류 등)"""
+
+
 class TickRollbackError(Exception):
-    """Runtime 실패로 Tick 전체가 rollback될 때 발생"""
+    """RuntimeExecutionError로 Tick 전체가 rollback될 때 발생"""
 
 
-AgentRuntimeFn = Callable[..., Coroutine[Any, Any, dict]]
+# (agents, event, snapshot) → {agent_id: result} batch 방식 1회 호출
+AgentRuntimeFn = Callable[
+    [list[TickAgent], TickEvent, WorldSnapshot],
+    Coroutine[Any, Any, dict[str, Any]],
+]
 PolicyFn = Callable[[list[PolicyInput]], Coroutine[Any, Any, None]]
 
 
@@ -73,6 +81,8 @@ class TickEngine:
         agents: list[TickAgent],
         event: TickEvent,
         snapshot: WorldSnapshot,
+        *,
+        schedule_requires_professor: bool = False,
     ) -> TickResult:
         simulation_id = snapshot.simulation_id
         if simulation_id in self._running:
@@ -80,15 +90,13 @@ class TickEngine:
 
         self._running.add(simulation_id)
         try:
-            participants = self._select_participants(agents, event)
+            participants = self._select_participants(
+                agents, event, schedule_requires_professor=schedule_requires_professor
+            )
+            runtime_outputs: dict[str, Any] = {}
 
-            async def _run_one(agent: TickAgent) -> tuple[str, dict]:
-                return agent.id, await self._runtime(agent=agent, event=event, snapshot=snapshot)
-
-            tasks: list[asyncio.Task[tuple[str, dict]]] = []
-            async with asyncio.TaskGroup() as tg:
-                tasks = [tg.create_task(_run_one(a)) for a in participants]
-            runtime_outputs: dict[str, dict] = dict(t.result() for t in tasks)
+            if participants:
+                runtime_outputs = await self._runtime(participants, event, snapshot)
 
             if self._policy and runtime_outputs:
                 policy_inputs = [
@@ -108,17 +116,27 @@ class TickEngine:
             )
         except TickConflictError:
             raise
-        except Exception as exc:
+        except RuntimeExecutionError as exc:
             raise TickRollbackError("Tick rolled back due to runtime failure") from exc
         finally:
             self._running.discard(simulation_id)
 
-    def _select_participants(self, agents: list[TickAgent], event: TickEvent) -> list[TickAgent]:
+    def _select_participants(
+        self,
+        agents: list[TickAgent],
+        event: TickEvent,
+        *,
+        schedule_requires_professor: bool = False,
+    ) -> list[TickAgent]:
+        """
+        실행 대상 선정. is_active 여부와 무관하게 선정하고 Runtime에 전달.
+        비활성 Agent는 Runtime이 LLM 호출 없이 SKIPPED 결과를 반환.
+        """
         result = []
         for agent in agents:
-            if not agent.is_active:
-                continue
-            if agent.id not in event.participant_ids:
-                continue
-            result.append(agent)
+            if agent.agent_type == AgentType.STUDENT:
+                result.append(agent)
+            elif agent.agent_type == AgentType.PROFESSOR:
+                if schedule_requires_professor or agent.id in event.participant_ids:
+                    result.append(agent)
         return result

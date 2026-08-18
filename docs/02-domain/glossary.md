@@ -3,7 +3,7 @@ title: 용어집
 source: local/CLAUDE.md + 2차 회의록 + docs/02-domain/*
 status: approved
 visibility: public
-updated: 2026-07-13
+updated: 2026-08-08
 ---
 
 # 용어집 (Glossary)
@@ -43,7 +43,7 @@ updated: 2026-07-13
 
 | 용어 | 정의 |
 |------|------|
-| **Professor Agent** | 교수 역할 Agent. 교양 1 + 전공 4 = 5명. 수업·시험·과제 사건 진행 |
+| **Professor Agent** | 교수 역할 Agent. MVP 1명. 수업·시험·과제 사건 진행 |
 
 ## R
 
@@ -55,13 +55,13 @@ updated: 2026-07-13
 
 | 용어 | 정의 |
 |------|------|
-| **Student Agent** | 학생 역할 Agent. 20명. 시뮬레이션의 주체 |
+| **Student Agent** | 학생 역할 Agent. MVP 5명 (User Persona 1명 포함). 시뮬레이션의 주체 |
 
 ## T
 
 | 용어 | 정의 |
 |------|------|
-| **Time Tick** | 시뮬레이션 시간 단위. 1 Tick = 24분 = 1일 (확정) |
+| **Time Tick** | 시뮬레이션 시간 단위. 1 Tick = 8분 = 1블록, 1일 = 3블록 (MORNING·AFTERNOON·EVENING) (확정) |
 | **3축** | Magic Academy 시뮬레이션을 구동하는 핵심 프레임: 관계·조직·사건 |
 
 ## U
