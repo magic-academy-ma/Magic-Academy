@@ -235,7 +235,8 @@ docs/
 - `docs/00-start-here/`
 - `docs/01-product/`
 - `docs/02-domain/`
-- `docs/04-feature-specs/`
+- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
+- `docs/05-team-rules/`
 
 ---
 
@@ -246,8 +247,8 @@ docs/
 **자동 로딩 문서**
 - `docs/02-domain/`
 - `docs/03-system-design/`
+- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
 - `docs/05-team-rules/`
-- `docs/04-feature-specs/` (구현 대상 스펙)
 
 **구현 원칙**
 - TDD 기반: 실패하는 테스트 먼저 작성 ➡️ 구현
@@ -272,5 +273,6 @@ docs/
 
 **자동 로딩 문서**
 - `docs/03-system-design/`
-- `docs/04-feature-specs/` (FE 관련 스펙)
+- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
+- `docs/05-team-rules/`
 - `frontend/src/App.jsx` (기존 패턴 참조)

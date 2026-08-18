@@ -107,8 +107,9 @@ Figma URL이 입력된 경우. Confluence Draft → Approved → docs 이관 흐
 1. Figma MCP (`get_design_context` + `get_screenshot`)로 디자인 컨텍스트 추출
 2. `docs/02-domain/`, `docs/03-system-design/` 참조하여 도메인 맥락 확보
 3. 아래 형식으로 FE 스펙 초안 작성
-4. `/confluence-post` 스킬 호출하여 Confluence Draft 생성
-5. 팀 검토 → Approved 전환 후 `docs/04-feature-specs/`에 이관
+4. 작성된 FE 스펙 초안을 사용자에게 보여주고 승인 받기
+5. `/confluence-post` 스킬 호출하여 Confluence Draft 생성
+6. 팀 검토 → Approved 전환 후 `docs/04-feature-specs/`에 이관
 
 ### 출력
 
