@@ -30,7 +30,7 @@ function DeltaEdge({ id, sourceX, sourceY, targetX, targetY, data }) {
             pointerEvents: "all",
           }}
         >
-          <DeltaGroup effects={data.effects} compact />
+          <DeltaGroup effects={data?.effects} compact />
         </div>
       </EdgeLabelRenderer>
     </>
@@ -89,17 +89,17 @@ const edges = [
     },
   },
 ];
-export default function RelationshipFlow({ edges: edgesProp = edges }) {
-  const hasEdges = edgesProp.length > 0;
+export default function RelationshipFlow({ nodes: nodesProp = nodes, edges: edgesProp = edges }) {
+  const hasChanges = edgesProp.some((e) => e.data?.effects?.length > 0);
 
   return (
     <div style={{ width: "100%", height: 400, position: "relative" }}>
-      <ReactFlow nodes={nodes} edges={edgesProp} edgeTypes={edgeTypes} fitView>
+      <ReactFlow nodes={nodesProp} edges={edgesProp} edgeTypes={edgeTypes} fitView>
         <Background />
         <Controls />
       </ReactFlow>
 
-      {!hasEdges && (
+      {!hasChanges && (
         <div
           style={{
             position: "absolute",

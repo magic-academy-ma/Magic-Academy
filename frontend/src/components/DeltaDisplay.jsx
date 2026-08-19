@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 
 const METRIC_VALENCE = {
   trust: "positive",
@@ -63,7 +63,7 @@ export function DeltaBadge({ effect, compact = false }) {
   } = effect;
   const color = getDeltaColor(metric, delta);
   const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "▬";
-  const sign = delta > 0 ? `+${delta}` : `${delta}`;
+  const sign = delta > 0 ? `+${delta}` : `${Math.abs(delta)}`;
   const isRelationship = isRelationshipEffect(effect);
   const tooltip = [reason, rule_id ? `rule: ${rule_id}` : null]
     .filter(Boolean)
