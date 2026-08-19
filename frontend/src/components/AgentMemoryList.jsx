@@ -1,8 +1,6 @@
-// TODO: 스키마 확정 후 DUMMY_DATA 제거하고 실제 API 응답으로 교체 (Issue #73)
-
 import React from "react";
 
-// 개발용 더미 데이터 - 실제 연결 시 제거
+// TickResponse.retrieved_memories 응답 스키마 예시 (Inspector 상위 컴포넌트 연결 전 임시 기본값)
 const DUMMY_DATA = [
   {
     agent_id: "agent_001",
@@ -11,6 +9,8 @@ const DUMMY_DATA = [
       {
         id: "mem_001",
         content: "조별 과제를 성공적으로 마쳤다.",
+        memory_type: "observation",
+        importance: 50,
         created_tick: 42,
         event_id: "event_010",
       },
@@ -55,3 +55,5 @@ export default function AgentMemoryList({ data = DUMMY_DATA }) {
     </div>
   );
 }
+
+
