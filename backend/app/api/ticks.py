@@ -1,57 +1,92 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
+from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
 from app.services.simulations import require_owned_simulation
-from app.simulation.tick_engine import (
-    TickConflictError,
-    TickEngine,
-    TickResult,
-    TickRollbackError,
-)
+
+
+class DecisionExplanationResponse(BaseModel):
+    alternatives: list[dict]
+    influencing_factors: list[dict]
+
+
+class AgentTickResultResponse(BaseModel):
+    agent_id: UUID
+    agent_name: str
+    runtime_status: str
+    action_type: str
+    utterance: str | None
+    motivation_summary: str
+    decision_explanation: DecisionExplanationResponse
+    retry_count: int
+    failure_reason: str | None
 
 
 class TickAdvanceResponse(BaseModel):
+    simulation_id: UUID
+    previous_tick: int
+    current_tick: int
+    current_day: int
     status: str
-    participant_ids: list[str]
-    runtime_outputs: dict[str, dict]
+    agent_results: list[AgentTickResultResponse]
 
 
-def make_tick_router(engine: TickEngine) -> APIRouter:
-    router = APIRouter(tags=["ticks"])
+router = APIRouter(tags=["ticks"])
 
-    @router.post(
-        "/simulations/{simulation_id}/ticks/advance",
-        response_model=TickAdvanceResponse,
-    )
-    async def advance_tick(
-        simulation_id: UUID,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(require_user_role),
-    ) -> TickAdvanceResponse:
-        require_owned_simulation(db, simulation_id, current_user)
 
-        # TODO: PR #39 연결 후 DB에서 agents, events 조회 및 TickEngine 호출
-        try:
-            result: TickResult = await engine.run_tick(
-                agents=[],
-                event=None,  # type: ignore[arg-type]
-                snapshot=None,  # type: ignore[arg-type]
-            )
-        except TickConflictError as exc:
-            raise HTTPException(status_code=409, detail="Tick is already running") from exc
-        except TickRollbackError as exc:
-            raise HTTPException(status_code=500, detail="Tick rolled back due to runtime failure") from exc
-
-        return TickAdvanceResponse(
-            status=result.status,
-            participant_ids=result.participant_ids,
-            runtime_outputs=result.runtime_outputs,
+@router.post(
+    "/simulations/{simulation_id}/ticks/advance",
+    response_model=TickAdvanceResponse,
+)
+def advance_tick(
+    simulation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+):
+    simulation = require_owned_simulation(db, simulation_id, current_user)
+    try:
+        result = advance_manual_tick(db, simulation)
+        db.commit()
+    except TickAlreadyRunningError:
+        db.rollback()
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": {
+                "code": "TICK_ALREADY_RUNNING",
+                "message": "이미 진행 중인 Tick이 있습니다.",
+                }
+            },
         )
+    except Exception:
+        db.rollback()
+        raise
 
-    return router
+    return TickAdvanceResponse(
+        simulation_id=simulation.id,
+        previous_tick=result.previous_tick,
+        current_tick=result.current_tick,
+        current_day=result.current_day,
+        status="COMPLETED",
+        agent_results=[
+            AgentTickResultResponse(
+                agent_id=runtime_result.agent_id,
+                agent_name=result.agent_names[runtime_result.agent_id],
+                runtime_status=runtime_result.status,
+                action_type=runtime_result.intent.action_type,
+                utterance=runtime_result.intent.utterance,
+                motivation_summary=runtime_result.intent.motivation_summary,
+                decision_explanation=runtime_result.intent.decision_explanation.model_dump(),
+                retry_count=runtime_result.retry_count,
+                failure_reason=runtime_result.failure_reason,
+            )
+            for runtime_result in result.runtime_results
+        ],
+    )

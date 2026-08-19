@@ -1,0 +1,216 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event as ThreadEvent
+from uuid import UUID
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import sessionmaker
+
+
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+pytestmark = pytest.mark.skipif(
+    not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required"
+)
+
+
+@pytest.fixture()
+def client():
+    from app.core.database import get_db
+    from app.main import app
+
+    engine = create_engine(TEST_DATABASE_URL)
+    session_factory = sessionmaker(
+        bind=engine, autoflush=False, expire_on_commit=False
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "TRUNCATE runtime_results, event_participants, events, users, "
+                "simulations, locations, agents RESTART IDENTITY CASCADE"
+            )
+        )
+
+    def override_db():
+        with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_db
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client, session_factory
+    app.dependency_overrides.clear()
+    engine.dispose()
+
+
+def register_login_create(test_client):
+    credentials = {
+        "username": "slice-one-owner",
+        "display_name": "Slice One",
+        "password": "Slice1-password!",
+    }
+    assert test_client.post("/v1/auth/register", json=credentials).status_code == 201
+    login = test_client.post(
+        "/v1/auth/login",
+        json={"username": credentials["username"], "password": credentials["password"]},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    created = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Slice 1 E2E"}
+    )
+    assert created.status_code == 201
+    return created.json()["id"], headers
+
+
+def test_slice_one_full_vertical_flow(client):
+    from app.domain.models import Agent, Event, EventParticipant, RuntimeResult, Simulation
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+
+    assert test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance"
+    ).status_code == 401
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["simulation_id"] == simulation_id
+    assert (body["previous_tick"], body["current_tick"], body["current_day"]) == (
+        0,
+        1,
+        1,
+    )
+    assert body["status"] == "COMPLETED"
+    assert "runtime_outputs" not in body
+    assert "participant_ids" not in body
+    assert {result["runtime_status"] for result in body["agent_results"]} <= {
+        "PROPOSED",
+        "FALLBACK",
+        "SKIPPED",
+    }
+
+    with session_factory() as db:
+        simulation_uuid = UUID(simulation_id)
+        agents = list(
+            db.scalars(select(Agent).where(Agent.simulation_id == simulation_uuid))
+        )
+        assert len(agents) == 6
+        class_event = db.scalar(
+            select(Event).where(
+                Event.simulation_id == simulation_uuid, Event.event_type == "class"
+            )
+        )
+        participant_ids = set(
+            db.scalars(
+                select(EventParticipant.agent_id).where(
+                    EventParticipant.event_id == class_event.id
+                )
+            )
+        )
+        fixtures_by_id = {agent.id: agent.fixture_key for agent in agents}
+        assert {fixtures_by_id[agent_id] for agent_id in participant_ids} == {
+            "student-01",
+            "professor-01",
+        }
+        stored = list(db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id)))
+        assert {fixtures_by_id[result.agent_id] for result in stored} == {
+            "student-01",
+            "professor-01",
+        }
+        assert all(
+            result.idempotency_key
+            == f"{simulation_id}:1:{result.agent_id}"
+            for result in stored
+        )
+        api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
+        assert set(api_by_id) == {str(result.agent_id) for result in stored}
+        for result in stored:
+            api_result = api_by_id[str(result.agent_id)]
+            assert api_result["runtime_status"] == result.status
+            assert api_result["action_type"] == result.action_type
+        simulation = db.get(Simulation, simulation_uuid)
+        assert (simulation.current_tick, simulation.current_day) == (1, 1)
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
+
+
+def test_other_user_cannot_advance_owned_simulation(client):
+    test_client, _ = client
+    simulation_id, _ = register_login_create(test_client)
+    other = {
+        "username": "slice-one-other",
+        "display_name": "Other",
+        "password": "Slice1-password!",
+    }
+    test_client.post("/v1/auth/register", json=other)
+    login = test_client.post(
+        "/v1/auth/login",
+        json={"username": other["username"], "password": other["password"]},
+    )
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert response.status_code == 403
+
+
+def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
+    from app.domain.models import RuntimeResult, Simulation
+    from app.services.simulation_tick import SimulationTickService
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+    original = SimulationTickService.run_runtime_phase
+
+    def fail_after_save(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        raise RuntimeError("tick update failed")
+
+    monkeypatch.setattr(SimulationTickService, "run_runtime_phase", fail_after_save)
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert response.status_code == 500
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        assert simulation.current_tick == 0
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+
+
+def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):
+    from app.simulation.agent_runtime import AgentRuntime
+
+    test_client, _ = client
+    simulation_id, headers = register_login_create(test_client)
+    entered_runtime = ThreadEvent()
+    release_runtime = ThreadEvent()
+    original = AgentRuntime.run
+    first_call = True
+
+    def hold_first_runtime(self, runtime_input):
+        nonlocal first_call
+        if first_call:
+            first_call = False
+            entered_runtime.set()
+            assert release_runtime.wait(timeout=5)
+        return original(self, runtime_input)
+
+    monkeypatch.setattr(AgentRuntime, "run", hold_first_runtime)
+
+    def request_tick():
+        return test_client.post(
+            f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(request_tick)
+        assert entered_runtime.wait(timeout=5)
+        second = executor.submit(request_tick).result(timeout=5)
+        release_runtime.set()
+        successful = first.result(timeout=5)
+
+    assert successful.status_code == 200
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "TICK_ALREADY_RUNNING"
