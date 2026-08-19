@@ -30,7 +30,6 @@ description: 기능 설명을 받아 docs/04-feature-specs/ 형식의 스펙 초
 ---
 title: FR-XX {기능명}
 status: draft
-visibility: public
 updated: {오늘 날짜}
 ---
 
