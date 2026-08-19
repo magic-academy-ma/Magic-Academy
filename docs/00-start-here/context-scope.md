@@ -1,8 +1,8 @@
 ---
 title: AI Context 로딩 범위
 status: approved
+updated: 2026-08-10
 visibility: public
-updated: 2026-08-06
 ---
 
 # AI Context 로딩 범위
@@ -20,16 +20,15 @@ updated: 2026-08-06
 | 파일 | 문자 수 | 예상 토큰 | 분류 |
 |------|------:|----------:|------|
 | `00-start-here/index.md` | 898 | ~225 | Always |
-| `00-start-here/what-is-decided.md` | 1,967 | ~492 | Always |
-| `00-start-here/what-is-pending.md` | 959 | ~240 | Always |
-| `00-start-here/context-quality.md` | 895 | ~224 | Always |
-| `02-domain/overview.md` | 913 | ~228 | Always |
-| `02-domain/agents.md` | 2,004 | ~501 | Always |
+| `00-start-here/what-is-decided.md` | 1,221 | ~305 | Always |
+| `00-start-here/what-is-pending.md` | 799 | ~200 | Always |
+| `00-start-here/context-quality.md` | 531 | ~133 | Always |
+| `02-domain/overview.md` | 929 | ~232 | Always |
+| `02-domain/agents.md` | 2,086 | ~522 | Always |
 | `02-domain/relationships.md` | 1,220 | ~305 | Always |
-| `02-domain/organizations.md` | 960 | ~240 | Always |
-| `02-domain/events.md` | 1,280 | ~320 | Always |
-| `02-domain/time-and-space.md` | 1,102 | ~276 | Always |
-| `02-domain/glossary.md` | 1,512 | ~378 | Always |
+| `02-domain/organizations.md` | 835 | ~209 | Always |
+| `02-domain/events.md` | 1,160 | ~290 | Always |
+| `02-domain/time-and-space.md` | 1,286 | ~322 | Always |
 | `05-team-rules/conventions.md` | 1,267 | ~317 | Task |
 | `05-team-rules/definition-of-done.md` | 1,127 | ~282 | Task |
 | `05-team-rules/git-workflow-commit.md` | 1,473 | ~368 | Task (구현·커밋 시) |
@@ -37,20 +36,20 @@ updated: 2026-08-06
 | `05-team-rules/dev-workflow.md` | 1,709 | ~427 | Task (외부 게시 작업 시) |
 | `05-team-rules/ai-usage.md` | 1,330 | ~333 | Task |
 | `decisions/README.md` | 632 | ~158 | Task |
-| `02-domain/world-setting.md` | 11,050 | ~2,763 | Task (세계관·Magic Layer 구현 시) |
+| `02-domain/world-setting.md` | 9,499 | ~2,375 | Task (세계관·Magic Layer 구현 시) |
 | `03-system-design/event-master.md` | 12,752 | ~3,188 | Task (Event Master 구현 시) |
 | `03-system-design/policy-signal-delta.md` | 12,144 | ~3,036 | Task (Policy Engine 구현 시) |
 | `04-feature-specs/mvp-feature-spec.md` | 10,767 | ~2,692 | Task (MVP 기능 구현 시) |
 | `04-feature-specs/inspector.md` | 6,167 | ~1,542 | Task (Inspector 구현 시) |
 | `01-product/simulation-parameters.md` | 6,636 | ~1,659 | Task (파라미터 관련 구현 시) |
-| `README.md` | — | ~211 | Skip |
-| `_meta/SYNC.md` | — | ~1,020 | Skip |
-| `_meta/ai-native-env-design.md` | — | ~1,063 | Skip |
+| `README.md` | 1,243 | ~311 | Skip |
+| `_meta/SYNC.md` | 6,659 | ~1,665 | Skip |
+| `_meta/ai-native-env-design.md` | 4,216 | ~1,054 | Skip |
 
-> 측정일: 2026-08-06 (`wc -m`), what-is-decided.md·agents.md·world-setting·event-master·policy-signal-delta는 2026-08-08 재측정
+> 측정일: 2026-08-19 (`wc -m`)
 
-**총 Always Load 토큰**: ~3,428 토큰 (00-start-here/ + 02-domain/ 기준)  
-**전체 docs/ 토큰 (Skip 제외)**: ~20,845 토큰
+**총 Always Load 토큰**: ~2,741 토큰 (00-start-here/ 4종 + 02-domain/ 6종)  
+**전체 docs/ 토큰 (Skip 제외)**: ~19,770 토큰
 
 ---
 
@@ -69,12 +68,11 @@ docs/02-domain/relationships.md
 docs/02-domain/organizations.md
 docs/02-domain/events.md
 docs/02-domain/time-and-space.md
-docs/02-domain/glossary.md
 ```
 
 **이유**:
 - `00-start-here/` 4종: 프로젝트 방향, 확정/미정 경계를 파악하지 못하면 임의 결정이 발생한다. 모든 작업의 전제 조건.
-- `02-domain/` 7종: 이 프로젝트는 도메인 용어(3축, Tick, Agent 종류, 관계 척도)가 코드 구조와 직결된다. 도메인을 모르면 잘못된 변수명, 잘못된 관계 방향, 잘못된 사건 분류가 생긴다.
+- `02-domain/` 6종: 이 프로젝트는 도메인 용어(3축, Tick, Agent 종류, 관계 척도)가 코드 구조와 직결된다. 도메인을 모르면 잘못된 변수명, 잘못된 관계 방향, 잘못된 사건 분류가 생긴다.
 - `00-start-here/context-quality.md`: AI context 충분성을 작업 시작 전에 판단하는 기준. 이 파일 없이는 AI가 잘못된 컨텍스트로 작업을 시작해도 알아차릴 수 없다.
 
 ---
@@ -108,7 +106,7 @@ git-workflow-pr, definition-of-done은 버그 수정 시 불필요 — PR 작성
 
 ### 문서 작업 / 이관
 
-Always Load 중 `02-domain/` 7종 + 아래:
+Always Load 중 `02-domain/` 6종 + 아래:
 
 ```
 docs/00-start-here/index.md
@@ -165,6 +163,6 @@ docs/05-team-rules/ai-usage.md
 
 이관 큐(⬜/✅ 테이블)는 상태 추적용 운영 데이터다. AI가 이관 큐를 읽어도 실제 Confluence에 접근할 수 없으므로 정보 가치가 없다. 이 파일은 AI context에서 완전히 제외하고, 이관 담당자 로컬 작업 시에만 참조한다.
 
-### 5. `02-domain/glossary.md` Always Load 유지 권장
+### 5. `02-domain/glossary.md` 폐기 완료 (~391 토큰 절감)
 
-용어집은 ~382 토큰이지만, 도메인 용어를 잘못 사용하는 것(예: Event와 Tick을 혼동)이 코드 설계 오류로 직결된다. 개별 도메인 파일에 정의가 분산돼 있어 이 파일이 없으면 용어 불일치가 발생할 수 있으므로 Always Load를 유지한다.
+모든 용어가 각 도메인 파일(agents.md, relationships.md, events.md 등)에 이미 정의됨. Time Tick·3축 정의는 overview.md에 흡수. (2026-08-10 완료)

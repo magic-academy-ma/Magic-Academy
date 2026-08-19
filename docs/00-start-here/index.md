@@ -1,8 +1,8 @@
 ---
 title: 시작하기
 status: approved
-visibility: public
 updated: 2026-07-13
+visibility: public
 ---
 
 # Magic Academy — AI 진입점
