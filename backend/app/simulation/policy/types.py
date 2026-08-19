@@ -1,6 +1,12 @@
 # TODO(kan-44): 가윤님 PR 머지 후 이 파일 삭제하고 tick_engine에서 import로 교체
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.simulation.tick_engine import MemoryCandidateItem
 
 
 class RelationshipSignalType(str, Enum):
@@ -63,3 +69,4 @@ class AgentRuntimeResult:
     action_type: str
     target_agent_id: str | None = None
     reaction: AgentReaction | None = None
+    memory_candidate: MemoryCandidateItem | None = None  # Slice 3 추가
