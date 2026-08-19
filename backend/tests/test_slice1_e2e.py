@@ -121,9 +121,14 @@ def test_slice_one_full_vertical_flow(client):
             "student-01",
             "professor-01",
         }
+        run_ids = {result.run_id for result in stored}
+        assert len(run_ids) == 1
+        stored_run_id = run_ids.pop()
+        assert stored_run_id != simulation_id
+        assert UUID(stored_run_id).version == 7
         assert all(
             result.idempotency_key
-            == f"{simulation_id}:1:{result.agent_id}"
+            == f"{result.run_id}:{result.tick_number}:{result.agent_id}"
             for result in stored
         )
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
@@ -164,8 +169,10 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
     test_client, session_factory = client
     simulation_id, headers = register_login_create(test_client)
     original = SimulationTickService.run_runtime_phase
+    failed_run_ids = []
 
     def fail_after_save(self, *args, **kwargs):
+        failed_run_ids.append(str(kwargs["run_id"]))
         original(self, *args, **kwargs)
         raise RuntimeError("tick update failed")
 
@@ -178,6 +185,53 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
         simulation = db.get(Simulation, UUID(simulation_id))
         assert simulation.current_tick == 0
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+
+    monkeypatch.setattr(SimulationTickService, "run_runtime_phase", original)
+    retry = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert retry.status_code == 200
+    with session_factory() as db:
+        saved_run_ids = set(db.scalars(select(RuntimeResult.run_id)))
+    assert len(failed_run_ids) == 1
+    assert len(saved_run_ids) == 1
+    assert failed_run_ids[0] not in saved_run_ids
+
+
+def test_consecutive_ticks_use_distinct_batch_run_ids(client):
+    from app.domain.models import RuntimeResult
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+
+    first = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    second = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert first.status_code == second.status_code == 200
+
+    with session_factory() as db:
+        stored = list(
+            db.scalars(
+                select(RuntimeResult).order_by(
+                    RuntimeResult.tick_number, RuntimeResult.agent_id
+                )
+            )
+        )
+    run_ids_by_tick = {}
+    for result in stored:
+        run_ids_by_tick.setdefault(result.tick_number, set()).add(result.run_id)
+        assert result.idempotency_key == (
+            f"{result.run_id}:{result.tick_number}:{result.agent_id}"
+        )
+    assert set(run_ids_by_tick) == {1, 2}
+    assert all(len(run_ids) == 1 for run_ids in run_ids_by_tick.values())
+    assert run_ids_by_tick[1] != run_ids_by_tick[2]
+    assert all(
+        simulation_id not in run_ids for run_ids in run_ids_by_tick.values()
+    )
 
 
 def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):

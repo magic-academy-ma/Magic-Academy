@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from uuid6 import uuid7
 
 from app.domain.models import Agent, Event, EventParticipant, Simulation
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
@@ -69,6 +70,7 @@ async def advance_manual_tick(
     previous_tick = simulation.current_tick
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
+    run_id = uuid7()
 
     event = db.scalar(
         select(Event)
@@ -136,7 +138,7 @@ async def advance_manual_tick(
         batch = service.run_runtime_phase(
             db,
             simulation_id=simulation.id,
-            run_id=simulation.id,
+            run_id=run_id,
             tick_number=current_tick,
             block=block,
             preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
