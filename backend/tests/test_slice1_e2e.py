@@ -1,4 +1,5 @@
 import os
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event as ThreadEvent
 from uuid import UUID
@@ -214,3 +215,67 @@ def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):
     assert successful.status_code == 200
     assert second.status_code == 409
     assert second.json()["error"]["code"] == "TICK_ALREADY_RUNNING"
+
+
+def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
+    from app.services.database_runtime_results import DatabaseRuntimeResultSink
+    from app.services.simulation_tick import SimulationTickService
+    from app.simulation.tick_engine import TickEngine
+
+    test_client, _ = client
+    simulation_id, headers = register_login_create(test_client)
+    calls = {"engine": 0, "runtime_phase": 0, "save_batch": 0}
+    original_engine = TickEngine.run_tick
+    original_runtime_phase = SimulationTickService.run_runtime_phase
+    original_save_batch = DatabaseRuntimeResultSink.save_batch
+
+    async def count_engine(self, *args, **kwargs):
+        calls["engine"] += 1
+        return await original_engine(self, *args, **kwargs)
+
+    def count_runtime_phase(self, *args, **kwargs):
+        calls["runtime_phase"] += 1
+        return original_runtime_phase(self, *args, **kwargs)
+
+    def count_save_batch(self, *args, **kwargs):
+        calls["save_batch"] += 1
+        return original_save_batch(self, *args, **kwargs)
+
+    monkeypatch.setattr(TickEngine, "run_tick", count_engine)
+    monkeypatch.setattr(
+        SimulationTickService, "run_runtime_phase", count_runtime_phase
+    )
+    monkeypatch.setattr(DatabaseRuntimeResultSink, "save_batch", count_save_batch)
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 200
+    assert calls == {"engine": 1, "runtime_phase": 1, "save_batch": 1}
+    assert {result["agent_name"] for result in response.json()["agent_results"]} == {
+        "아델",
+        "에단",
+    }
+
+
+def test_manual_tick_preserves_tick_engine_policy_extension(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    received_policy_inputs = []
+
+    async def policy(inputs):
+        received_policy_inputs.extend(inputs)
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(advance_manual_tick(db, simulation, policy=policy))
+        db.commit()
+
+    assert len(received_policy_inputs) == len(result.runtime_results) == 2
+    assert {item.agent_id for item in received_policy_inputs} == {
+        str(runtime_result.agent_id) for runtime_result in result.runtime_results
+    }

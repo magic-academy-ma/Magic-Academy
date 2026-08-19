@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -52,7 +53,7 @@ def advance_tick(
 ):
     simulation = require_owned_simulation(db, simulation_id, current_user)
     try:
-        result = advance_manual_tick(db, simulation)
+        result = asyncio.run(advance_manual_tick(db, simulation))
         db.commit()
     except TickAlreadyRunningError:
         db.rollback()

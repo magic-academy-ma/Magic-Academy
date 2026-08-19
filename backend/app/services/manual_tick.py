@@ -16,6 +16,14 @@ from app.simulation.agent_runtime import (
     MockLLMClient,
     ScheduleSummary,
 )
+from app.simulation.tick_engine import (
+    AgentType,
+    PolicyFn,
+    TickAgent,
+    TickEngine,
+    TickEvent,
+    WorldSnapshot,
+)
 
 
 class TickAlreadyRunningError(Exception):
@@ -41,7 +49,12 @@ def tick_position(tick_number: int) -> tuple[int, Block]:
     return current_day, block
 
 
-def advance_manual_tick(db: Session, simulation: Simulation) -> ManualTickResult:
+async def advance_manual_tick(
+    db: Session,
+    simulation: Simulation,
+    *,
+    policy: PolicyFn | None = None,
+) -> ManualTickResult:
     locked = db.scalar(
         select(
             text(
@@ -104,24 +117,68 @@ def advance_manual_tick(db: Session, simulation: Simulation) -> ManualTickResult
             )
         )
     )
-    batch = service.run_runtime_phase(
-        db,
-        simulation_id=simulation.id,
-        run_id=simulation.id,
-        tick_number=current_tick,
-        block=block,
-        preselected_agent_ids=preselected_ids,
-        schedule=ScheduleSummary(
-            event_id=event.id,
-            schedule_type="class",
-            is_mandatory=True,
-            location_id=event.location_id,
-            start_tick=current_tick,
-            end_tick=current_tick,
-        ),
-        events=[event],
-        event_participants={event.id: participants},
+    schedule = ScheduleSummary(
+        event_id=event.id,
+        schedule_type="class",
+        is_mandatory=True,
+        location_id=event.location_id,
+        start_tick=current_tick,
+        end_tick=current_tick,
     )
+    batch = None
+
+    async def run_runtime_batch(
+        selected_agents: list[TickAgent],
+        _event: TickEvent,
+        _snapshot: WorldSnapshot,
+    ) -> dict[str, dict]:
+        nonlocal batch
+        batch = service.run_runtime_phase(
+            db,
+            simulation_id=simulation.id,
+            run_id=simulation.id,
+            tick_number=current_tick,
+            block=block,
+            preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
+            schedule=schedule,
+            events=[event],
+            event_participants={event.id: participants},
+        )
+        return {
+            str(result.agent_id): result.model_dump(mode="json")
+            for result in batch.results
+        }
+
+    candidates_by_id = {agent.id: agent for agent in agents}
+    tick_candidates = [
+        TickAgent(
+            id=str(agent_id),
+            agent_type=(
+                AgentType.PROFESSOR
+                if candidates_by_id[agent_id].agent_type == "professor"
+                else AgentType.STUDENT
+            ),
+            is_active=candidates_by_id[agent_id].active_status == "active",
+        )
+        for agent_id in preselected_ids
+    ]
+    tick_result = await TickEngine(
+        runtime=run_runtime_batch,
+        policy=policy,
+    ).run_tick(
+        tick_candidates,
+        TickEvent(
+            id=str(event.id),
+            event_type=event.event_type,
+            participant_ids={str(agent_id) for agent_id in participant_ids},
+        ),
+        WorldSnapshot(
+            simulation_id=str(simulation.id),
+            current_tick=previous_tick,
+        ),
+    )
+    if tick_result.status != "completed" or batch is None:
+        raise RuntimeError("TickEngine completed without a Runtime batch")
     simulation.current_tick = current_tick
     simulation.current_day = current_day
     db.flush()
