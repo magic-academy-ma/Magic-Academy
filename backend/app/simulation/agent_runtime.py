@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Literal, Protocol, TypedDict
 from uuid import UUID
@@ -12,6 +13,15 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+
+@dataclass
+class MemoryCandidateItem:
+    """Runtime이 반환하는 기억 후보 — id 없음, 저장은 Tick Engine 담당."""
+
+    content: str
+    memory_type: str  # "observation" | "conversation" | "reflection" | "plan"
+    importance: int  # 0–100
 
 
 class StrictModel(BaseModel):

@@ -6,6 +6,7 @@ from typing import Any, Callable, Coroutine
 from app.simulation.agent_runtime import (
     AgentReaction,
     AgentRuntimeResult,
+    MemoryCandidateItem,
     RelationshipSignal,
     RelationshipSignalType,
     SignalIntensity,
@@ -59,14 +60,6 @@ class MemoryItem:
     importance: int   # 0–100
     created_tick: int
     event_id: str | None
-
-
-@dataclass
-class MemoryCandidateItem:
-    """Runtime이 반환하는 기억 후보 — id 없음, 저장은 Tick Engine 담당."""
-    content: str
-    memory_type: str  # "observation" | "conversation" | "reflection" | "plan"
-    importance: int   # 0–100
 
 
 # ─── Tick 결과 ─────────────────────────────────────────────────────────────────
