@@ -23,6 +23,8 @@ pytestmark = pytest.mark.skipif(
 def client():
     from app.core.database import get_db
     from app.main import app
+    from app.services.runtime_dependency import get_agent_runtime
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
     engine = create_engine(TEST_DATABASE_URL)
     session_factory = sessionmaker(
@@ -40,7 +42,10 @@ def client():
         with session_factory() as session:
             yield session
 
+    runtime = AgentRuntime(MockLLMClient(), model="test-runtime-override")
+
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_agent_runtime] = lambda: runtime
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client, session_factory
     app.dependency_overrides.clear()
@@ -134,6 +139,7 @@ def test_slice_one_full_vertical_flow(client):
             == f"{result.run_id}:{result.tick_number}:{result.agent_id}"
             for result in stored
         )
+        assert {result.model for result in stored} == {"test-runtime-override"}
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
@@ -319,6 +325,7 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
 def test_manual_tick_preserves_tick_engine_policy_extension(client):
     from app.domain.models import Simulation
     from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
     test_client, session_factory = client
     simulation_id, _ = register_login_create(test_client)
@@ -329,7 +336,16 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
 
     with session_factory() as db:
         simulation = db.get(Simulation, UUID(simulation_id))
-        result = asyncio.run(advance_manual_tick(db, simulation, policy=policy))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(
+                    MockLLMClient(), model="test-direct-runtime"
+                ),
+                policy=policy,
+            )
+        )
         db.commit()
 
     assert len(received_policy_inputs) == len(result.runtime_results) == 2

@@ -14,7 +14,6 @@ from app.simulation.agent_runtime import (
     AgentRuntime,
     AgentRuntimeResult,
     Block,
-    MockLLMClient,
     ScheduleSummary,
 )
 from app.simulation.tick_engine import (
@@ -54,6 +53,7 @@ async def advance_manual_tick(
     db: Session,
     simulation: Simulation,
     *,
+    runtime: AgentRuntime,
     policy: PolicyFn | None = None,
 ) -> ManualTickResult:
     locked = db.scalar(
@@ -114,7 +114,7 @@ async def advance_manual_tick(
     service = SimulationTickService(
         RuntimeInputAdapter(
             RuntimeOrchestrator(
-                AgentRuntime(MockLLMClient()),
+                runtime,
                 DatabaseRuntimeResultSink(db),
             )
         )
