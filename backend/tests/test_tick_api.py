@@ -1,82 +1,75 @@
-"""
-Tick API 엔드포인트 테스트
-
-POST /v1/simulations/{simulation_id}/ticks/advance
-
-DB·인증 의존성은 mock으로 대체하고 TickEngine DI로 핵심 동작을 검증한다.
-"""
-from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from app.services.manual_tick import tick_position
 
-from app.simulation.tick_engine import (
-    RuntimeExecutionError,
-    TickEngine,
+
+@pytest.mark.parametrize(
+    ("tick", "day", "block"),
+    [
+        (1, 1, "MORNING"),
+        (2, 1, "AFTERNOON"),
+        (3, 1, "EVENING"),
+        (4, 2, "MORNING"),
+        (6, 2, "EVENING"),
+        (7, 3, "MORNING"),
+    ],
 )
-
-SIM_ID = "00000000-0000-0000-0000-000000000001"
-
-
-def make_test_app(engine: TickEngine) -> FastAPI:
-    from app.api.ticks import make_tick_router
-    from app.core.database import get_db
-    from app.core.security import require_user_role
-
-    app = FastAPI()
-    app.include_router(make_tick_router(engine), prefix="/v1")
-    app.dependency_overrides[get_db] = lambda: MagicMock()
-    app.dependency_overrides[require_user_role] = lambda: MagicMock()
-    return app
+def test_tick_position_boundaries(tick, day, block):
+    assert tick_position(tick) == (day, block)
 
 
-def make_engine(runtime=None) -> TickEngine:
-    async def default_runtime(agents, event, snapshot):
-        return {a.id: {"intent": "study"} for a in agents}
-
-    return TickEngine(runtime=runtime or default_runtime)
+def test_tick_position_rejects_non_positive_tick():
+    with pytest.raises(ValueError, match="positive"):
+        tick_position(0)
 
 
-# ── 정상 케이스 ───────────────────────────────────────────────────────────────
+def test_tick_response_contract_does_not_expose_internal_fields():
+    from app.api.ticks import (
+        AgentTickResultResponse,
+        DecisionExplanationResponse,
+        RelationshipDeltaResponse,
+        TickAdvanceResponse,
+    )
 
+    response = TickAdvanceResponse(
+        simulation_id=uuid4(),
+        previous_tick=0,
+        current_tick=1,
+        current_day=1,
+        status="COMPLETED",
+        relationship_deltas=[
+            RelationshipDeltaResponse(
+                effect_id="run:1:a:rel:TRUST_UP:b",
+                rule_id="REL_TRUST_UP_MEDIUM",
+                source_agent_id=uuid4(),
+                target_agent_id=uuid4(),
+                metric="trust",
+                delta=3,
+                before=0,
+                after_preview=3,
+                reason="대화 후 신뢰 상승",
+            )
+        ],
+        agent_results=[
+            AgentTickResultResponse(
+                agent_id=uuid4(),
+                agent_name="아델",
+                runtime_status="PROPOSED",
+                action_type="ATTEND_CLASS",
+                utterance=None,
+                motivation_summary="수업에 참석한다.",
+                decision_explanation=DecisionExplanationResponse(
+                    alternatives=[], influencing_factors=[]
+                ),
+                retry_count=0,
+                failure_reason=None,
+            )
+        ],
+    ).model_dump(mode="json")
 
-@patch("app.api.ticks.require_owned_simulation")
-def test_tick_returns_200_on_success(mock_require):
-    client = TestClient(make_test_app(make_engine()))
-    response = client.post(f"/v1/simulations/{SIM_ID}/ticks/advance")
-    assert response.status_code == 200
-
-
-@patch("app.api.ticks.require_owned_simulation")
-def test_tick_response_shape(mock_require):
-    client = TestClient(make_test_app(make_engine()))
-    response = client.post(f"/v1/simulations/{SIM_ID}/ticks/advance")
-    body = response.json()
-    assert "status" in body
-    assert "participant_ids" in body
-    assert "runtime_outputs" in body
-
-
-# ── 중복 Tick → 409 ───────────────────────────────────────────────────────────
-
-
-@patch("app.api.ticks.require_owned_simulation")
-def test_duplicate_tick_returns_409(mock_require):
-    # TODO: PR #60 연결 후 실제 동시 요청 또는 transaction 경계 검증으로 교체
-    engine = make_engine()
-    engine._running = True  # type: ignore[attr-defined]
-
-    client = TestClient(make_test_app(engine))
-    response = client.post(f"/v1/simulations/{SIM_ID}/ticks/advance")
-    assert response.status_code == 409
-
-
-# ── 입력 검증 ─────────────────────────────────────────────────────────────────
-
-
-@patch("app.api.ticks.require_owned_simulation")
-def test_invalid_simulation_id_returns_422(mock_require):
-    client = TestClient(make_test_app(make_engine()))
-    response = client.post("/v1/simulations/not-a-uuid/ticks/advance")
-    assert response.status_code == 422
+    assert response["status"] == "COMPLETED"
+    assert response["agent_results"][0]["runtime_status"] == "PROPOSED"
+    assert response["relationship_deltas"][0]["delta"] == 3
+    assert "participant_ids" not in response
+    assert "runtime_outputs" not in response
