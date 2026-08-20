@@ -16,7 +16,7 @@ export async function handleMockRequest(path, options = {}) {
     return mockAuthUser;
   }
   if (path === "/v1/auth/register" && method === "POST") {
-    return mockAuthUser;
+    return mockAuthUser.user;
   }
 
   // 2. Simulation API
@@ -26,11 +26,9 @@ export async function handleMockRequest(path, options = {}) {
   if (path === "/v1/simulations" && method === "POST") {
     const body = options.body ? JSON.parse(options.body) : {};
     return {
-      id: `sim-${Date.now()}`,
+      ...mockSimulations[0],
       name: body.name ?? "새 시뮬레이션",
-      status: "INITIALIZING",
       current_tick: 0,
-      total_agents: 6,
       created_at: new Date().toISOString(),
     };
   }
