@@ -63,9 +63,8 @@ def test_tick_response_shape(mock_require):
 
 @patch("app.api.ticks.require_owned_simulation")
 def test_duplicate_tick_returns_409(mock_require):
-    # TODO: PR #60 연결 후 실제 동시 요청 또는 transaction 경계 검증으로 교체
     engine = make_engine()
-    engine._running = True  # type: ignore[attr-defined]
+    engine._running.add(SIM_ID)
 
     client = TestClient(make_test_app(engine))
     response = client.post(f"/v1/simulations/{SIM_ID}/ticks/advance")
