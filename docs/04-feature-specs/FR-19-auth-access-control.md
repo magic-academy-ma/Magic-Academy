@@ -1,7 +1,6 @@
 ---
 title: "FR-19 인증 및 접근 제어 — Slice 0"
 status: approved
-visibility: public
 updated: 2026-08-05
 ---
 

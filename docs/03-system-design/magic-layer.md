@@ -3,7 +3,6 @@ title: Magic Layer Agent 설계
 source: confluence/05_TECH/magic-layer.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/9371768/Magic+Layer+Agent
 status: approved
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-24
 ---
@@ -49,16 +48,6 @@ Magic Layer는 단순히 무작위로 사건을 생성하지 않는다.
 ```
 세계 상태 → 발생 조건 판정 → 사건 후보 생성 → 사건 적용
 ```
-
-### 1.2 왜 에이전트여야 하는가
-
-| 대안 | 왜 부족한가 |
-| --- | --- |
-| 고정 규칙 기반 치환 | 세계관 표현의 다양성이 부족함 |
-| Event Master 내부 분기 | 일반 이벤트 생성과 마법 사건 판정의 책임이 섞임 |
-| **조건 판정 + LLM 서술 조합 (채택)** | **발생 여부는 시스템이 결정하고, LLM은 사건의 서술과 대상 선택을 보조** |
-
-> LLM이 사건을 만들어내는 것이 아니라, 시스템이 사건 후보를 만들고 LLM은 그 결과를 세계관에 맞게 서술한다.
 
 ---
 
@@ -143,52 +132,8 @@ Magic Layer는 **방향 정보만 제공**한다.
 
 ### 3.2 출력
 
-```json
-{
-  "converted_events": [
-    {
-      "event_type": "GROUP_PROJECT",
-      "title": "변환 마법 과제",
-      "description": "루나와 카이가 변환 마법 과제를 함께 진행한다.",
-      "participant_agent_ids": [3, 7],
-      "location": "마도공학 연구실",
-      "tick": 42,
-      "source": "magic_layer"
-    }
-  ],
-  "special_events": [
-    {
-      "event_type": "MAGIC_EXPLOSION",
-      "title": "마도공학 연구실의 폭발",
-      "description": "피로가 누적된 상태에서 실험이 진행되던 중 폭발이 발생했다.",
-      "participant_agent_ids": [3, 7, 12],
-      "location": "마도공학 연구실",
-      "tick": 42,
-      "source": "magic_layer",
-      "expected_effects": {
-        "state_changes": [
-          {
-            "agent_id": 3,
-            "effects": [
-              {"target": "fatigue", "direction": "increase"},
-              {"target": "stress", "direction": "increase"}
-            ]
-          }
-        ],
-        "relationship_changes": [
-          {
-            "source_id": 3,
-            "target_id": 7,
-            "effects": [
-              {"target": "trust", "direction": "decrease"}
-            ]
-          }
-        ]
-      },
-      "world_effects": []
-    }
-  ]
-}
+> 출력 구조: `converted_events[]`(event_type, title, description, participant_agent_ids, location, tick, source) + `special_events[]`(+ expected_effects.state_changes[], expected_effects.relationship_changes[], world_effects[])  
+> `expected_effects` direction: `"increase"` / `"decrease"` — 숫자 delta 금지, 방향만 허용
 ```
 
 ---
@@ -488,29 +433,3 @@ Magic Layer 자체는 stateless로 유지할 수 있다. 이전 사건의 지속
 
 ---
 
-## 핵심 원칙 (변경 이력)
-
-**기존 방식 (폐기):**
-
-```
-확률 → LLM이 사건 선택 → LLM이 대상 선택 → LLM이 trust -10 생성 → 이벤트 기록
-```
-
-**현재 방식 (확정):**
-
-```
-세계 상태 변화 → 임계값 초과 → 사건 발생 조건 충족
-  → 조건에 맞는 대상 선택 → 사건 생성 → 효과 방향만 정의
-  → Policy Engine이 실제 수치 계산
-  → 지속 상태를 World State에 기록 → 다음 tick에 상태가 다시 영향을 줌
-```
-
----
-
-## 변경 이력
-
-| 버전 | 날짜 | 변경 내용 |
-| --- | --- | --- |
-| v0.1 | 2026-07-17 | 초안 작성 |
-| v0.5 이전 | 2026-07-17~23 | 설계 반복 (고정 확률 기반 생성 방식 → 조건 기반으로 전환 논의) |
-| v0.6 | 2026-07-24 | world_state 조건 기반 발생 기준 확정. 고정 확률(30%) 제거. MAGICAL_DISCOVERY 강제 생성 없음 확정. |

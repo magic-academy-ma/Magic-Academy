@@ -3,7 +3,6 @@ title: Git 브랜치·커밋 컨벤션
 source: confluence/09_CONVENTIONS/1.브랜치컨벤션
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4161548/1.
 status: approved
-visibility: public
 updated: 2026-07-21
 source_updated: 2026-07-18
 ---

@@ -30,6 +30,19 @@ visibility: public
 
 ---
 
+## 도메인 파일 목록
+
+| 파일 | 내용 |
+|------|------|
+| `agents.md` | Agent 종류·역할·내부 상태 |
+| `relationships.md` | 관계 척도·유형·변화 규칙 |
+| `organizations.md` | 조직 목록·소속 규칙 |
+| `events.md` | 사건 목록·트리거·효과 |
+| `time-and-space.md` | Time Tick·공간·날씨 |
+| `glossary.md` | 전체 용어 정의 |
+
+---
+
 ## 반드시 읽어야 할 파일 순서
 
 1. `docs/00-start-here/what-is-decided.md` — 확정된 수치와 결정 사항
