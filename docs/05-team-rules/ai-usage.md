@@ -3,8 +3,9 @@ title: 8. AI 사용 컨벤션
 source: confluence/09_CONVENTIONS/8.AI사용컨벤션
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4521997/8.+AI
 status: approved
-updated: 2026-07-13
-source_updated: 2026-07-09
+visibility: public
+updated: 2026-08-06
+source_updated: 2026-07-31
 ---
 
 # 8. AI 사용 컨벤션

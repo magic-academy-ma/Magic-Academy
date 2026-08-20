@@ -1,8 +1,9 @@
 ---
 title: 조직 정의
-source: local/CLAUDE.md + 2차 회의록
 status: approved
-updated: 2026-07-13
+updated: 2026-08-08
+visibility: public
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 조직 (Organization)
@@ -49,12 +50,3 @@ updated: 2026-07-13
 | 동아리 | 동아리방 (명시적 정의 미정) |
 | 총학생회 | 학생회관 (명시적 정의 미정) |
 
----
-
-## 확장성 메모 (MVP 제외)
-
-- 단과대학 확장: 전공 4개 → N개
-- 조직 수 확장: 동아리·기숙사 수 조정
-- 인간-동물 관계 확장 등
-
-구현 시 조직을 하드코딩하지 않고 확장 가능한 구조로 설계할 것.

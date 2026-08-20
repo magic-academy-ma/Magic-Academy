@@ -1,5 +1,8 @@
 ---
 title: Agent 정의
+status: approved
+updated: 2026-07-28
+visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "Magic Layer 설계 (Confluence #6619141)"
@@ -11,8 +14,7 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/6619141
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
-status: approved
-updated: 2026-07-28
+source_updated: 2026-07-28
 ---
 
 # Agent 정의
@@ -43,19 +45,18 @@ updated: 2026-07-28
 
 모든 Agent는 아래 내부 상태를 보유하며, 이 상태가 행동과 관계 변화의 입력이 된다.
 
-| 상태 | 설명 |
-|------|------|
-| 배고픔 | 식사 이벤트로 감소 |
-| 피로도 | Tick 경과·수업·활동으로 누적, 수면(밤 스킵) 시 감소 |
-| 스트레스 | 시험·갈등·과제로 누적 |
-| 만족도 | 긍정 사건·관계 호전으로 상승 |
-| 기분 | 위 4개 상태와 관계 변화의 복합 결과 |
+| 상태 | 범위 | 설명 |
+|------|------|------|
+| 배고픔 | 0~100 | 식사 이벤트로 감소 |
+| 피로도 | 0~100 | Tick 경과·수업·활동으로 누적, 수면(밤 스킵) 시 감소 |
+| 스트레스 | 0~100 | 시험·갈등·과제로 누적 |
+| 만족도 | 0~100 | 긍정 사건·관계 호전으로 상승 |
+| 기분 | -100~100 | 위 4개 상태와 관계 변화의 복합 결과 |
 
 ---
 
 ## Student Agent
 
-- **1단계 수량**: 5명 (User Persona 1명 포함) — 아키텍처 v2.3 (Confluence #8290305)
 - **memory 보유 상한**: 최대 10개 — Spec §FR-02
 - **조직 소속**: 전공 1개 + 기숙사 1개 + 동아리 0~1개 + 총학생회(선택)
 - **학년**: 1~4학년 중 전공별 랜덤 배정
@@ -64,20 +65,13 @@ updated: 2026-07-28
 
 ## Professor Agent
 
-- **1단계 수량**: 1명 — 아키텍처 v2.3 (Confluence #8290305)
-- 담당 과목의 수업·시험·조별과제 사건을 진행
 - 학생 Agent와 관계(신뢰도·의존도 등)를 형성할 수 있음
 
 ## Event Master Agent (시스템 컴포넌트)
 
-- **수량**: 1 — 생활 Agent 수에서 제외
-- **MVP 포함**: 확정 — Spec §FR-05, FR-09
-- 역할: 매 Tick 사건을 생성하는 오케스트레이터 (하루 1~2회 특별 사건 생성)
+- 하루 1~2회 특별 사건 생성
 - 모델: Sonnet 4.6 (서사 품질 중요)
 
 ## Magic Layer (시스템 컴포넌트)
 
-- **수량**: 1 — 생활 Agent 수에서 제외
-- **MVP 포함**: 확정 — Magic Layer 설계 (Confluence #6619141)
-- 역할: ① Event Master 이벤트 마법 세계관 변환 (매 Tick) ② 30% 확률 마법 특수 사건 생성
 - 모델: Haiku 4.5

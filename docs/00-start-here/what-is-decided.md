@@ -1,7 +1,8 @@
 ---
 title: 확정된 사항
 status: approved
-updated: 2026-07-28
+updated: 2026-08-08
+visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "2026-07-09 기술 스택 확정 회의 (Confluence #7405620)"
@@ -13,8 +14,6 @@ source:
 ---
 
 # 확정된 사항
-
-> 출처: 2차 회의 (2026-07-07) · [Spec] MVP 핵심 설계 기준 (Confluence #6356994) · 2026-07-09 기술 스택 확정 회의 (Confluence #7405620)
 
 ---
 
@@ -28,20 +27,29 @@ source:
 
 ## Agent 구성 (MVP)
 
-> 출처: [Spec] MVP 핵심 설계 기준 §FR-01~FR-09 · Magic Layer 설계 (Confluence #6619141)
+1단계 생활 Agent: Student 5명 (User Persona 1명 포함) + Professor 1명. 시스템 컴포넌트: Event Master Agent · Magic Layer 각 1개.  
+상세: `docs/02-domain/agents.md`
 
-| Agent | 수량 | 비고 |
-|-------|------|------|
-| Student Agent | 1단계 5명 (User Persona 1명 포함) | 2단계 이상 확장 예정 — §FR-01 |
-| Professor Agent | 1단계 1명 | 2단계 이상 확장 예정 — §FR-01 |
-| Event Master Agent | 1 | 시스템 컴포넌트 (생활 Agent 수 제외) — §FR-05, FR-09 |
-| Magic Layer | 1 | 시스템 컴포넌트 (생활 Agent 수 제외), Magic Layer 운영 |
+---
 
-- **1단계 생활 Agent**: Student 5명 + Professor 1명 = 총 6명
+## 기술 스택
 
-- **User Persona**: 별도 Agent 아님. Student 중 1명을 지정하며 성격·성향 수정 가능. 직접 조종 불가.
-- **Student Agent memory 상한**: 최대 10 — §FR-02
-- **Magic Layer 실행 위치**: Event Master → Magic Layer → Agent Runtime
+| 계층 | 기술 |
+|------|------|
+| 백엔드 | FastAPI |
+| 에이전트 오케스트레이션 | LangGraph |
+| DB | PostgreSQL + pgvector |
+| 프론트엔드 | React |
+| 인프라 | Docker Compose |
+
+---
+
+## 개발 환경
+
+- **GitHub Actions CI**: 구축 완료
+- **CodeRabbit**: AI PR 리뷰어 설치 완료
+- **docs/ 구조**: 확정 (`docs/README.md` 참조)
+- **SYNC.md**: Confluence → docs/ 이관 정책·큐 (`docs/_meta/SYNC.md`)
 
 ---
 

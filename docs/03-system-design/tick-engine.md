@@ -3,8 +3,9 @@ title: Tick Engine 스펙
 source: confluence/05_TECH/tick-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/12910622/Tick+Engine
 status: approved
-updated: 2026-07-28
-source_updated: 2026-07-28
+visibility: public
+updated: 2026-08-06
+source_updated: 2026-08-05
 ---
 
 **출처:** 시스템 아키텍처 (#8290305) · Tick 기반 시뮬레이션 실행 환경 (#5996546) · WebSocket 실시간 통신 (#6717441)
@@ -21,6 +22,14 @@ source_updated: 2026-07-28
 | 스케줄러 | APScheduler (in-process) |
 | Agent 병렬화 | asyncio.gather() + Semaphore(10) |
 
+### 컴포넌트 책임 분리
+
+| 컴포넌트 | 책임 |
+| --- | --- |
+| TickScheduler | APScheduler 등록, 블록 전환 트리거, 야간 대기·전환 |
+| SimulationTickService | 현재 world state 스냅샷 생성 (DB 조회), Tick 시작·종료 기록 |
+| TickOrchestrator | Event Master → Magic Layer → Agent Runtime → Policy Engine → Conflict Resolver → DB Commit 순서 조율 |
+
 ---
 
 ## 2. 스케줄링
@@ -29,6 +38,20 @@ source_updated: 2026-07-28
 * **활동 시간대(3블록)**: §3 실행 순서 전체 수행.
 * **야간 대기**: EVENING Tick의 batch commit 완료 후 시작한다. 설정된 대기시간이 지나면 자동 전환하며, 수동 밤 스킵은 남은 대기시간만 생략하고 같은 전환 로직을 실행한다.
 * **야간 전환**: Agent Runtime·Event Master·Magic Layer를 호출하지 않는다. 야간 회복 Policy를 적용하고 Tick 번호 증가 없이 `current_day + 1`, 다음 블록 MORNING으로 전환한다.
+
+### 2.1 실행 인수 잠금 (PostgreSQL lease)
+
+TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick lease를 획득한다.
+
+`simulation_ticks`에는 `run_id`, `logical_tick_key`, `status`, `attempt`, `fence_token`, `lease_expires_at`, `heartbeat_at`, `snapshot_version`, `resolution_id`, `failure_code`를 기록한다.
+
+`status='running'`인 행은 Simulation별 최대 1개만 허용하는 partial unique index로 중첩 실행을 차단한다.
+
+* 자동 Scheduler Trigger가 기존 실행과 경합하면 새 Tick을 적재하지 않고 skip한다. 수동 Tick·밤 스킵 요청은 `409 TICK_ALREADY_RUNNING`을 반환한다.
+* 실행 중 TickOrchestrator가 lease heartbeat를 갱신한다. lease가 만료되면 기존 실행을 `stale`로 종료하고 새 `fence_token`을 발급할 수 있다.
+* Commit Service는 현재 `run_id`와 `fence_token`을 다시 검증해 만료된 이전 실행의 지연 Commit을 거부한다.
+* lease TTL과 heartbeat 주기는 설정값으로 관리하며 `lease TTL > heartbeat 주기 × 2`를 만족해야 한다.
+* 서로 다른 Simulation은 독립적인 lease를 사용해 병렬 실행할 수 있다.
 
 ---
 
@@ -39,7 +62,7 @@ source_updated: 2026-07-28
 ```
 [1] SimulationTickService
     - tick 시작
-    - 현재 world state snapshot 생성 (DB 조회)
+    - 현재 world state snapshot 생성 (DB 조회, REPEATABLE READ)
 
 
 [2] Event Master Agent  (Sonnet 4.6, LLM 단일 호출)
@@ -88,7 +111,8 @@ source_updated: 2026-07-28
     - 이벤트 중복 참여는 event_id 기준으로 dedup
 
 
-[8] DB Commit  (PostgreSQL batch write, 블록당 1회)
+[8] DB Commit  (PostgreSQL batch write, 블록당 1회, READ COMMITTED)
+    - run_id·fence_token·state_version 검증 (만료된 이전 실행의 지연 Commit 거부)
     - 관계 변화 (relationships 테이블)
     - Agent 내부 상태 변화 (agent_states 테이블)
     - memory 저장 (agent_memories 테이블)
@@ -119,13 +143,34 @@ async def run_agents(agents, context):
 
 ## 5. 상태 저장 시점
 
-* 블록 완료 후 **1회 batch write** (단계 [7])
+* 블록 완료 후 **1회 batch write** (단계 [8])
 * 이벤트·Agent 행동 직후 즉시 저장 없음 (DB 쓰기 횟수 최소화)
 * 블록 중 실패 시 해당 블록 내 변화 유실 가능 → 재시작 단위 = 블록
 
 ---
 
-## 6. WebSocket 브로드캐스트
+## 6. 격리 수준
+
+| 단계 | 격리 수준 | 이유 |
+| --- | --- | --- |
+| 스냅샷 조회 ([1]) | REPEATABLE READ | 동일 Tick 내 일관된 world state 읽기 보장 |
+| DB Commit ([8]) | READ COMMITTED | 단순 batch insert, 스냅샷과 독립적 |
+
+---
+
+## 7. 재시도 정책
+
+| 대상 | 최대 재시도 횟수 | 실패 시 처리 |
+| --- | --- | --- |
+| Agent LLM 호출 | 1회 | 해당 Agent Intent 제외 후 나머지 계속 |
+| DB Commit | 2회 | 2회 모두 실패 시 해당 블록 롤백, 다음 Tick 진행 |
+| Tick 전체 | 0회 (재시도 없음) | 실패 시 다음 Tick으로 진행, 실패 블록 기록 |
+
+Tick 전체 재시도를 허용하지 않는 이유: LLM 호출 결과가 비결정적이므로 재시도 시 결과 일관성을 보장할 수 없음.
+
+---
+
+## 8. WebSocket 브로드캐스트
 
 * 경로: `wss://{server}/v1/ws/simulations/{simulation_id}`
 * 방향: 서버 → 클라이언트 단방향 push
@@ -141,7 +186,7 @@ async def run_agents(agents, context):
 
 ---
 
-## 7. 확정된 설계 결정
+## 9. 확정된 설계 결정
 
 | # | 항목 | 결정 | 비고 |
 | --- | --- | --- | --- |
@@ -151,7 +196,52 @@ async def run_agents(agents, context):
 
 ---
 
----
+## 10. 모듈 위치
+
+```
+backend/app/simulation/
+├── tick_scheduler.py      # APScheduler 등록, 블록 전환, 야간 대기
+├── tick_orchestrator.py   # 컴포넌트 조율 순서 실행
+├── tick_service.py        # world state 스냅샷 생성, Tick 시작·종료 기록
+├── agent_runtime.py       # 생활 Agent 6명 병렬 실행 (확장 가능)
+├── event_master.py        # Event Master Agent 호출
+└── magic_layer.py         # Magic Layer 호출
+```
 
 ---
 
+## 11. 의존성
+
+```
+Frontend (React)
+    ↕ WebSocket /v1/ws/simulations/{simulation_id}
+API Layer (FastAPI)
+    ↓
+TickScheduler (APScheduler)  ← 이 스펙
+    ↓
+TickOrchestrator
+    ↓
+Event Master Agent → Magic Layer → Agent Runtime × 6 (MVP, 확장 가능)
+    ↓
+Domain Services (Intent Collector → Policy Engine → Conflict Resolver → DB Commit)
+    ↓
+PostgreSQL + pgvector
+```
+
+의존성 방향: 항상 위→아래 단방향.
+
+---
+
+## 변경 이력
+
+| 버전 | 날짜 | 변경 내용 |
+| --- | --- | --- |
+| v1.0 | 2026-07-22 | 초안 작성 — Tick 루프 8단계 정의. D1/D2/D3 확정. |
+| v1.1 | 2026-07-22 | Tick 단위를 1 Tick=1블록(8분), 1일=3 Tick(24분)으로 정정. MVP 생활 Agent 수 6명 기준으로 통일. |
+| v1.2 | 2026-07-24 | Agent Runtime 출력 계약을 signal·Intent 1개·Memory 후보 방식으로 정리. Magic Layer 특수 사건 발생 기준을 world_state 조건 기반으로 확정. |
+| v1.3 | 2026-07-28 | Professor 조건부 실행, Event 저장 후보 반환과 batch commit 책임, delta 합산 및 clamp 규칙, WebSocket 상태값 표현 정정. |
+| v1.4 | 2026-07-28 | 자동·수동 야간 전환이 동일 로직을 사용하도록 정의. WebSocket 경로와 메시지 타입을 API 명세 §14 기준으로 통일. Tick batch commit 성공 이후에만 변경 메시지 발행. |
+| v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
+| v2.0 | 2026-08-05 | TickScheduler·SimulationTickService·TickOrchestrator 책임 분리. 모듈 위치 갱신. |
+| v2.1 | 2026-08-05 | §2.1 실행 인수 잠금(PostgreSQL lease·fencing token) 추가. §6 격리 수준(Snapshot REPEATABLE READ, Commit READ COMMITTED) 확정. §7 재시도 정책(Agent 1회, Commit 2회, Tick 전체 0회) 확정. |
+| v2.2 | 2026-08-08 | §2.1 lease 설계 범위 보완 — simulation_ticks 테이블·전체 필드 목록, partial unique index, heartbeat 갱신·stale 처리, Commit Service run_id·fence_token 검증, 409 TICK_ALREADY_RUNNING, lease TTL 제약 추가. §3 [8] DB Commit에 run_id·fence_token·state_version 검증 항목 추가. |

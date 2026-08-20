@@ -1,7 +1,8 @@
 ---
 title: AI Context 품질 기준
 status: approved
-updated: 2026-07-23
+visibility: public
+updated: 2026-08-08
 ---
 
 # AI Context 품질 기준
@@ -24,12 +25,3 @@ updated: 2026-07-23
 > - [실패 항목]  
 > 작업을 시작하기 전에 확인이 필요합니다.
 
----
-
-## 파트 2 — 문서 관리자 점검 (작성·갱신·PR 머지 전)
-
-- [ ] **frontmatter**: `title`, `status`, `updated` 필드가 채워져 있는가 (Confluence 이관 파일은 `source_updated`도 필요)
-- [ ] **미정 명시**: 확정되지 않은 내용에 `[미정]` 표시가 있는가
-- [ ] **크로스링크**: 관련 문서를 상대 경로로 참조하고 있는가
-- [ ] **토큰 효율**: 불필요한 중복·설명 없이 핵심만 담겨 있는가
-- [ ] **민감 정보**: PUBLIC 저장소 기준에 맞게 분류됐는가 ([`../_meta/SYNC.md`](../_meta/SYNC.md) 분류 정책 참조)

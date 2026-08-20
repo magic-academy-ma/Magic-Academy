@@ -7,8 +7,9 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/17989637/MVP
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/17956886
 status: draft
-updated: 2026-07-29
-source_updated: 2026-07-28
+visibility: public
+updated: 2026-08-06
+source_updated: 2026-08-05
 ---
 
 ## MVP 포함
@@ -24,7 +25,7 @@ source_updated: 2026-07-28
 - 대표 캠페인
 - 설정 저장·공유·가져오기
 - Replay
-- 시점 복원과 분기
+- 시점 복원
 - Magic OFF/ON 비교
 
 ## MVP 제외
@@ -40,12 +41,13 @@ source_updated: 2026-07-28
 - 운영자용 writable Inspector
 - 결제
 - 공개 커뮤니티 피드 고도화
+- 시점 분기
 
 ## MVP 완료 조건
 
 - 대표 캠페인이 10 Tick을 정상 완료한다.
 - 저장 결과의 Event·상태·관계 변화를 Replay할 수 있다.
-- 기준 Tick의 상태·관계·Memory·Event에서 새 분기를 생성할 수 있다.
+- 기준 Tick의 상태·관계·Memory에서 시점을 복원할 수 있다.
 - 인증된 사용자별 데이터 접근이 격리된다.
 - Magic OFF와 ON 결과를 같은 기준으로 비교할 수 있다.
 - Inspector에서 행동 이유를 확인할 수 있다.
@@ -63,7 +65,7 @@ source_updated: 2026-07-28
 | Inspector | Decision Explanation 제공률 | 정상 Intent의 95% 이상 |
 | Magic | 특수 사건 오발생률 | 조건 미충족 상태에서 0건 |
 | Replay | 원본 Tick 결과 재생 정합성 | 저장된 Event·상태·관계 변화와 100% 일치 |
-| 복원 | 분기 생성 정합성 | 기준 Tick의 상태·관계·Memory를 누락 없이 복제 |
+| 복원 | 시점 복원 정합성 | 기준 Tick의 상태·관계·Memory를 누락 없이 복제 |
 | 접근 제어 | 다른 사용자 비공개 Simulation 접근 | 0건 |
 | 데모 | 대표 시나리오 완주 | 발표 제한 시간 내 1회 완주 |
 
@@ -87,7 +89,7 @@ MVP 포함 여부와 구현 순서를 구분한다. P2 기능도 MVP 출시 전�
 | P0 | Agent Runtime·상태·관계·Event·Policy | FR-01~05, FR-09, FR-20 | 핵심 시뮬레이션 루프 |
 | P0 | 대표 캠페인·Inspector | FR-11, FR-18, FR-21 | 핵심 사용자 가치를 검증 |
 | P1 | 설정 저장·Replay | FR-13, FR-16 | 결과를 다시 확인 |
-| P1 | 시점 복원·분기 | FR-17 | 비교 실험 제공 |
+| P1 | 시점 복원 | FR-17 | 비교 실험 제공 |
 | P1 | Magic OFF/ON 비교 | FR-12, FR-20, FR-21 | 제품 차별점 강화 |
 | P2 | 설정 공유·가져오기 | FR-14, FR-15 | 네트워크 효과 |
 | P2 | 검색·필터·UI 고도화 | 관련 화면 기능 | 사용성 개선 |
@@ -95,7 +97,7 @@ MVP 포함 여부와 구현 순서를 구분한다. P2 기능도 MVP 출시 전�
 ### 의존성
 
 - Replay는 Tick 이력과 Event·상태·관계 변경 기록이 선행되어야 한다.
-- 시점 복원은 snapshot과 원본·분기 Simulation 관계가 선행되어야 한다.
+- 시점 복원은 snapshot이 선행되어야 한다.
 - 공유·가져오기는 인증과 소유권 정책이 선행되어야 한다.
 - Magic ON/OFF 비교는 동일 seed와 변경 가능 시점 정책이 선행되어야 한다.
 - Inspector는 Decision Explanation 저장·조회 계약이 선행되어야 한다.
