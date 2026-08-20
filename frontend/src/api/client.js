@@ -19,9 +19,22 @@ export async function apiRequest(path, { token, ...options } = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_URL}${path}`, { ...options, headers });
   if (!response.ok) {
-    const error = new Error(ERROR_MESSAGES[response.status] ?? `요청에 실패했습니다. (${response.status})`);
-    error.status = response.status;
-    throw error;
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // body 없음/JSON 파싱 실패 — 무시하고 status 기반 메시지로 fallback
   }
+
+  const code = body?.error?.code;
+  const serverMessage = body?.error?.message;
+
+  const error = new Error(
+    serverMessage ?? ERROR_MESSAGES[response.status] ?? `요청에 실패했습니다. (${response.status})`
+  );
+  error.status = response.status;
+  error.code = code;
+  throw error;
+}
   return response.json();
 }

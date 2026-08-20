@@ -1,9 +1,9 @@
 ---
 title: 관계 정의
-source: local/CLAUDE.md + 2차 회의록
 status: approved
-visibility: public
 updated: 2026-07-13
+visibility: public
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 관계 (Relationship)

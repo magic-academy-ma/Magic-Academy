@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID as PythonUUID
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -325,6 +326,13 @@ class AgentMemory(TimestampMixin, Base):
         CheckConstraint("created_tick >= 0", name="ck_agent_memories_created_tick"),
         Index("idx_agent_memories_agent_occurred", "agent_id", text("occurred_at DESC"), text("id DESC")),
         Index("idx_agent_memories_cleanup", "agent_id", "importance", "created_tick"),
+        Index(
+            "idx_agent_memories_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 64},
+        ),
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -336,3 +344,4 @@ class AgentMemory(TimestampMixin, Base):
     created_tick: Mapped[int] = mapped_column(BigInteger, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))

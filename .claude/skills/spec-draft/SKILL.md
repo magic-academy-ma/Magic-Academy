@@ -37,7 +37,6 @@ Figma URL 없이 기능 설명만 주어진 경우.
 ---
 title: FR-XX {기능명}
 status: draft
-visibility: public
 updated: {오늘 날짜}
 ---
 

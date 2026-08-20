@@ -69,7 +69,7 @@ class ReactionValence(StrEnum):
     NEGATIVE = "NEGATIVE"
 
 
-class Intensity(StrEnum):
+class SignalIntensity(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -211,13 +211,13 @@ class AgentRuntimeInput(StrictModel):
 
 class RelationshipSignal(StrictModel):
     signal_type: RelationshipSignalType
-    intensity: Intensity
+    intensity: SignalIntensity
     target_agent_id: UUID
 
 
 class StateSignal(StrictModel):
     signal_type: StateSignalType
-    intensity: Intensity
+    intensity: SignalIntensity
 
 
 class AgentReaction(StrictModel):
