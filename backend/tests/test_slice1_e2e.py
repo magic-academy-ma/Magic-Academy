@@ -11,6 +11,9 @@ from sqlalchemy.orm import sessionmaker
 
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if os.getenv("CI") == "true" and not TEST_DATABASE_URL:
+    raise RuntimeError("TEST_DATABASE_URL is required in CI")
+
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required"
 )
