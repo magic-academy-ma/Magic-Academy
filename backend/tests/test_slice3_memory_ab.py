@@ -8,7 +8,7 @@ from app.simulation.tick_engine import (
     TickEvent,
     WorldSnapshot,
 )
-from app.simulation.policy.types import AgentRuntimeResult
+from tests.runtime_factories import make_runtime_result
 
 
 def make_snapshot(tick: int = 2):
@@ -27,7 +27,7 @@ async def test_memory_presence_changes_action_type():
         for agent in agents:
             memories = snapshot.data.get("memories", {}).get(agent.id, [])
             action = "TALK" if memories else "STUDY"
-            outputs[agent.id] = AgentRuntimeResult(agent_id=agent.id, action_type=action, target_agent_id=None)
+            outputs[agent.id] = make_runtime_result(agent.id, action_type=action)
         return outputs
 
     async def retriever_with(agent_id, tick, query):
@@ -51,8 +51,8 @@ async def test_memory_presence_changes_action_type():
         snapshot=make_snapshot(),
     )
 
-    assert result_with.runtime_outputs["s-1"].action_type == "TALK"
-    assert result_without.runtime_outputs["s-1"].action_type == "STUDY"
+    assert result_with.runtime_outputs["s-1"].intent.action_type == "TALK"
+    assert result_without.runtime_outputs["s-1"].intent.action_type == "STUDY"
 
 
 async def test_retrieval_trace_matches_passed_ids():
@@ -65,7 +65,7 @@ async def test_retrieval_trace_matches_passed_ids():
         ]
 
     async def runtime(agents, event, snapshot):
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="STUDY", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     result = await engine.run_tick(

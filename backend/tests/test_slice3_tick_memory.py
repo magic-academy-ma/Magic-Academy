@@ -8,7 +8,7 @@ from app.simulation.tick_engine import (
     TickEvent,
     WorldSnapshot,
 )
-from app.simulation.policy.types import AgentRuntimeResult
+from tests.runtime_factories import make_runtime_result
 
 
 def make_snapshot(tick: int = 2):
@@ -34,7 +34,7 @@ async def test_tick_loads_memories_before_runtime():
             received_by_runtime.append(
                 snapshot.data.get("memories", {}).get(agent.id, [])
             )
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="STUDY", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     await engine.run_tick(
@@ -58,7 +58,7 @@ async def test_retrieval_trace_in_tick_result():
         ]
 
     async def runtime(agents, event, snapshot):
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="STUDY", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     result = await engine.run_tick(
@@ -79,21 +79,19 @@ async def test_memory_candidate_stored_after_tick():
 
     async def runtime(agents, event, snapshot):
         return {
-            agent.id: AgentRuntimeResult(
-                agent_id=agent.id,
-                action_type="STUDY",
-                target_agent_id=None,
+            agent.id: make_runtime_result(
+                agent.id,
                 memory_candidate=MemoryCandidateItem(
                     content="마법을 배웠다",
                     memory_type="observation",
-                    importance=60,
+                    importance=6,
                 ),
             )
             for agent in agents
         }
 
     async def store(agent_id, event_id, candidate, tick):
-        store_calls.append((agent_id, event_id, candidate.content, tick))
+        store_calls.append((agent_id, event_id, candidate.content, candidate.importance, tick))
         return "new-mem-id"
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever, memory_store=store)
@@ -104,7 +102,7 @@ async def test_memory_candidate_stored_after_tick():
     )
 
     assert len(store_calls) == 1
-    assert store_calls[0] == ("s-1", "evt-1", "마법을 배웠다", 2)
+    assert store_calls[0] == ("s-1", "evt-1", "마법을 배웠다", 60, 2)
     assert result.created_memory_ids["s-1"] == ["new-mem-id"]
 
 
@@ -116,7 +114,7 @@ async def test_no_store_call_when_no_candidate():
         return []
 
     async def runtime(agents, event, snapshot):
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="WAIT", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id, action_type="WAIT") for agent in agents}
 
     async def store(agent_id, event_id, candidate, tick):
         store_calls.append(agent_id)
@@ -135,7 +133,7 @@ async def test_no_store_call_when_no_candidate():
 async def test_no_retriever_tick_completes_normally():
     """memory_retriever 없어도 Tick이 정상 완료되고 retrieval_traces는 빈 dict다"""
     async def runtime(agents, event, snapshot):
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="WAIT", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id, action_type="WAIT") for agent in agents}
 
     engine = TickEngine(runtime=runtime)
     result = await engine.run_tick(

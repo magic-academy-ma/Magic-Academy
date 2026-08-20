@@ -1,11 +1,11 @@
-from app.simulation.policy.types import AgentRuntimeResult
+from app.simulation.policy.types import PolicyRuntimeResult
 
 
 def validate_runtime_result(
-    result: AgentRuntimeResult,
+    result: PolicyRuntimeResult,
     valid_agent_ids: set[str],
 ) -> list[str]:
-    """AgentRuntimeResult의 유효성을 검증하고 에러 메시지 목록을 반환한다. 빈 목록이면 유효."""
+    """PolicyRuntimeResult의 유효성을 검증하고 에러 메시지 목록을 반환한다. 빈 목록이면 유효."""
     errors: list[str] = []
 
     if result.reaction is None:

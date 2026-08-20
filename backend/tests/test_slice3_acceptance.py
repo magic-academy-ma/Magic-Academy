@@ -19,7 +19,7 @@ from app.simulation.tick_engine import (
     TickEvent,
     WorldSnapshot,
 )
-from app.simulation.policy.types import AgentRuntimeResult
+from tests.runtime_factories import make_runtime_result
 
 
 def make_snapshot(tick: int = 1):
@@ -36,14 +36,12 @@ async def test_e2e_memory_created_in_tick_n():
 
     async def runtime(agents, event, snapshot):
         return {
-            agent.id: AgentRuntimeResult(
-                agent_id=agent.id,
-                action_type="STUDY",
-                target_agent_id=None,
+            agent.id: make_runtime_result(
+                agent.id,
                 memory_candidate=MemoryCandidateItem(
                     content="마법 수업에서 새로운 주문을 익혔다",
                     memory_type="observation",
-                    importance=55,
+                    importance=6,
                 ),
             )
             for agent in agents
@@ -75,7 +73,7 @@ async def test_e2e_memory_used_in_tick_n_plus_1():
     async def runtime(agents, event, snapshot):
         for agent in agents:
             received.append(snapshot.data.get("memories", {}).get(agent.id, []))
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="PRACTICE", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id) for agent in agents}
 
     engine = TickEngine(runtime=runtime, memory_retriever=retriever)
     result = await engine.run_tick(
@@ -92,7 +90,7 @@ async def test_e2e_no_memory_retriever_does_not_break():
     """memory_retriever가 없어도 Tick이 정상 완료된다"""
 
     async def runtime(agents, event, snapshot):
-        return {agent.id: AgentRuntimeResult(agent_id=agent.id, action_type="WAIT", target_agent_id=None) for agent in agents}
+        return {agent.id: make_runtime_result(agent.id, action_type="WAIT") for agent in agents}
 
     engine = TickEngine(runtime=runtime)
     result = await engine.run_tick(

@@ -1,4 +1,3 @@
-# TODO(kan-44): 가윤님 PR 머지 후 이 파일 삭제하고 tick_engine에서 import로 교체
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -64,7 +63,8 @@ class AgentReaction:
 
 
 @dataclass
-class AgentRuntimeResult:
+class PolicyRuntimeResult:
+    """Policy Engine 내부 평가용 DTO. 정식 Runtime 결과와 혼동하지 않는다."""
     agent_id: str
     action_type: str
     target_agent_id: str | None = None

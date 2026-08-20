@@ -12,6 +12,7 @@ from app.simulation.tick_engine import (
     TickRollbackError,
     WorldSnapshot,
 )
+from tests.runtime_factories import make_runtime_result
 
 
 def make_student(agent_id: str, *, is_active: bool = True) -> TickAgent:
@@ -36,7 +37,7 @@ def make_snapshot() -> WorldSnapshot:
 async def test_tick_runs_student_runtime():
     """Student가 있으면 Runtime batch가 1회 호출된다"""
     student = make_student("s-1")
-    runtime = AsyncMock(return_value={"s-1": {"intent": "study"}})
+    runtime = AsyncMock(return_value={"s-1": make_runtime_result("s-1")})
     engine = TickEngine(runtime=runtime)
 
     event = make_event(participant_ids=["s-1"])
@@ -64,7 +65,7 @@ async def test_professor_runs_only_when_in_event():
 async def test_professor_runs_when_in_event():
     """Professor가 Event 참여자면 Runtime batch 호출된다"""
     professor = make_professor("p-1")
-    runtime = AsyncMock(return_value={"p-1": {"intent": "lecture"}})
+    runtime = AsyncMock(return_value={"p-1": make_runtime_result("p-1", action_type="TEACH_CLASS")})
     engine = TickEngine(runtime=runtime)
 
     event = make_event(participant_ids=["p-1"])
@@ -78,7 +79,7 @@ async def test_professor_runs_when_in_event():
 async def test_professor_runs_when_schedule_requires():
     """schedule_requires_professor=True면 Event 미참여 Professor도 Runtime batch 호출된다"""
     professor = make_professor("p-1")
-    runtime = AsyncMock(return_value={"p-1": {"intent": "lecture"}})
+    runtime = AsyncMock(return_value={"p-1": make_runtime_result("p-1", action_type="TEACH_CLASS")})
     engine = TickEngine(runtime=runtime)
 
     event = make_event(participant_ids=[])
@@ -97,7 +98,8 @@ async def test_professor_runs_when_schedule_requires():
 async def test_inactive_student_in_runtime_batch():
     """비활성 Student도 Runtime batch에 포함된다 (Runtime이 SKIPPED 결과를 반환)"""
     inactive_student = make_student("s-inactive", is_active=False)
-    runtime = AsyncMock(return_value={"s-inactive": {"status": "SKIPPED"}})
+    skipped_result = make_runtime_result("s-inactive", status="SKIPPED")
+    runtime = AsyncMock(return_value={"s-inactive": skipped_result})
     engine = TickEngine(runtime=runtime)
 
     event = make_event(["s-inactive"])
@@ -107,7 +109,7 @@ async def test_inactive_student_in_runtime_batch():
 
     runtime.assert_awaited_once()
     assert "s-inactive" in result.participant_ids
-    assert result.runtime_outputs["s-inactive"] == {"status": "SKIPPED"}
+    assert result.runtime_outputs["s-inactive"] == skipped_result
 
 
 # ── 중복 Tick 방지 ────────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ async def test_inactive_student_in_runtime_batch():
 async def test_duplicate_tick_raises_conflict():
     async def slow_runtime(agents, event, snapshot):
         await asyncio.sleep(0.05)
-        return {a.id: {"intent": "study"} for a in agents}
+        return {a.id: make_runtime_result(a.id) for a in agents}
 
     engine = TickEngine(runtime=slow_runtime)
     student = make_student("s-1")
@@ -151,7 +153,7 @@ async def test_runtime_failure_triggers_rollback():
 
 
 async def test_tick_unlocks_after_completion():
-    runtime = AsyncMock(return_value={"s-1": {"intent": "study"}})
+    runtime = AsyncMock(return_value={"s-1": make_runtime_result("s-1")})
     engine = TickEngine(runtime=runtime)
 
     student = make_student("s-1")
@@ -172,7 +174,7 @@ async def test_tick_unlocks_after_failure():
         call_count += 1
         if call_count == 1:
             raise RuntimeExecutionError("first call fails")
-        return {a.id: {"intent": "study"} for a in agents}
+        return {a.id: make_runtime_result(a.id) for a in agents}
 
     engine = TickEngine(runtime=sometimes_failing)
     student = make_student("s-1")
@@ -209,7 +211,7 @@ async def test_tick_unlocks_after_code_bug():
         call_count += 1
         if call_count == 1:
             raise TypeError("bug")
-        return {a.id: {"intent": "study"} for a in agents}
+        return {a.id: make_runtime_result(a.id) for a in agents}
 
     engine = TickEngine(runtime=buggy_then_ok)
     student = make_student("s-1")
@@ -230,7 +232,7 @@ async def test_different_simulation_ids_run_concurrently():
     async def tracking_runtime(agents, event, snapshot):
         started.append(snapshot.simulation_id)
         await asyncio.sleep(0.01)
-        return {a.id: {"intent": "study"} for a in agents}
+        return {a.id: make_runtime_result(a.id) for a in agents}
 
     engine = TickEngine(runtime=tracking_runtime)
     student = make_student("s-1")
@@ -251,7 +253,7 @@ async def test_same_simulation_id_blocks_concurrent_tick():
     """같은 simulation_id는 동시에 실행되면 TickConflictError가 발생해야 한다."""
     async def slow_runtime(agents, event, snapshot):
         await asyncio.sleep(0.05)
-        return {a.id: {"intent": "study"} for a in agents}
+        return {a.id: make_runtime_result(a.id) for a in agents}
 
     engine = TickEngine(runtime=slow_runtime)
     student = make_student("s-1")

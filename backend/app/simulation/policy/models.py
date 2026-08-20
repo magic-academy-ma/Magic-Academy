@@ -1,5 +1,11 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.simulation.policy.types import PolicyRuntimeResult
 
 
 class PolicyStatus(str, Enum):
@@ -42,7 +48,7 @@ class PolicyEvaluationInput:
     policy_version: str
     agent_snapshots: dict[str, AgentSnapshot]
     relationship_snapshots: list[RelationshipSnapshot]
-    runtime_results: list
+    runtime_results: list[PolicyRuntimeResult]
     valid_agent_ids: set[str]
 
 

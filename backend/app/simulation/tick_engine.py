@@ -173,11 +173,16 @@ class TickEngine:
             created_memory_ids: dict[str, list[str]] = {}
             if self._memory_store:
                 for agent_id, output in runtime_outputs.items():
-                    if hasattr(output, "memory_candidate") and output.memory_candidate is not None:
-                        mem_id = await self._memory_store(
-                            agent_id, event.id, output.memory_candidate, snapshot.current_tick
+                    for candidate in output.intent.memory_candidates:
+                        memory_candidate = MemoryCandidateItem(
+                            content=candidate.content,
+                            memory_type=candidate.memory_type.value.lower(),
+                            importance=candidate.importance * 10,
                         )
-                        created_memory_ids[agent_id] = [mem_id]
+                        mem_id = await self._memory_store(
+                            agent_id, event.id, memory_candidate, snapshot.current_tick
+                        )
+                        created_memory_ids.setdefault(agent_id, []).append(mem_id)
 
             return TickResult(
                 status="completed",

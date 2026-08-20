@@ -5,24 +5,11 @@ from app.simulation.policy.models import (
     PolicyEvaluationResult,
     PolicyStatus,
 )
+from app.simulation.policy.constants import METRIC_RANGE
 from app.simulation.policy.registries.signal_policy import get_relationship_delta, get_state_delta
 from app.simulation.policy.types import RelationshipSignalType, StateSignalType
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
-
-METRIC_RANGE: dict[str, tuple[int, int]] = {
-    "trust": (-100, 100),
-    "affection": (-100, 100),
-    "mood": (-100, 100),
-    "tension": (0, 100),
-    "closeness": (0, 100),
-    "rivalry": (0, 100),
-    "dependency": (0, 100),
-    "hunger": (0, 100),
-    "fatigue": (0, 100),
-    "stress": (0, 100),
-    "satisfaction": (0, 100),
-}
 
 RELATIONSHIP_SIGNAL_TO_METRIC: dict[RelationshipSignalType, str] = {
     RelationshipSignalType.TRUST_UP: "trust",

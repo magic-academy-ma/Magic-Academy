@@ -58,8 +58,8 @@ def _make_rel_signal(signal_type, intensity, target_id):
 
 
 def _make_runtime_result(agent_id, target_id, rel_signals=None, state_signals=None):
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult
-    return AgentRuntimeResult(
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult
+    return PolicyRuntimeResult(
         agent_id=agent_id,
         action_type="TALK",
         target_agent_id=target_id,
@@ -125,9 +125,9 @@ def _make_eval_input(runtime_results, rel_snapshots=None, agent_snapshots=None):
 def test_trust_up_produces_positive_effect_candidate():
     from app.simulation.policy.engine import evaluate_policy
     from app.simulation.policy.models import PolicyStatus
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [AgentRuntimeResult(
+    results = [PolicyRuntimeResult(
         agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
         reaction=AgentReaction(
             valence="POSITIVE",
@@ -160,9 +160,9 @@ def test_unknown_policy_version_is_rejected():
 
 def test_ab_signal_does_not_affect_ba():
     from app.simulation.policy.engine import evaluate_policy
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [AgentRuntimeResult(
+    results = [PolicyRuntimeResult(
         agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
         reaction=AgentReaction(
             valence="POSITIVE",
@@ -181,9 +181,9 @@ def test_ab_signal_does_not_affect_ba():
 def test_trust_preview_clamped_at_100():
     from app.simulation.policy.engine import evaluate_policy
     from app.simulation.policy.models import RelationshipSnapshot
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [AgentRuntimeResult(
+    results = [PolicyRuntimeResult(
         agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
         reaction=AgentReaction(
             valence="POSITIVE",
@@ -206,9 +206,9 @@ def test_trust_preview_clamped_at_100():
 
 def test_mood_up_produces_state_effect():
     from app.simulation.policy.engine import evaluate_policy
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, StateSignal
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, StateSignal
 
-    results = [AgentRuntimeResult(
+    results = [PolicyRuntimeResult(
         agent_id="agent-a", action_type="REST", target_agent_id=None,
         reaction=AgentReaction(
             valence="POSITIVE",
@@ -285,10 +285,10 @@ def test_invalid_signal_does_not_reject_valid_signals_of_same_agent():
     """잘못된 signal 하나가 같은 agent의 정상 signal까지 거부하면 안 된다."""
     from app.simulation.policy.engine import evaluate_policy
     from app.simulation.policy.models import PolicyStatus
-    from app.simulation.policy.types import AgentReaction, AgentRuntimeResult, RelationshipSignal
+    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
     # agent-a → self (잘못된 signal) + agent-a → agent-b (정상 signal)
-    results = [AgentRuntimeResult(
+    results = [PolicyRuntimeResult(
         agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
         reaction=AgentReaction(
             valence="POSITIVE",
