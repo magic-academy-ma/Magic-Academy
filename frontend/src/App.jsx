@@ -7,7 +7,6 @@ function AuthPanel({ onLogin, notice }) {
   const [form, setForm] = useState({ username: "", display_name: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [authNotice, setAuthNotice] = useState("");
 
   async function submit(event) {
     event.preventDefault();
@@ -93,7 +92,6 @@ export default function App() {
   const [tickLoading, setTickLoading] = useState(false);
   const [tickResult, setTickResult] = useState(null);
   const [tickError, setTickError] = useState(null); // { type, message }
-  const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   function resetSession(notice = "") {
     setAuth(null);
