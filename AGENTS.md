@@ -79,8 +79,6 @@ docs/
 
 **판단이 필요할 때**
 요청이 모호하거나 두 가지 이상 해석이 가능하면 추측해서 진행하지 말고 질문한다.
-- 나쁜 예: "아마 A를 의미하는 것 같아 A로 작성했습니다"
-- 좋은 예: "A와 B 두 해석이 가능합니다. 어느 쪽인가요?"
 
 **범위 밖 발견 사항 처리**
 
@@ -219,36 +217,34 @@ docs/
 
 ## 역할별 페르소나 (3종 활동 기반 통합)
 
-> **세션 시작 전**: 지금 맡은 작업 유형에 맞춰 페르소나를 선택하고, 지정된 자동 로딩 문서를 읽는다.  
-> 누구든 작업 성격에 따라 자유롭게 페르소나를 선택할 수 있다.
-> - 기획 · 요구사항 · 이슈 · 기능 스펙 초안 ➡️ `@pm`
-> - Slice 단위 구현 · 백엔드 · DB · 도메인 로직 · 단위 테스트 ➡️ `@dev`
-> - 화면 UI 개발 · React 컴포넌트 · Figma 기반 스펙 ➡️ `@fe`
+> **세션 시작 전**: 작업 유형에 맞는 페르소나를 선택하고, 지정된 문서를 로드한다.  
+> 기획·스펙 → `@pm` / Slice 구현 → `@dev` / 프론트엔드 → `@fe`  
+> 역할 경계 침범 방지: 본인 영역 밖을 수정해야 할 경우 해당 담당자에게 먼저 확인
 
----
+### @pm — 기획·스펙
 
-### @pm — 공통 (팀원 누구나)
-
-**주요 담당**: 기획, 요구사항 정의, 스펙 초안 작성, GitHub Issue 생성, 범위 관리
+**주요 담당**: Issue 작성, 스펙 초안, 요구사항 명확화, 범위 관리
 
 **자동 로딩 문서**
-- `docs/00-start-here/`
 - `docs/01-product/`
 - `docs/02-domain/`
-- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
-- `docs/05-team-rules/`
+- `docs/04-feature-specs/`
+- `docs/05-team-rules/git-workflow-pr.md`
 
 ---
 
-### @dev — 공통 (팀원 누구나)
+### @dev — Slice 구현 (공통)
 
-**주요 담당**: Slice 단위 구현, 백엔드(FastAPI), DB(PostgreSQL+pgvector), 도메인 로직, 단위 테스트, 오케스트레이션
+**주요 담당**: Slice 단위 기능 구현, 백엔드·DB·인프라 작업
 
 **자동 로딩 문서**
 - `docs/02-domain/`
-- `docs/03-system-design/`
-- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
-- `docs/05-team-rules/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/<해당 컴포넌트>.md`  ← Slice마다 직접 로드
+- `docs/04-feature-specs/<해당 Slice>.md`     ← Slice마다 직접 로드
+- `docs/05-team-rules/conventions.md`
+- `docs/05-team-rules/definition-of-done.md`
+- `docs/05-team-rules/git-workflow-commit.md`
 
 **구현 원칙**
 - TDD 기반: 실패하는 테스트 먼저 작성 ➡️ 구현
@@ -257,7 +253,7 @@ docs/
 
 ---
 
-### @fe — 공통 (팀원 누구나)
+### @fe — 프론트엔드
 
 **주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 시각화, Mock 기반 화면 완성
 
@@ -272,7 +268,9 @@ docs/
 - 백엔드 미완성 시 스펙의 Mock Data Fixture(`src/mocks/fixtures/`)를 활용하여 독립 실행 가능하게 구현
 
 **자동 로딩 문서**
-- `docs/03-system-design/`
-- `docs/04-feature-specs/` (구현 대상 기능 및 화면 스펙)
-- `docs/05-team-rules/`
+- `docs/02-domain/`
+- `docs/03-system-design/architecture.md`
+- `docs/03-system-design/user-flow.md`
+- `docs/04-feature-specs/` (FE 관련)
+- `docs/05-team-rules/conventions.md`
 - `frontend/src/App.jsx` (기존 패턴 참조)

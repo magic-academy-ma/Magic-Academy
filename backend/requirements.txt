@@ -10,3 +10,4 @@ pwdlib[argon2]>=0.2.1
 uuid6>=2025.0.1
 pytest>=8.3.0
 httpx>=0.28.0
+langgraph>=0.6.0

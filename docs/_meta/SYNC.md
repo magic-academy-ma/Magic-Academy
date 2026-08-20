@@ -62,7 +62,7 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | 99. Archive | 미이관 | 불필요 |
 
 `02-domain/`은 Confluence 직접 매핑 없음 → PRD 부록 A + `local/CLAUDE.md` 도메인 모델 기반으로 새로 작성.  
-`04-feature-specs/`는 구현 직전 새로 작성 (Confluence 매핑 없음).
+`04-feature-specs/`는 Confluence 이관(#16777778, #12582917)과 신규 작성으로 구분됨. 이관 항목은 §이관 큐 참조.
 
 ---
 
@@ -80,6 +80,11 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | — | 02. Product Planning / 타겟 사용자 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
 | — | 02. Product Planning / 사용자 시나리오 | 이관 제외 — 구현 AI context 불필요 | 2026-07-13 |
 | — | 03. Requirements / 비기능 요구사항 | 이관 불가 — Confluence 미존재 | 2026-07-13 |
+| ✅ | 03. Requirements / [요구사항] 시뮬레이션 파라미터 설정 (#21364758) | `01-product/simulation-parameters.md` | 2026-08-05 |
+| — | [Spec] 대표 캠페인 — 첫 학기, 다섯 명의 마법사 (#13533186) | 미이관 — 사용자 시나리오 계열 | 2026-08-05 |
+| — | [Scenario] 대표 캠페인 데모 — 설정 생성부터 시점 복원까지 (#13402116) | 미이관 — 사용자 시나리오 계열 | 2026-08-05 |
+| ✅ | MVP 범위 (#17989637) — drift | `01-product/mvp-scope.md` 재동기화 | 2026-08-05 |
+| ✅ | 핵심 기능 정의 (#16777846) — drift | `01-product/functional-requirements.md` 재동기화 | 2026-08-05 |
 
 ### 03-system-design/
 
@@ -95,6 +100,11 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 05. Tech / Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 2026-07-28 |
 | ✅ | 05. Tech / Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-07-28 |
 | ✅ | 05. Tech / User Flow (#17367076) | `03-system-design/user-flow.md` | 2026-07-28 |
+| ✅ | 05. Tech / Event Master Agent 설계 (#10878982) | `03-system-design/event-master.md` | 2026-08-06 |
+| ✅ | 05. Tech / 인증·접근 제어 설계 (#23888013) | `03-system-design/auth.md` | 2026-08-06 |
+| ✅ | 05. Tech / [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | 2026-08-06 |
+| ✅ | Tick Engine 스펙 (#12910622) — drift | `03-system-design/tick-engine.md` 재동기화 | 2026-08-05 |
+| ✅ | Policy Engine 설계 (#14090319) — drift | `03-system-design/policy-engine.md` 재동기화 | 2026-08-05 |
 
 ### 05-team-rules/
 
@@ -107,6 +117,15 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 09_CONVENTIONS / 8. AI 사용 컨벤션 | `05-team-rules/ai-usage.md` | 2026-07-13 |
 | ✅ | 09_CONVENTIONS / 11. Definition of Done | `05-team-rules/definition-of-done.md` | 2026-07-13 |
 
+### 04-feature-specs/
+
+| 상태 | Confluence 문서 | docs/ 파일 | 추가일 |
+|------|----------------|------------|--------|
+| ✅ | [기능 명세서] 1단계 Magic Academy MVP (#16777778) | `04-feature-specs/mvp-feature-spec.md` | 2026-08-05 |
+| ✅ | [Spec] Inspector 기능 정의 (#12582917) | `04-feature-specs/inspector.md` | 2026-08-05 |
+
+---
+
 ### 02-domain/ (새로 작성 — Confluence 직접 매핑 없음)
 
 | 상태 | 작성 기준 | docs/ 파일 | 추가일 |
@@ -117,4 +136,19 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | PRD 부록 A (조직 축) | `02-domain/organizations.md` | 2026-07-13 |
 | ✅ | PRD 부록 A (사건 축) | `02-domain/events.md` | 2026-07-13 |
 | ✅ | PRD 부록 A (배경) | `02-domain/time-and-space.md` | 2026-07-13 |
-| ✅ | 전체 문서 취합 | `02-domain/glossary.md` | 2026-07-13 |
+| ❌ 폐기 | 전체 문서 취합 | `02-domain/glossary.md` (2026-08-13 폐기 — 각 도메인 파일에 통합) | 2026-07-13 |
+| ✅ | 05. Tech / [전제 조건] Magic Academy 세계관 설정 (#10911745) | `02-domain/world-setting.md` | 2026-08-06 |
+
+---
+
+### 명시적 미이관
+
+> 이관 결정이 내려진 항목. 이관 큐에 추가하지 않는다.
+
+| 상태 | Confluence 문서 | 이유 | 결정일 |
+|------|----------------|------|--------|
+| — | [Plan] 1단계 수직 Slice 0~7 (#19202077) | INTERNAL — 팀 내부 계획 | 2026-08-05 |
+| — | [Sprint] 1단계 개발 5영업일 스프린트 (#19169283) | INTERNAL — 스프린트 계획 | 2026-08-05 |
+| — | [Branding] Magic Academy 브랜딩 (#24281259) | 구현 AI context 불필요 | 2026-08-05 |
+| — | [Test] * 4종 + Magic Academy 테스트 문서 범위 및 담당 (#22544473 등) | 테스트 문서 — 07 QA & Test 스코프 제외 결정 | 2026-08-05 |
+| — | 05. Tech / 인증·접근 제어 설계 (#23888013) | INTERNAL — 변경 이력 팀원 실명(PII) + 내부 API 경로 노출 | 2026-08-07 |

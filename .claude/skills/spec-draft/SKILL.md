@@ -4,7 +4,7 @@ description: 기능 설명 또는 FE 화면 Figma URL을 받아 스펙 초안을
 
 # /spec-draft
 
-기능 설명 또는 Figma URL을 받아 스펙 초안을 생성한다.  
+기능 설명 또는 Figma URL을 받아 스펙 초안을 생성한다.
 **Figma URL이 입력되면 모드 B(FE 화면 스펙)로 자동 전환된다.**
 
 ---
@@ -37,7 +37,6 @@ Figma URL 없이 기능 설명만 주어진 경우.
 ---
 title: FR-XX {기능명}
 status: draft
-visibility: public
 updated: {오늘 날짜}
 ---
 
@@ -113,7 +112,7 @@ Figma URL이 입력된 경우. Confluence Draft → Approved → docs 이관 흐
 
 ### 출력
 
-Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면명-kebab}-screen.md`)  
+Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면명-kebab}-screen.md`)
 예) `FR-03-user-persona-select-screen.md`
 
 ### 스펙 초안 형식

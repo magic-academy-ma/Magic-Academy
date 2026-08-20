@@ -1,9 +1,9 @@
 ---
 title: 사건 정의
-source: local/CLAUDE.md + 2차 회의록
 status: approved
+updated: 2026-08-08
 visibility: public
-updated: 2026-07-13
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 사건 (Event)
@@ -55,10 +55,3 @@ updated: 2026-07-13
 | 배신 사건 | 신뢰도 급락, 긴장도 ↑ |
 | 화해 사건 | 긴장도 → 0, 호감도 소폭 ↑ |
 
----
-
-## 확장성 메모 (MVP 제외)
-
-- 사건 규모 확장 (전교·외부 사건)
-- 사건 타입 추가: 연구실 인턴, 동아리 공연, 교환학생 등
-- 사건은 하드코딩하지 않고 타입 기반 확장 가능 구조로 설계할 것
