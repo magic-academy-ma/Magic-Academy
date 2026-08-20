@@ -25,7 +25,7 @@ def test_tick_position_rejects_non_positive_tick():
         tick_position(0)
 
 
-def test_tick_response_contract_does_not_expose_internal_fields():
+def test_tick_response_contract_preserves_public_fields_only():
     from app.api.ticks import AgentTickResultResponse, TickAdvanceResponse
     from app.api.ticks import DecisionExplanationResponse
 
@@ -54,5 +54,6 @@ def test_tick_response_contract_does_not_expose_internal_fields():
 
     assert response["status"] == "COMPLETED"
     assert response["agent_results"][0]["runtime_status"] == "PROPOSED"
+    assert response["retrieved_memories"] == []
     assert "participant_ids" not in response
     assert "runtime_outputs" not in response

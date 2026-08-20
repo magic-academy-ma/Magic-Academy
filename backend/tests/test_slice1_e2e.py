@@ -93,6 +93,7 @@ def test_slice_one_full_vertical_flow(client):
         1,
     )
     assert body["status"] == "COMPLETED"
+    assert body["retrieved_memories"] == []
     assert "runtime_outputs" not in body
     assert "participant_ids" not in body
     assert {result["runtime_status"] for result in body["agent_results"]} <= {

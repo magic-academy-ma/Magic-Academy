@@ -18,6 +18,7 @@ from app.simulation.agent_runtime import (
 )
 from app.simulation.tick_engine import (
     AgentType,
+    MemoryItem,
     PolicyFn,
     TickAgent,
     TickEngine,
@@ -37,6 +38,8 @@ class ManualTickResult:
     current_day: int
     agent_names: dict[UUID, str]
     runtime_results: tuple[AgentRuntimeResult, ...]
+    retrieval_traces: dict[str, list[str]]
+    retrieved_memories: dict[str, tuple[MemoryItem, ...]]
 
 
 def tick_position(tick_number: int) -> tuple[int, Block]:
@@ -133,7 +136,7 @@ async def advance_manual_tick(
         selected_agents: list[TickAgent],
         _event: TickEvent,
         _snapshot: WorldSnapshot,
-    ) -> dict[str, dict]:
+    ) -> dict[str, AgentRuntimeResult]:
         nonlocal batch
         batch = service.run_runtime_phase(
             db,
@@ -146,10 +149,7 @@ async def advance_manual_tick(
             events=[event],
             event_participants={event.id: participants},
         )
-        return {
-            str(result.agent_id): result.model_dump(mode="json")
-            for result in batch.results
-        }
+        return {str(result.agent_id): result for result in batch.results}
 
     candidates_by_id = {agent.id: agent for agent in agents}
     tick_candidates = [
@@ -164,6 +164,10 @@ async def advance_manual_tick(
         )
         for agent_id in preselected_ids
     ]
+    snapshot = WorldSnapshot(
+        simulation_id=str(simulation.id),
+        current_tick=previous_tick,
+    )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=policy,
@@ -174,10 +178,7 @@ async def advance_manual_tick(
             event_type=event.event_type,
             participant_ids={str(agent_id) for agent_id in participant_ids},
         ),
-        WorldSnapshot(
-            simulation_id=str(simulation.id),
-            current_tick=previous_tick,
-        ),
+        snapshot,
     )
     if tick_result.status != "completed" or batch is None:
         raise RuntimeError("TickEngine completed without a Runtime batch")
@@ -190,4 +191,9 @@ async def advance_manual_tick(
         current_day=current_day,
         agent_names={agent.id: agent.name for agent in agents},
         runtime_results=batch.results,
+        retrieval_traces=tick_result.retrieval_traces,
+        retrieved_memories={
+            agent_id: tuple(memories)
+            for agent_id, memories in snapshot.data.get("memories", {}).items()
+        },
     )

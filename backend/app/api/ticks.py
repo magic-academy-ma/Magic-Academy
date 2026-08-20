@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -32,6 +32,21 @@ class AgentTickResultResponse(BaseModel):
     failure_reason: str | None
 
 
+class AgentMemoryItem(BaseModel):
+    id: str
+    content: str
+    memory_type: str
+    importance: int
+    created_tick: int
+    event_id: str | None = None
+
+
+class AgentMemoryResponse(BaseModel):
+    agent_id: str
+    memory_ids_passed: list[str]
+    memories: list[AgentMemoryItem]
+
+
 class TickAdvanceResponse(BaseModel):
     simulation_id: UUID
     previous_tick: int
@@ -39,6 +54,7 @@ class TickAdvanceResponse(BaseModel):
     current_day: int
     status: str
     agent_results: list[AgentTickResultResponse]
+    retrieved_memories: list[AgentMemoryResponse] = Field(default_factory=list)
 
 
 router = APIRouter(tags=["ticks"])
@@ -64,8 +80,8 @@ def advance_tick(
             status_code=409,
             content={
                 "error": {
-                "code": "TICK_ALREADY_RUNNING",
-                "message": "이미 진행 중인 Tick이 있습니다.",
+                    "code": "TICK_ALREADY_RUNNING",
+                    "message": "이미 진행 중인 Tick이 있습니다.",
                 }
             },
         )
@@ -92,5 +108,23 @@ def advance_tick(
                 failure_reason=runtime_result.failure_reason,
             )
             for runtime_result in result.runtime_results
+        ],
+        retrieved_memories=[
+            AgentMemoryResponse(
+                agent_id=agent_id,
+                memory_ids_passed=memory_ids,
+                memories=[
+                    AgentMemoryItem(
+                        id=memory.id,
+                        content=memory.content,
+                        memory_type=memory.memory_type,
+                        importance=memory.importance,
+                        created_tick=memory.created_tick,
+                        event_id=memory.event_id,
+                    )
+                    for memory in result.retrieved_memories.get(agent_id, ())
+                ],
+            )
+            for agent_id, memory_ids in result.retrieval_traces.items()
         ],
     )
