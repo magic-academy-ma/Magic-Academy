@@ -287,6 +287,7 @@ class AgentRuntimeResult(StrictModel):
     agent_id: UUID
     status: RuntimeStatus
     intent: IntentCandidate
+    memory_candidate: MemoryCandidateItem | None = None
     retry_count: int = Field(ge=0)
     failure_reason: str | None
     model: str
