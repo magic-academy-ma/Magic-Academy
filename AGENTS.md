@@ -215,7 +215,7 @@ docs/
 
 ---
 
-## 역할별 페르소나
+## 역할별 페르소나 (3종 활동 기반 통합)
 
 > **세션 시작 전**: 작업 유형에 맞는 페르소나를 선택하고, 지정된 문서를 로드한다.  
 > 기획·스펙 → `@pm` / Slice 구현 → `@dev` / 프론트엔드 → `@fe`  
@@ -246,11 +246,26 @@ docs/
 - `docs/05-team-rules/definition-of-done.md`
 - `docs/05-team-rules/git-workflow-commit.md`
 
+**구현 원칙**
+- TDD 기반: 실패하는 테스트 먼저 작성 ➡️ 구현
+- `develop` 직접 커밋 금지: 항상 `worktree` 또는 피처 브랜치에서 격리 작업
+- 도메인 3축(관계·조직·사건) 및 Time Tick(1 Tick = 8분) 규칙 준수
+
 ---
 
 ### @fe — 프론트엔드
 
-**주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 표시
+**주요 담당**: React + React Flow, 화면 컴포넌트, Agent 상태 시각화, Mock 기반 화면 완성
+
+**워크플로우**
+1. Figma URL 받기 ➡️ `/spec-draft` 스킬 (Figma URL 입력)로 스펙 초안 및 Mock Fixture 생성
+2. `docs/04-feature-specs/FR-XX-screen.md` 파일 확인 후 Mock Data 기반으로 React 컴포넌트 즉시 구현
+3. 로컬 브라우저 검증 (`VITE_USE_MOCK=true npm run dev`) 후 PR 생성 ➡️ 팀 코드 리뷰 ➡️ 머지
+
+**구현 원칙**
+- 화면 하나 = 스펙 하나 = PR 하나
+- 기존 `frontend/src/` 패턴 따르기
+- 백엔드 미완성 시 스펙의 Mock Data Fixture(`src/mocks/fixtures/`)를 활용하여 독립 실행 가능하게 구현
 
 **자동 로딩 문서**
 - `docs/02-domain/`
@@ -258,3 +273,4 @@ docs/
 - `docs/03-system-design/user-flow.md`
 - `docs/04-feature-specs/` (FE 관련)
 - `docs/05-team-rules/conventions.md`
+- `frontend/src/App.jsx` (기존 패턴 참조)
