@@ -1,3 +1,4 @@
+from app.simulation.agent_runtime import RelationshipSignalType, StateSignalType
 from app.simulation.policy.models import (
     METRIC_RANGE,
     EffectCandidate,
@@ -7,8 +8,6 @@ from app.simulation.policy.models import (
     PolicyStatus,
 )
 from app.simulation.policy.registries.signal_policy import get_relationship_delta, get_state_delta
-from app.simulation.policy.types import RelationshipSignalType, StateSignalType
-from app.simulation.policy.validators import validate_runtime_result
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
 
@@ -84,56 +83,133 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
     has_rejection = False
 
     for runtime_result in inp.runtime_results:
-        errors = validate_runtime_result(runtime_result, inp.valid_agent_ids)
-        if errors:
-            rejected.append({"agent_id": runtime_result.agent_id, "reasons": errors})
-            has_rejection = True
-            continue
+        source_agent_id = str(runtime_result.agent_id)
+        reaction = runtime_result.intent.reaction
+        action_type = runtime_result.intent.action_type
+        seen_effect_source_keys: set[tuple[str, ...]] = set()
 
-        if runtime_result.reaction is None:
-            continue
-
-        for idx, signal in enumerate(runtime_result.reaction.relationship_signals):
+        relationship_directions: dict[tuple[str, str], set[int]] = {}
+        for signal in reaction.relationship_signals:
             metric = RELATIONSHIP_SIGNAL_TO_METRIC.get(signal.signal_type)
+            if metric is not None:
+                key = (metric, str(signal.target_agent_id))
+                relationship_directions.setdefault(key, set()).add(
+                    1 if signal.signal_type.value.endswith("_UP") else -1
+                )
+
+        conflicting_relationship_keys = {
+            key for key, directions in relationship_directions.items() if len(directions) > 1
+        }
+        for metric, target_agent_id in sorted(conflicting_relationship_keys):
+            warnings.append(
+                f"conflicting relationship signals: {source_agent_id} → "
+                f"{target_agent_id} {metric}"
+            )
+
+        state_directions: dict[str, set[int]] = {}
+        for signal in reaction.state_signals:
+            metric = STATE_SIGNAL_TO_METRIC.get(signal.signal_type)
+            if metric is not None:
+                state_directions.setdefault(metric, set()).add(
+                    1 if signal.signal_type.value.endswith("_UP") else -1
+                )
+        conflicting_state_metrics = {
+            metric for metric, directions in state_directions.items() if len(directions) > 1
+        }
+        for metric in sorted(conflicting_state_metrics):
+            warnings.append(f"conflicting state signals: {source_agent_id} {metric}")
+
+        for signal in reaction.relationship_signals:
+            metric = RELATIONSHIP_SIGNAL_TO_METRIC.get(signal.signal_type)
+            target_agent_id = str(signal.target_agent_id)
             if metric is None:
                 warnings.append(f"unknown relationship signal: {signal.signal_type}")
                 continue
-            pair_key = (runtime_result.agent_id, signal.target_agent_id)
+            if signal.target_agent_id == runtime_result.agent_id or target_agent_id not in inp.valid_agent_ids:
+                rejected.append({
+                    "agent_id": source_agent_id,
+                    "target_agent_id": target_agent_id,
+                    "signal_type": signal.signal_type,
+                    "reason": "INVALID_RELATIONSHIP_TARGET",
+                })
+                has_rejection = True
+                continue
+            if (metric, target_agent_id) in conflicting_relationship_keys:
+                rejected.append({
+                    "agent_id": source_agent_id,
+                    "target_agent_id": target_agent_id,
+                    "signal_type": signal.signal_type,
+                    "reason": "CONFLICTING_DUPLICATE_EFFECT",
+                })
+                has_rejection = True
+                continue
+            rule_id = f"REL_{signal.signal_type}_{signal.intensity}"
+            effect_source_key = (
+                runtime_result.idempotency_key,
+                "RELATIONSHIP",
+                source_agent_id,
+                target_agent_id,
+                metric,
+                rule_id,
+            )
+            if effect_source_key in seen_effect_source_keys:
+                continue
+            seen_effect_source_keys.add(effect_source_key)
+            pair_key = (source_agent_id, target_agent_id)
             rel_snapshot = rel_index.get(pair_key)  # None이면 첫 만남 → 초기값 0
             current = rel_snapshot.get(metric, 0) if rel_snapshot is not None else 0
             delta = get_relationship_delta(signal.signal_type, signal.intensity)
             after_preview = _clamp_preview(current, delta, metric)
             effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:rel:{signal.signal_type}:{signal.target_agent_id}:{idx}",
+                effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:rel:{signal.signal_type}:{target_agent_id}",
                 target_type=EffectTargetType.RELATIONSHIP,
-                source_agent_id=runtime_result.agent_id,
-                target_agent_id=signal.target_agent_id,
+                source_agent_id=source_agent_id,
+                target_agent_id=target_agent_id,
                 metric=metric,
                 delta=delta,
                 before=current,
                 after_preview=after_preview,
-                rule_id=f"REL_{signal.signal_type}_{signal.intensity}",
-                reason=f"{runtime_result.action_type}의 {signal.intensity} {signal.signal_type} 반응",
+                rule_id=rule_id,
+                reason=f"{action_type}의 {signal.intensity} {signal.signal_type} 반응",
             ))
 
-        for idx, signal in enumerate(runtime_result.reaction.state_signals):
+        for signal in reaction.state_signals:
             metric = STATE_SIGNAL_TO_METRIC.get(signal.signal_type)
             if metric is None:
                 warnings.append(f"unknown state signal: {signal.signal_type}")
                 continue
-            current = state_index.get(runtime_result.agent_id, {}).get(metric, 0)
+            if metric in conflicting_state_metrics:
+                rejected.append({
+                    "agent_id": source_agent_id,
+                    "signal_type": signal.signal_type,
+                    "reason": "CONFLICTING_DUPLICATE_EFFECT",
+                })
+                has_rejection = True
+                continue
+            rule_id = f"STATE_{signal.signal_type}_{signal.intensity}"
+            effect_source_key = (
+                runtime_result.idempotency_key,
+                "AGENT_STATE",
+                source_agent_id,
+                metric,
+                rule_id,
+            )
+            if effect_source_key in seen_effect_source_keys:
+                continue
+            seen_effect_source_keys.add(effect_source_key)
+            current = state_index.get(source_agent_id, {}).get(metric, 0)
             delta = get_state_delta(signal.signal_type, signal.intensity)
             after_preview = _clamp_preview(current, delta, metric)
             effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{runtime_result.agent_id}:state:{signal.signal_type}:{idx}",
+                effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:state:{signal.signal_type}",
                 target_type=EffectTargetType.AGENT_STATE,
-                source_agent_id=runtime_result.agent_id,
+                source_agent_id=source_agent_id,
                 target_agent_id=None,
                 metric=metric,
                 delta=delta,
                 before=current,
                 after_preview=after_preview,
-                rule_id=f"STATE_{signal.signal_type}_{signal.intensity}",
+                rule_id=rule_id,
                 reason=f"{signal.intensity} {signal.signal_type} 반응",
             ))
 
