@@ -14,6 +14,7 @@ description: 현재 브랜치의 diff와 커밋 내역을 분석해 Magic Academ
    - `git diff origin/{base}...HEAD --stat` 및 `git log origin/{base}...HEAD --oneline` 확인
    - 브랜치명 또는 사용자 입력에서 관련 Issue 번호 추출
    - 연결할 Issue 내용 확인 (`gh issue view {이슈번호}`)
+   - Issue 번호를 찾지 못하면 Issue 조회를 생략하고 `관련 Issue 없음`으로 작성
 2. **사전 검증**:
    - PR 변경 규모 확인 (권장: 300~500줄 이내 / 1,000줄 이상 시 분리 권고)
    - Public 저장소 보안 검증 (시크릿, API 키, 팀원 개인정보·내부 KPI 포함 여부)
