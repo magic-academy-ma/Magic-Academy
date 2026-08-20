@@ -1,12 +1,25 @@
 * { box-sizing: border-box; }
 button, input { font: inherit; }
 button { cursor: pointer; }
-.app-shell, .auth-shell { min-height: 100vh; background: #f5f3ff; color: #211a2b; }
+.app-shell, .auth-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgb(6 12 20 / 42%), rgb(6 12 20 / 42%)),
+    url("./assets/magic-academy-background.png") center / cover fixed;
+  color: #211a2b;
+}
 .auth-shell { display: grid; place-items: center; }
 header { height: 72px; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #ddd6fe; }
 .profile { display: grid; text-align: right; }.profile small { color: #6b7280; }
 main { padding: 32px; }
-.panel { background: #fff; border: 1px solid #ddd6fe; border-radius: 14px; padding: 24px; box-shadow: 0 8px 28px #4c1d9512; }
+.panel {
+  background: rgb(255 255 255 / 86%);
+  border: 1px solid rgb(255 255 255 / 58%);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 12px 36px rgb(6 12 20 / 28%);
+  backdrop-filter: blur(16px);
+}
 .auth-panel, .create-panel { width: min(440px, calc(100vw - 32px)); margin: 8vh auto; display: grid; gap: 16px; }
 label { display: grid; gap: 6px; text-align: left; font-weight: 600; }
 input { padding: 10px 12px; border: 1px solid #c4b5fd; border-radius: 8px; background: #fff; color: #211a2b; }
