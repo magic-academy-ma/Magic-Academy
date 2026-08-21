@@ -1,7 +1,41 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from uuid import UUID
 
+from app.domain.models import Agent
 from app.simulation.agent_runtime import AgentContext
+
+# User Persona는 별도 Runtime 없이 기존 Student와 동일하게 편성된다 (Slice 4 Task 0 계약).
+STUDENT_AGENT_TYPES = frozenset({"student", "user_persona"})
+PROFESSOR_AGENT_TYPE = "professor"
+
+
+def select_tick_participant_ids(
+    agents: Sequence[Agent],
+    *,
+    event_participant_agent_ids: Iterable[UUID] = (),
+    schedule_requires_professor: bool = False,
+) -> tuple[UUID, ...]:
+    """Tick 실행 대상 Agent.id를 편성한다.
+
+    Student(User Persona 포함)는 항상 포함하고, Professor는 Event 참여자이거나
+    Schedule 조건을 충족할 때만 추가한다. agents 순서를 보존하고 중복 id는 제거한다.
+    """
+    participant_event_id_set = set(event_participant_agent_ids)
+    seen_ids: set[UUID] = set()
+    participant_ids: list[UUID] = []
+    for agent in agents:
+        if agent.id in seen_ids:
+            continue
+        if agent.agent_type in STUDENT_AGENT_TYPES:
+            include = True
+        elif agent.agent_type == PROFESSOR_AGENT_TYPE:
+            include = schedule_requires_professor or agent.id in participant_event_id_set
+        else:
+            include = False
+        if include:
+            seen_ids.add(agent.id)
+            participant_ids.append(agent.id)
+    return tuple(participant_ids)
 
 
 class RuntimeTargetSelector:
