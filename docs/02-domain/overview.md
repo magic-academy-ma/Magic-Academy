@@ -1,9 +1,9 @@
 ---
 title: 도메인 개요
-source: local/CLAUDE.md + 2차 회의록
 status: approved
-visibility: public
 updated: 2026-07-13
+visibility: public
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 도메인 개요
@@ -28,7 +28,7 @@ Magic Academy 시뮬레이션은 **3축(관계·조직·사건)**으로 구동�
 
 ## 시뮬레이션 진행 방식
 
-- 시간 단위: **Time Tick** (잠정 24분 = 1일)
+- 시간 단위: **Time Tick** — 1 Tick = 8분 = 1블록, 1일 = 3블록 (MORNING·AFTERNOON·EVENING)
 - 입학 시점부터 Tick이 흐르며 사건이 발생하고 관계가 누적된다
 - 사용자가 없어도 자율 진행, 개입 시 User Persona Agent를 통해 결과가 달라진다
 
@@ -41,4 +41,4 @@ Magic Academy 시뮬레이션은 **3축(관계·조직·사건)**으로 구동�
 | `organizations.md` | 조직 목록·소속 규칙 |
 | `events.md` | 사건 목록·트리거·효과 |
 | `time-and-space.md` | Time Tick·공간·날씨 |
-| `glossary.md` | 전체 용어 정의 |
+

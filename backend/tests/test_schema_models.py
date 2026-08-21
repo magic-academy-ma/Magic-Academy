@@ -2,6 +2,7 @@ import unittest
 
 from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.domain import models  # noqa: F401
@@ -56,6 +57,7 @@ class SchemaModelTests(unittest.TestCase):
             "idx_agents_runtime_active",
             "idx_agent_memories_agent_occurred",
             "idx_agent_memories_cleanup",
+            "idx_agent_memories_embedding_hnsw",
             "idx_relationships_source_updated",
             "idx_events_simulation_started",
             "idx_organizations_simulation_id",
@@ -146,8 +148,18 @@ class SchemaModelTests(unittest.TestCase):
                 constraints[f"ck_relationships_{metric}"],
             )
 
-    def test_embedding_column_is_deferred_until_dimension_is_decided(self) -> None:
-        self.assertNotIn("embedding", Base.metadata.tables["agent_memories"].c)
+    def test_memory_embedding_uses_vector_1536_and_hnsw_cosine_index(self) -> None:
+        memories = Base.metadata.tables["agent_memories"]
+        self.assertIsInstance(memories.c.embedding.type, Vector)
+        self.assertEqual(memories.c.embedding.type.dim, 1536)
+        index = next(
+            item for item in memories.indexes
+            if item.name == "idx_agent_memories_embedding_hnsw"
+        )
+        options = index.dialect_options["postgresql"]
+        self.assertEqual(options["using"], "hnsw")
+        self.assertEqual(options["ops"], {"embedding": "vector_cosine_ops"})
+        self.assertEqual(options["with"], {"m": 16, "ef_construction": 64})
 
 
 if __name__ == "__main__":

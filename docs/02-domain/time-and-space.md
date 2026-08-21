@@ -1,9 +1,9 @@
 ---
 title: 시간과 공간
-source: local/CLAUDE.md + 2차 회의록
 status: approved
-visibility: public
 updated: 2026-08-08
+visibility: public
+source: local/CLAUDE.md + 2차 회의록
 ---
 
 # 시간과 공간 (배경)
