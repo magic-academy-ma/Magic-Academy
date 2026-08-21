@@ -10,6 +10,7 @@ from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
 from app.services.simulation_tick import SimulationTickService
+from app.services.simulation_snapshots import SimulationSnapshotService
 from app.simulation.agent_runtime import (
     AgentRuntime,
     AgentRuntimeResult,
@@ -185,6 +186,7 @@ async def advance_manual_tick(
     simulation.current_tick = current_tick
     simulation.current_day = current_day
     db.flush()
+    SimulationSnapshotService().create_snapshot(db, simulation)
     return ManualTickResult(
         previous_tick=previous_tick,
         current_tick=current_tick,

@@ -27,15 +27,20 @@ class SchemaModelTests(unittest.TestCase):
                 "organization_memberships",
                 "events",
                 "event_participants",
+                "simulation_configs",
+                "simulation_snapshots",
             },
         )
 
-    def test_primary_and_foreign_keys_use_postgresql_uuid(self) -> None:
+    def test_primary_keys_use_uuid_and_foreign_key_types_match(self) -> None:
         for table in Base.metadata.tables.values():
             for primary_key in table.primary_key.columns:
                 self.assertIsInstance(primary_key.type, UUID)
             for foreign_key in table.foreign_keys:
-                self.assertIsInstance(foreign_key.parent.type, UUID)
+                self.assertIsInstance(
+                    foreign_key.parent.type,
+                    type(foreign_key.column.type),
+                )
 
     def test_required_unique_constraints_and_indexes_exist(self) -> None:
         expected_names = {
@@ -61,6 +66,9 @@ class SchemaModelTests(unittest.TestCase):
             "idx_relationships_source_updated",
             "idx_events_simulation_started",
             "idx_organizations_simulation_id",
+            "uq_simulation_configs_version",
+            "uq_simulation_snapshots_tick",
+            "idx_simulation_snapshots_timeline",
         }
         actual_names = {
             item.name
