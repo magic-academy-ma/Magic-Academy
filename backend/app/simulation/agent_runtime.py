@@ -388,19 +388,20 @@ class MockLLMClient:
     def generate(self, runtime_input: AgentRuntimeInput) -> object:
         if self._response is not None:
             return deepcopy(self._response)
-        if runtime_input.agent.fixture_key != "student-01":
-            raise ValueError("default mock response is only defined for student-01")
         class_event = next(
             event for event in runtime_input.events if event.event_type == EventType.CLASS
         )
+        is_professor = runtime_input.agent.agent_type == "professor"
+        action_type = "TEACH_CLASS" if is_professor else "ATTEND_CLASS"
         response = {
-            "action_type": "ATTEND_CLASS",
+            "action_type": action_type,
             "target_agent_id": None,
             "target_location_id": str(class_event.location_id),
             "related_event_id": str(class_event.event_id),
             "utterance": None,
             "motivation_summary": (
-                "아델은 책임감 있게 예정된 수업에 참석하려 한다."
+                f"{runtime_input.agent.name}은 예정된 수업에 "
+                f"{'진행' if is_professor else '참석'}하려 한다."
             ),
             "reaction": {
                 "valence": "NEUTRAL",
@@ -412,8 +413,10 @@ class MockLLMClient:
             "decision_explanation": {
                 "alternatives": [
                     {
-                        "action_type": "ATTEND_CLASS",
-                        "description": "예정된 수업에 참석한다.",
+                        "action_type": action_type,
+                        "description": "예정된 수업을 진행한다."
+                        if is_professor
+                        else "예정된 수업에 참석한다.",
                         "relative_priority": "HIGH",
                         "selected": True,
                     },
