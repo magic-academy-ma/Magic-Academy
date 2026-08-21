@@ -18,8 +18,51 @@ const agents = ['professor-01', 'student-01', 'student-02', 'student-03', 'stude
   location: { id: `01900000-0000-7000-8000-00000000002${index}`, code: key.startsWith('student') ? 'dormitory' : 'classroom', name: key.startsWith('student') ? '기숙사' : '교실' },
 }))
 
+// User Persona 설정 옵션 (UserPersonaSetup이 workspace 진입과 동시에 조회한다).
+const personaConfigData = {
+  rule_version: 'mbti-big-five-v0.1',
+  global_min: -50,
+  global_max: 50,
+  step: 5,
+  mbti_rules: {
+    ISTJ: {
+      openness: { min: -45, default: -25, max: 5 },
+      conscientiousness: { min: -15, default: 25, max: 45 },
+      extraversion: { min: -45, default: -25, max: 5 },
+      agreeableness: { min: -45, default: -20, max: 15 },
+      emotional_stability: { min: -50, default: 0, max: 50 },
+    },
+  },
+}
+
 function response(body, status = 200) {
   return Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) })
+}
+
+// 여러 번 호출되는 엔드포인트(예: 재시도)를 순서대로 흘려보내고, 배열이 소진되면 마지막 항목을 반복한다.
+function sequence(handlers) {
+  let index = 0
+  return () => {
+    const handler = handlers[Math.min(index, handlers.length - 1)]
+    index += 1
+    return handler()
+  }
+}
+
+// mockImplementationOnce 체인 대신 URL 기준으로 분기하는 공용 mock을 사용한다.
+function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {}) {
+  const loginHandler = login ?? (() => response({ access_token: 'token', token_type: 'bearer', user }))
+  const createSimHandler = createSimulation ?? (() => response(simulation, 201))
+  const agentsHandler = agentsHandlers ? sequence(agentsHandlers) : () => response(agents)
+
+  return vi.spyOn(globalThis, 'fetch').mockImplementation((url, options = {}) => {
+    if (url.endsWith('/v1/auth/login')) return loginHandler()
+    if (url.endsWith('/v1/simulations') && options.method === 'POST') return createSimHandler()
+    if (url.endsWith('/agents')) return agentsHandler()
+    if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
+    if (url.includes('/user-persona')) return response({}, 404) // 아직 미설정 (정상 상태)
+    return response({}, 404)
+  })
 }
 
 afterEach(() => {
@@ -35,10 +78,7 @@ async function login() {
 
 describe('Slice 0 UI', () => {
   it('logs in, creates a simulation, and renders six API agents', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
-      .mockImplementationOnce(() => response(simulation, 201))
-      .mockImplementationOnce(() => response(agents))
+    createFetchMock()
     render(<App />)
     await login()
     expect(await screen.findByText('Owner A')).toBeInTheDocument()
@@ -58,10 +98,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('shows an empty-agent message', async () => {
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
-      .mockImplementationOnce(() => response(simulation, 201))
-      .mockImplementationOnce(() => response([]))
+    createFetchMock({ agents: [() => response([])] })
     render(<App />)
     await login()
     await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
@@ -69,11 +106,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('keeps the created simulation and retries only the agent request', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
-      .mockImplementationOnce(() => response(simulation, 201))
-      .mockImplementationOnce(() => response({}, 500))
-      .mockImplementationOnce(() => response(agents))
+    const fetchMock = createFetchMock({ agents: [() => response({}, 500), () => response(agents)] })
 
     render(<App />)
     await login()
@@ -84,7 +117,7 @@ describe('Slice 0 UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Agent 다시 불러오기' }))
 
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/agents'))).toHaveLength(2)
     expect(fetchMock.mock.calls.filter(([url, options]) =>
       url.endsWith('/v1/simulations') && options?.method === 'POST'
     )).toHaveLength(1)
@@ -92,11 +125,13 @@ describe('Slice 0 UI', () => {
 
   it('clears the previous user session state after an agent request returns 401', async () => {
     const nextUser = { ...user, id: '01900000-0000-7000-8000-000000000099', username: 'owner-b', display_name: 'Owner B' }
-    vi.spyOn(globalThis, 'fetch')
-      .mockImplementationOnce(() => response({ access_token: 'token-a', token_type: 'bearer', user }))
-      .mockImplementationOnce(() => response(simulation, 201))
-      .mockImplementationOnce(() => response({}, 401))
-      .mockImplementationOnce(() => response({ access_token: 'token-b', token_type: 'bearer', user: nextUser }))
+    createFetchMock({
+      login: sequence([
+        () => response({ access_token: 'token-a', token_type: 'bearer', user }),
+        () => response({ access_token: 'token-b', token_type: 'bearer', user: nextUser }),
+      ]),
+      agents: [() => response({}, 401)],
+    })
 
     render(<App />)
     await login()

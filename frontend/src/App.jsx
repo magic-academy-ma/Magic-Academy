@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
+import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin }) {
@@ -54,6 +55,7 @@ export default function App() {
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
+  const [personaAgentId, setPersonaAgentId] = useState(null);
   const [name, setName] = useState("Slice 0 Simulation");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,6 +65,7 @@ export default function App() {
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
+    setPersonaAgentId(null);
     setError("");
   }
 
@@ -110,6 +113,9 @@ export default function App() {
       setLoading(false);
     }
   }
+  
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "STUDENT");
 
   return (
     <div className="app-shell">
@@ -130,13 +136,43 @@ export default function App() {
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
-              {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
+              {agents.map((agent) => (
+                <button
+                  data-agent-id={agent.id}
+                  className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent)}
+                >
+                  <b>{agent.name}</b>
+                  <span>{agent.agent_type} · {agent.mbti_type}</span>
+                  {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
+                </button>
+              ))}
             </div>
+
+            <UserPersonaSetup
+              simulationId={simulation.id}
+              students={students}
+              token={auth.access_token}
+              onSaved={(result) => setPersonaAgentId(result.agent_id)}
+            />
+
             <aside className="panel inspector">
               <h2>Inspector</h2>
               {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
                 <h3>{selectedAgent.name}</h3>
-                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
+                <dl>
+                  <dt>Persona 여부</dt><dd>{selectedAgent.id === personaAgentId ? "예 (User Persona)" : "아니오"}</dd>
+                  <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+                  <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+                  <dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd>
+                  <dt>위치</dt><dd>{selectedAgent.location.name}</dd>
+                  <dt>기분</dt><dd>{selectedAgent.state.mood}</dd>
+                  <dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd>
+                  <dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd>
+                  <dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd>
+                  <dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd>
+                </dl>
               </>}
             </aside>
           </section>
