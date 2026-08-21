@@ -71,5 +71,6 @@ def test_tick_response_contract_does_not_expose_internal_fields():
     assert response["status"] == "COMPLETED"
     assert response["agent_results"][0]["runtime_status"] == "PROPOSED"
     assert response["relationship_deltas"][0]["delta"] == 3
+    assert response["retrieved_memories"] == []
     assert "participant_ids" not in response
     assert "runtime_outputs" not in response

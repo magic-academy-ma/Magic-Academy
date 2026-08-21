@@ -15,11 +15,11 @@ from app.simulation.agent_runtime import (
     AgentRuntime,
     AgentRuntimeResult,
     Block,
-    MockLLMClient,
     ScheduleSummary,
 )
 from app.simulation.tick_engine import (
     AgentType,
+    MemoryItem,
     PolicyFn,
     TickAgent,
     TickEngine,
@@ -40,6 +40,8 @@ class ManualTickResult:
     agent_names: dict[UUID, str]
     runtime_results: tuple[AgentRuntimeResult, ...]
     policy_result: PolicyCommitResult
+    retrieval_traces: dict[str, list[str]]
+    retrieved_memories: dict[str, tuple[MemoryItem, ...]]
 
 
 def tick_position(tick_number: int) -> tuple[int, Block]:
@@ -56,6 +58,7 @@ async def advance_manual_tick(
     db: Session,
     simulation: Simulation,
     *,
+    runtime: AgentRuntime,
     policy: PolicyFn | None = None,
 ) -> ManualTickResult:
     locked = db.scalar(
@@ -116,7 +119,7 @@ async def advance_manual_tick(
     service = SimulationTickService(
         RuntimeInputAdapter(
             RuntimeOrchestrator(
-                AgentRuntime(MockLLMClient()),
+                runtime,
                 DatabaseRuntimeResultSink(db),
             )
         )
@@ -176,6 +179,10 @@ async def advance_manual_tick(
         )
         for agent_id in preselected_ids
     ]
+    snapshot = WorldSnapshot(
+        simulation_id=str(simulation.id),
+        current_tick=previous_tick,
+    )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=evaluate_policy_batch,
@@ -186,10 +193,7 @@ async def advance_manual_tick(
             event_type=event.event_type,
             participant_ids={str(agent_id) for agent_id in participant_ids},
         ),
-        WorldSnapshot(
-            simulation_id=str(simulation.id),
-            current_tick=previous_tick,
-        ),
+        snapshot,
     )
     if tick_result.status != "completed" or batch is None or policy_result is None:
         raise RuntimeError("TickEngine completed without a Runtime batch")
@@ -203,4 +207,9 @@ async def advance_manual_tick(
         agent_names={agent.id: agent.name for agent in agents},
         runtime_results=batch.results,
         policy_result=policy_result,
+        retrieval_traces=tick_result.retrieval_traces,
+        retrieved_memories={
+            agent_id: tuple(memories)
+            for agent_id, memories in snapshot.data.get("memories", {}).items()
+        },
     )
