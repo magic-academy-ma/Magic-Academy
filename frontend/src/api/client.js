@@ -27,25 +27,25 @@ export async function apiRequest(path, { token, ...options } = {}) {
   }
 
   if (!response.ok) {
-
     // 두 가지 에러 포맷을 모두 지원한다.
+    const code = body?.code ?? body?.error?.code;
+    const serverMessage = body?.message ?? body?.error?.message;
+
     const message =
-      (typeof body?.message === "string" && body.message) ||
-      (typeof body?.error?.message === "string" && body.error.message) ||
+      (typeof serverMessage === "string" && serverMessage) ||
       (typeof body?.detail === "string" && body.detail) ||
       ERROR_MESSAGES[response.status] ||
       `요청에 실패했습니다. (${response.status})`;
 
     const error = new Error(message);
     error.status = response.status;
-    error.code = body?.code ?? body?.error?.code;
-    error.details = body?.details;
+    error.code = code;
+    error.details = body?.details ?? body?.error?.details;
 
     throw error;
   }
 
   return body;
-}
 
 // --- User Persona (Slice 4 Task 4) ---
 export async function getUserPersonaConfig(simulationId, { token } = {}) {
@@ -87,4 +87,4 @@ export async function startSimulation(simulationId, { token } = {}) {
     }
   );
   return response.data;
-
+}
