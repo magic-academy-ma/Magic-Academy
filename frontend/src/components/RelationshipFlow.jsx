@@ -39,62 +39,12 @@ function DeltaEdge({ id, sourceX, sourceY, targetX, targetY, data }) {
 
 const edgeTypes = { delta: DeltaEdge };
 
-// --- agent 2명 (mock) ---
-const nodes = [
-  {
-    id: "3",
-    position: { x: 0, y: 100 },
-    data: { label: "Agent 3" },
-  },
-  {
-    id: "7",
-    position: { x: 300, y: 100 },
-    data: { label: "Agent 7" },
-  },
-];
-
-// --- 그 사이 관계 edge (mock delta 포함) ---
-const edges = [
-  {
-    id: "e3-7",
-    source: "3",
-    target: "7",
-    type: "delta",
-    data: {
-      effects: [
-        {
-          effect_id: "sim-20260721-01:42:3:reaction:TRUST_UP:7",
-          target_type: "RELATIONSHIP",
-          source_agent_id: 3,
-          target_agent_id: 7,
-          metric: "trust",
-          delta: 3,
-          before: 21,
-          after_preview: 24,
-          reason: "TALK의 MEDIUM TRUST_UP 반응",
-          rule_id: "REL_SIGNAL_TRUST_UP_MEDIUM",
-        },
-        {
-          effect_id: "sim-20260721-01:42:7:reaction:TENSION_UP:3",
-          target_type: "RELATIONSHIP",
-          source_agent_id: 7,
-          target_agent_id: 3,
-          metric: "tension",
-          delta: 2,
-          before: 20,
-          after_preview: 22,
-          reason: "의식 실패로 긴장 고조",
-        },
-      ],
-    },
-  },
-];
-export default function RelationshipFlow({ nodes: nodesProp = nodes, edges: edgesProp = edges }) {
-  const hasChanges = edgesProp.some((e) => e.data?.effects?.length > 0);
+export default function RelationshipFlow({ nodes = [], edges = [] }) {
+  const hasChanges = edges.some((e) => e.data?.effects?.length > 0);
 
   return (
     <div style={{ width: "100%", height: 400, position: "relative" }}>
-      <ReactFlow nodes={nodesProp} edges={edgesProp} edgeTypes={edgeTypes} fitView>
+      <ReactFlow nodes={nodes} edges={edges} edgeTypes={edgeTypes} fitView>
         <Background />
         <Controls />
       </ReactFlow>
