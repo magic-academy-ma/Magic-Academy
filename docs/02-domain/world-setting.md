@@ -1,20 +1,14 @@
 ---
 title: "[전제 조건] Magic Academy 세계관 설정"
-source: confluence/05_TECH/[전제조건] Magic Academy 세계관 설정
-canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/10911745
 status: draft
-visibility: public
 updated: 2026-08-06
-source_updated: 2026-08-04
+visibility: public
+source: confluence/01-product-planning/world-setting.md
+canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/10911745
+source_updated: 2026-08-06
 ---
 
 # [전제 조건] Magic Academy 세계관 설정
-
-> **상태:** Draft
-> **작성자:** @Jehye
-> **담당자:** @Jehye
-> **작성일 / 최종 수정일:** 2026-07-18 / 2026-07-31
-> **기준 문서:** [[Policy] MBTI → Big Five 초기값 및 허용 범위](https://jehye.atlassian.net/wiki/spaces/MA/pages/21791106) · [[Spec] Student Agent 초기값](https://jehye.atlassian.net/wiki/spaces/MA/pages/19496962)
 
 ## 0. 개요 및 목적
 
@@ -50,50 +44,8 @@ source_updated: 2026-08-04
 
 학생 Agent는 매 tick 현재 상태값, 성격, Memory, 다른 Agent와의 관계, 현재 위치, 진행 중인 이벤트를 바탕으로 행동을 결정한다.
 
-학생 Agent가 생성하는 주요 Intent:
-
-- TALK: 다른 Agent와 대화
-- MOVE: 다른 공간으로 이동
-- STUDY: 수업 참여 또는 개인 학습
-- REST: 휴식
-- EAT: 식사
-- PARTICIPATE: 이벤트 참여
-- AVOID: 특정 Agent 또는 이벤트 회피
-
-Agent는 Intent만 생성하며, 실제 상태값과 관계 수치의 변경은 Orchestrator가 검증한 후 반영한다.
-
-#### 상태값
-
-상태값은 시뮬레이션 중 지속적으로 변화하는 동적 값이며, mood는 -100~100, 나머지 값은 0~100 범위를 사용한다.
-
-| 상태값 | 0에 가까운 상태 | 100에 가까운 상태 |
-| --- | --- | --- |
-| 배고픔 | 배부름 | 매우 배고픔 |
-| 피로도 | 충분히 휴식함 | 매우 피곤함 |
-| 스트레스 | 안정됨 | 매우 스트레스받음 |
-| 만족도 | 현재 생활에 불만족 | 현재 생활에 만족 |
-| 기분 | 매우 부정적(-100) | 매우 긍정적(+100) |
-
-상태값은 행동 선택 확률에 영향을 준다. 예를 들어 배고픔이 높으면 식당으로 이동할 가능성이 증가하고, 피로도가 높으면 휴식 행동을 선택할 가능성이 증가한다.
-
-#### Memory
-
-각 Agent는 최대 10개의 Memory를 보유한다.
-
-Memory 유형:
-
-- OBSERVATION: 주변에서 관찰한 사건
-- CONVERSATION: 다른 Agent와 나눈 대화
-- REFLECTION: 사건이나 관계에 대한 해석
-- PLAN: 이후 수행하려는 행동
-
-행동 결정 시 최대 5개의 Memory를 사용한다.
-
-- 가장 최근 Memory 2개 고정
-- pgvector 유사도 검색 결과 상위 3개
-- 동일 Memory가 중복된 경우 제외
-
-Memory가 10개를 초과하면 중요도, 최신성, 관계 영향도를 기준으로 우선순위가 낮은 Memory를 삭제하거나 요약한다.
+Intent 종류 (`docs/03-system-design/agent-runtime.md §3.3 MVP Action Type` 참조), 상태값 (배고픔·피로도·스트레스·만족도·기분) 정의, Memory 규칙 (상한 10개, 유형 4종, 검색, 초과 처리): `docs/03-system-design/agent-runtime.md` 참조.  
+상태값 범위 및 설명: `docs/02-domain/agents.md §공통 내부 상태` 참조.
 
 ### 2.2 기본 Student Agent 생성
 
@@ -264,35 +216,7 @@ Event Master가 생성하는 동적 이벤트는 Tick당 최대 1개로 제한�
 
 ## 5. 관계 시스템
 
-### 5.1 관계 척도
-
-| 척도 | 범위 | 방향 | 비고 |
-| --- | --- | --- | --- |
-| 호감도 | -100 ~ +100 | 단방향 | 초기값 0 |
-| 친밀도 | -100 ~ +100 | 단방향 | 초기값 0 |
-| 신뢰도 | -100 ~ +100 | 단방향 | 초기값 0 |
-| 긴장도 | 0 ~ +100 | 단방향 | 초기값 0 |
-| 경쟁 | 0 ~ +100 | 단방향 | 초기값 0 |
-| 의존도 | 0 ~ +100 | 단방향 | 초기값 0 |
-
-모든 관계는 **A→B**, **B→A**를 각각 별도로 저장한다.
-
-### 5.2 관계 종류 (확정)
-
-- 친구
-- 선후배
-- 라이벌
-- 고백
-- 배신
-- 화해
-
-관계 종류는 관계 척도와 최근 이벤트를 바탕으로 LLM이 판단한다. 복수 관계 공존 여부는 추후 결정한다.
-
-### 5.3 관계 변화 규칙
-
-관계는 CLASS, GROUP_PROJECT, EXAM, MEETING, MT, FESTIVAL, RANDOM_INCIDENT, 대화 및 공동 행동 결과에 따라 변화한다.
-
-Event는 관계 수치를 직접 변경하지 않으며, 관계 변화에 대한 정성적 결과만 생성한다. Policy Engine이 관계 delta를 계산하고 Orchestrator가 최종 반영한다.
+관계 척도 (6개, 범위·방향·초기값), 관계 종류, 관계 변화 규칙 상세: `docs/02-domain/relationships.md` 참조.
 
 ### 5.4 소속 효과
 

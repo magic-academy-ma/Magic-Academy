@@ -136,7 +136,7 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | PRD 부록 A (조직 축) | `02-domain/organizations.md` | 2026-07-13 |
 | ✅ | PRD 부록 A (사건 축) | `02-domain/events.md` | 2026-07-13 |
 | ✅ | PRD 부록 A (배경) | `02-domain/time-and-space.md` | 2026-07-13 |
-| ✅ | 전체 문서 취합 | `02-domain/glossary.md` | 2026-07-13 |
+| ❌ 폐기 | 전체 문서 취합 | `02-domain/glossary.md` (2026-08-13 폐기 — 각 도메인 파일에 통합) | 2026-07-13 |
 | ✅ | 05. Tech / [전제 조건] Magic Academy 세계관 설정 (#10911745) | `02-domain/world-setting.md` | 2026-08-06 |
 
 ---
