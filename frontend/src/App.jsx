@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "./api/client.js";
+import { buildSimulationSocketUrl } from "./api/socket.js";
+import { useSimulationSocket } from "./hooks/useSimulationSocket.js";
+import EventFeed from "./components/EventFeed.jsx";
+import RelationshipChangesPanel from "./components/RelationshipChangesPanel.jsx";
 import "./App.css";
+
+// Agent 상태 push가 없어 TICK_UPDATED 수신 시 REST로 재조회 (README 참고)
 
 function AuthPanel({ onLogin }) {
   const [mode, setMode] = useState("login");
@@ -66,8 +72,6 @@ export default function App() {
     setError("");
   }
 
-  if (!auth) return <AuthPanel onLogin={setAuth} />;
-
   async function loadAgents(simulationId) {
     setLoading(true);
     setError("");
@@ -87,6 +91,26 @@ export default function App() {
       setLoading(false);
     }
   }
+
+  // loadAgents와 달리 loading/error 상태를 건드리지 않는 조용한 재조회
+  const refreshAgentsSilently = useCallback(
+    async (simulationId) => {
+      try {
+        const agentList = await apiRequest(`/v1/simulations/${simulationId}/agents`, {
+          token: auth.access_token,
+        });
+        setAgents(agentList);
+      } catch (requestError) {
+        if (requestError.status === 401) {
+          resetSession();
+          return;
+        }
+        console.error("[App] Agent 상태 재조회 실패", requestError);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth]
+  );
 
   async function createSimulation(event) {
     event.preventDefault();
@@ -110,6 +134,52 @@ export default function App() {
       setLoading(false);
     }
   }
+
+  // AGENT_ACTION_UPDATED: action/location은 즉시 반영 가능 (명세에 데이터가 있음)
+  const handleAgentAction = useCallback((data) => {
+    setAgents((prev) =>
+      prev.map((agent) =>
+        agent.id === data.agent_id
+          ? { ...agent, current_action: data.action, current_location: data.location }
+          : agent
+      )
+    );
+  }, []);
+
+  // WS 재연결 = 그 사이 메시지가 유실됐을 수 있으므로 REST로 Agent 목록을 다시 불러옴
+  const handleReconnect = useCallback(() => {
+    if (simulation) refreshAgentsSilently(simulation.id);
+  }, [simulation, refreshAgentsSilently]);
+
+  // TICK_UPDATED = Commit 완료 = agent_states 변경 가능 시점 (Tick Engine 스펙 §1/§6)
+  const handleTickUpdated = useCallback(() => {
+    if (simulation) refreshAgentsSilently(simulation.id);
+  }, [simulation, refreshAgentsSilently]);
+
+  const wsUrl = simulation ? buildSimulationSocketUrl(simulation.id) : null;
+
+  const {
+    connected: wsConnected,
+    tick,
+    events: liveEvents,
+    relationshipUpdates,
+  } = useSimulationSocket({
+    wsUrl,
+    onAgentAction: handleAgentAction,
+    onTickUpdated: handleTickUpdated,
+    onReconnect: handleReconnect,
+  });
+
+  // agents 목록이 갱신되면 selectedAgent도 최신 상태로 동기화
+  useEffect(() => {
+    if (!selectedAgent) return;
+    const updated = agents.find((a) => a.id === selectedAgent.id);
+    if (updated && updated !== selectedAgent) {
+      setSelectedAgent(updated);
+    }
+  }, [agents, selectedAgent]);
+
+  if (!auth) return <AuthPanel onLogin={setAuth} />;
 
   return (
     <div className="app-shell">
@@ -139,6 +209,15 @@ export default function App() {
                 <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
               </>}
             </aside>
+            <div className="panel tick-feed">
+              <h2>실시간 이벤트</h2>
+              <p className="connection-status">
+                {wsConnected ? "🟢 실시간 연결됨" : "🔴 재연결 중..."}
+                {tick && ` · Day ${tick.current_day} / Tick ${tick.tick_number}`}
+              </p>
+              <EventFeed events={liveEvents} />
+              <RelationshipChangesPanel updates={relationshipUpdates} />
+            </div>
           </section>
         )}
       </main>
