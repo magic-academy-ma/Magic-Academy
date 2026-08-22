@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     jwt_issuer: str = "magic-academy-api"
     jwt_audience: str = "magic-academy-web"
     jwt_access_token_minutes: int = 60
+    openai_api_key: str | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
