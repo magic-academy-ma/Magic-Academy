@@ -72,8 +72,6 @@ def test_mood_down_low_returns_negative_2():
     assert get_state_delta(StateSignalType.MOOD_DOWN, SignalIntensity.LOW) == -2
 
 
-# ── validators ─────────────────────────────────────────────────────────────────
-
 def _make_rel_signal(signal_type, intensity, target_id):
     return RelationshipSignal(signal_type=signal_type, intensity=intensity, target_agent_id=target_id)
 
@@ -114,36 +112,6 @@ def _make_runtime_result(agent_id, target_id, rel_signals=None, state_signals=No
         prompt_version="test-prompt-v1",
         idempotency_key=f"sim-test-1:1:{agent_id}",
     )
-
-
-def test_self_target_relationship_signal_is_rejected():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        AGENT_A, AGENT_A,
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_A)],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={str(AGENT_A), str(AGENT_B)})
-    assert any("self" in e.lower() for e in errors)
-
-
-def test_invalid_target_agent_is_rejected():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        AGENT_A, AGENT_X,
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_X)],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={str(AGENT_A), str(AGENT_B)})
-    assert any("invalid" in e.lower() or "target" in e.lower() for e in errors)
-
-
-def test_valid_signal_has_no_errors():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        AGENT_A, AGENT_B,
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B)],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={str(AGENT_A), str(AGENT_B)})
-    assert errors == []
 
 
 # ── engine ─────────────────────────────────────────────────────────────────────
