@@ -12,7 +12,6 @@ from app.domain.relationship_metrics import (
     RelationshipMetric,
 )
 
-
 RelationshipRow: TypeAlias = Relationship
 
 

@@ -7,7 +7,10 @@ from app.simulation.policy.models import (
     PolicyEvaluationResult,
     PolicyStatus,
 )
-from app.simulation.policy.registries.signal_policy import get_relationship_delta, get_state_delta
+from app.simulation.policy.registries.signal_policy import (
+    get_relationship_delta,
+    get_state_delta,
+)
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
 
