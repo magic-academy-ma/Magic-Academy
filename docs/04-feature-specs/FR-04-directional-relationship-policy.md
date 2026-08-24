@@ -1,6 +1,6 @@
 ---
 title: FR-04 방향성 관계 Policy
-status: draft
+status: approved
 updated: 2026-08-25
 ---
 
@@ -72,16 +72,16 @@ Agent Runtime의 정성적 관계 signal을 결정론적인 관계 delta로 변�
 
 ## 7. 완료 기준
 
-- [ ] 6개 관계 signal의 UP/DOWN과 LOW/MEDIUM/HIGH를 테스트한다.
-- [ ] A→B 변화가 B→A에 영향을 주지 않는다.
-- [ ] 자기 관계와 교차 Simulation 관계를 거부한다.
-- [ ] LLM 숫자 delta 입력을 거부한다.
-- [ ] 중복 effect는 한 번만 적용한다.
-- [ ] 서로 다른 effect의 합산 후 clamp가 적용된다.
-- [ ] 합산된 모든 effect ID가 보존된다.
-- [ ] stale 값과 부분 write가 Tick 전체 rollback을 유발한다.
-- [ ] 신규 Relationship ID가 UUIDv7이다.
-- [ ] 단위·DB 통합·Tick E2E·Ruff·Mypy 검사가 통과한다.
+- [x] 6개 관계 signal의 UP/DOWN과 LOW/MEDIUM/HIGH를 테스트한다.
+- [x] A→B 변화가 B→A에 영향을 주지 않는다.
+- [x] 자기 관계와 교차 Simulation 관계를 거부한다.
+- [x] LLM 숫자 delta 입력을 거부한다.
+- [x] 중복 effect는 한 번만 적용한다.
+- [x] 서로 다른 effect의 합산 후 clamp가 적용된다.
+- [x] 합산된 모든 effect ID가 보존된다.
+- [x] stale 값과 부분 write가 Tick 전체 rollback을 유발한다.
+- [x] 신규 Relationship ID가 UUIDv7이다.
+- [x] 단위·DB 통합·Tick E2E·Ruff·Mypy 검사가 통과한다.
 
 ## 8. 미정 항목
 

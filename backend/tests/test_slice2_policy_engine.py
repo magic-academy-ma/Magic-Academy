@@ -3,7 +3,6 @@
 from uuid import UUID
 
 import pytest
-
 from app.simulation.agent_runtime import (
     ActionAlternative,
     ActionType,
@@ -29,77 +28,30 @@ AGENT_X = UUID("00000000-0000-0000-0000-00000000000f")
 # ── signal_policy ──────────────────────────────────────────────────────────────
 
 
-def test_trust_up_medium_returns_3():
+@pytest.mark.parametrize("signal_type", list(RelationshipSignalType))
+@pytest.mark.parametrize(
+    ("intensity", "magnitude"),
+    [(SignalIntensity.LOW, 1), (SignalIntensity.MEDIUM, 3), (SignalIntensity.HIGH, 5)],
+)
+def test_all_relationship_signal_intensity_combinations(
+    signal_type, intensity, magnitude
+):
     from app.simulation.policy.registries.signal_policy import get_relationship_delta
 
-    assert (
-        get_relationship_delta(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM)
-        == 3
-    )
+    direction = 1 if signal_type.value.endswith("_UP") else -1
+    assert get_relationship_delta(signal_type, intensity) == direction * magnitude
 
 
-def test_trust_down_medium_returns_negative_3():
-    from app.simulation.policy.registries.signal_policy import get_relationship_delta
-
-    assert (
-        get_relationship_delta(
-            RelationshipSignalType.TRUST_DOWN, SignalIntensity.MEDIUM
-        )
-        == -3
-    )
-
-
-def test_tension_up_high_returns_5():
-    from app.simulation.policy.registries.signal_policy import get_relationship_delta
-
-    assert (
-        get_relationship_delta(RelationshipSignalType.TENSION_UP, SignalIntensity.HIGH)
-        == 5
-    )
-
-
-def test_closeness_up_low_returns_1():
-    from app.simulation.policy.registries.signal_policy import get_relationship_delta
-
-    assert (
-        get_relationship_delta(RelationshipSignalType.CLOSENESS_UP, SignalIntensity.LOW)
-        == 1
-    )
-
-
-def test_rivalry_down_high_returns_negative_5():
-    from app.simulation.policy.registries.signal_policy import get_relationship_delta
-
-    assert (
-        get_relationship_delta(
-            RelationshipSignalType.RIVALRY_DOWN, SignalIntensity.HIGH
-        )
-        == -5
-    )
-
-
-def test_fatigue_up_low_returns_2():
+@pytest.mark.parametrize("signal_type", list(StateSignalType))
+@pytest.mark.parametrize(
+    ("intensity", "magnitude"),
+    [(SignalIntensity.LOW, 2), (SignalIntensity.MEDIUM, 5), (SignalIntensity.HIGH, 8)],
+)
+def test_all_state_signal_intensity_combinations(signal_type, intensity, magnitude):
     from app.simulation.policy.registries.signal_policy import get_state_delta
 
-    assert get_state_delta(StateSignalType.FATIGUE_UP, SignalIntensity.LOW) == 2
-
-
-def test_stress_down_high_returns_negative_8():
-    from app.simulation.policy.registries.signal_policy import get_state_delta
-
-    assert get_state_delta(StateSignalType.STRESS_DOWN, SignalIntensity.HIGH) == -8
-
-
-def test_mood_up_medium_returns_5():
-    from app.simulation.policy.registries.signal_policy import get_state_delta
-
-    assert get_state_delta(StateSignalType.MOOD_UP, SignalIntensity.MEDIUM) == 5
-
-
-def test_mood_down_low_returns_negative_2():
-    from app.simulation.policy.registries.signal_policy import get_state_delta
-
-    assert get_state_delta(StateSignalType.MOOD_DOWN, SignalIntensity.LOW) == -2
+    direction = 1 if signal_type.value.endswith("_UP") else -1
+    assert get_state_delta(signal_type, intensity) == direction * magnitude
 
 
 def _make_rel_signal(signal_type, intensity, target_id):

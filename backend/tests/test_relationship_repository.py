@@ -2,9 +2,6 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, event, select, text
-from sqlalchemy.orm import sessionmaker
-
 from app.domain.models import Agent, Relationship, Simulation, User
 from app.repositories.relationships import (
     InvalidRelationshipDeltaError,
@@ -13,6 +10,8 @@ from app.repositories.relationships import (
     apply_deltas,
     get_pair,
 )
+from sqlalchemy import create_engine, event, select, text
+from sqlalchemy.orm import sessionmaker
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(

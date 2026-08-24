@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from app.services.manual_tick import tick_position
 
 
@@ -62,7 +61,7 @@ def test_tick_response_contract_does_not_expose_internal_fields():
                 metric="trust",
                 delta=3,
                 before=0,
-                after_preview=3,
+                after=3,
                 reason="대화 후 신뢰 상승",
             )
         ],
@@ -86,6 +85,8 @@ def test_tick_response_contract_does_not_expose_internal_fields():
     assert response["status"] == "COMPLETED"
     assert response["agent_results"][0]["runtime_status"] == "PROPOSED"
     assert response["relationship_deltas"][0]["delta"] == 3
+    assert response["relationship_deltas"][0]["after"] == 3
+    assert "after_preview" not in response["relationship_deltas"][0]
     assert response["state_deltas"][0]["after"] == 15
     assert response["retrieved_memories"] == []
     assert "participant_ids" not in response

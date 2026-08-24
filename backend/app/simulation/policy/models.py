@@ -5,7 +5,7 @@ from app.domain.relationship_metrics import RELATIONSHIP_METRIC_RANGES
 from app.simulation.agent_runtime import AgentRuntimeResult
 
 METRIC_RANGE: dict[str, tuple[int, int]] = {
-    **RELATIONSHIP_METRIC_RANGES,
+    **{metric: bounds for metric, bounds in RELATIONSHIP_METRIC_RANGES.items()},
     "mood": (-100, 100),
     "hunger": (0, 100),
     "fatigue": (0, 100),

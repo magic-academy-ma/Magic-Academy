@@ -55,7 +55,7 @@ class RelationshipDeltaResponse(BaseModel):
     metric: str
     delta: int
     before: int
-    after_preview: int
+    after: int
     reason: str
 
 
@@ -144,7 +144,7 @@ def advance_tick(
                 metric=effect.metric,
                 delta=effect.after_preview - effect.before,
                 before=effect.before,
-                after_preview=effect.after_preview,
+                after=effect.after_preview,
                 reason=effect.reason,
             )
             for effect in result.policy_result.relationship_effects

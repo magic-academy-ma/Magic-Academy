@@ -199,8 +199,13 @@ export default function App() {
     position: { x: (index % 4) * 200, y: Math.floor(index / 4) * 150 },
     data: { label: agentNameById[id] ?? String(id) },
   }));
+  const namedRelationshipDeltas = relationshipDeltas.map((delta) => ({
+    ...delta,
+    source_agent_name: agentNameById[delta.source_agent_id],
+    target_agent_name: agentNameById[delta.target_agent_id],
+  }));
   const edgesByPair = new Map();
-  for (const delta of relationshipDeltas) {
+  for (const delta of namedRelationshipDeltas) {
     const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
     if (!edgesByPair.has(key)) {
       edgesByPair.set(key, {
@@ -333,6 +338,7 @@ export default function App() {
                   )}
 
                   <h4>관계 변화</h4>
+                  <DeltaGroup effects={namedRelationshipDeltas} />
                   <RelationshipFlow
                     nodes={flowNodes}
                     edges={flowEdges}

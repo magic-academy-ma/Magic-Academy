@@ -1,6 +1,6 @@
 ---
 title: FR-01 Agent 상태 Policy
-status: draft
+status: approved
 updated: 2026-08-25
 ---
 
@@ -65,15 +65,15 @@ Runtime의 정성적 state signal을 결정론적 delta로 변환하고 Agent �
 
 ## 7. 완료 기준
 
-- [ ] 모든 상태 signal과 intensity 변환을 테스트한다.
-- [ ] 상태별 상한·하한 clamp를 테스트한다.
-- [ ] 동일 signal 중복 제거를 테스트한다.
-- [ ] 상충 signal이 모두 거부되는지 테스트한다.
-- [ ] 존재하지 않는 Agent·State를 거부한다.
-- [ ] stale 상태가 Tick 전체 rollback을 유발한다.
-- [ ] 관계·Runtime Result·Tick 번호도 함께 rollback된다.
-- [ ] API 응답의 적용 delta가 DB 최종값과 일치한다.
-- [ ] 단위·DB 통합·Tick E2E·Ruff·Mypy 검사가 통과한다.
+- [x] 모든 상태 signal과 intensity 변환을 테스트한다.
+- [x] 상태별 상한·하한 clamp를 테스트한다.
+- [x] 동일 signal 중복 제거를 테스트한다.
+- [x] 상충 signal이 모두 거부되는지 테스트한다.
+- [x] 존재하지 않는 Agent·State를 거부한다.
+- [x] stale 상태가 Tick 전체 rollback을 유발한다.
+- [x] 관계·Runtime Result·Tick 번호도 함께 rollback된다.
+- [x] API 응답의 적용 delta가 DB 최종값과 일치한다.
+- [x] 단위·DB 통합·Tick E2E·Ruff·Mypy 검사가 통과한다.
 
 ## 8. 미정 항목
 
