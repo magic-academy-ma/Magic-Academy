@@ -72,18 +72,6 @@ class StateDeltaResponse(BaseModel):
     reason: str
 
 
-class StateDeltaResponse(BaseModel):
-    effect_id: str
-    rule_id: str
-    agent_id: UUID
-    agent_name: str
-    metric: str
-    delta: int
-    before: int
-    after: int
-    reason: str
-
-
 class TickAdvanceResponse(BaseModel):
     simulation_id: UUID
     previous_tick: int

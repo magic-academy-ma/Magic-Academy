@@ -3,7 +3,6 @@
 from uuid import UUID
 
 import pytest
-
 from app.simulation.agent_runtime import (
     ActionAlternative,
     ActionType,

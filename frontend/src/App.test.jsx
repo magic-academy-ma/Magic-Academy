@@ -210,7 +210,7 @@ describe('Slice 0 UI', () => {
         metric: 'trust',
         delta: 3,
         before: 0,
-        after_preview: 3,
+        after: 3,
         reason: '대화 후 신뢰 상승',
       }],
     })))
@@ -218,6 +218,48 @@ describe('Slice 0 UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
 
     expect(await screen.findByText('관계 변화')).toBeInTheDocument()
+    expect(screen.getByLabelText(`에단에서 아델로 신뢰 +3, 0에서 3으로 변화`)).toBeInTheDocument()
+  })
+
+  it('renders empty state and relationship delta messages', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      state_deltas: [],
+      relationship_deltas: [],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('이번 Tick에는 상태 변화가 없습니다.')).toBeInTheDocument()
+    expect(screen.getByText('이번 tick에는 관계 변화가 없습니다')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['음수', -5, 20, 15, '▼ -5'],
+    ['0', 0, 100, 100, '▬ 0'],
+  ])('renders %s committed state delta accessibly', async (_, delta, before, after, visibleDelta) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      state_deltas: [{
+        effect_id: `state-${delta}`,
+        rule_id: 'STATE_STRESS_TEST',
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        metric: 'stress',
+        delta,
+        before,
+        after,
+        reason: '테스트 변화',
+      }],
+      relationship_deltas: [],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText(visibleDelta)).toBeInTheDocument()
+    expect(screen.getByLabelText(`에단의 스트레스 ${delta > 0 ? `+${delta}` : delta}, ${before}에서 ${after}으로 변화`)).toBeInTheDocument()
   })
 
   it('renders committed state deltas separately from relationship deltas', async () => {
@@ -279,6 +321,20 @@ describe('Slice 0 UI', () => {
 
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     expect(screen.getByRole('alert')).toHaveTextContent('로그인이 필요하거나 만료되었습니다.')
+  })
+
+  it.each([
+    [403, 'FORBIDDEN', '접근 권한이 없습니다.', '접근 권한이 없습니다.'],
+    [500, 'INTERNAL_ERROR', '내부 오류', 'Tick 실행 중 서버 오류가 발생했습니다.'],
+  ])('shows the expected message for tick HTTP %s', async (status, code, message, expected) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response({ error: { code, message } }, status))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(expected)
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
 
   it('shows a concurrent-tick message on TICK_ALREADY_RUNNING', async () => {

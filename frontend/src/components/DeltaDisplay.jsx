@@ -56,24 +56,31 @@ export function DeltaBadge({ effect, compact = false }) {
     delta,
     before,
     after,
-    after_preview,
     reason,
     rule_id,
     source_agent_id,
     target_agent_id,
     agent_name,
+    source_agent_name,
+    target_agent_name,
   } = effect;
   const color = getDeltaColor(metric, delta);
-  const committedAfter = after ?? after_preview;
+  const committedAfter = after;
   const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "▬";
-  const sign = delta > 0 ? `+${delta}` : `${Math.abs(delta)}`;
+  const sign = delta > 0 ? `+${delta}` : `${delta}`;
   const isRelationship = isRelationshipEffect(effect);
+  const metricLabel = METRIC_LABEL_KO[metric] ?? metric;
+  const subject = isRelationship
+    ? `${source_agent_name ?? source_agent_id}에서 ${target_agent_name ?? target_agent_id}로`
+    : `${agent_name ?? source_agent_id}의`;
+  const accessibleLabel = `${subject} ${metricLabel} ${sign}, ${before}에서 ${committedAfter}으로 변화`;
   const tooltip = [reason, rule_id ? `rule: ${rule_id}` : null]
     .filter(Boolean)
     .join("\n");
 
   return (
     <div
+      aria-label={accessibleLabel}
       title={tooltip}
       style={{
         display: "inline-flex",
@@ -102,14 +109,14 @@ export function DeltaBadge({ effect, compact = false }) {
       </span>
       {isRelationship && source_agent_id != null && target_agent_id != null && (
         <span style={{ color: "#b0b3b9", fontSize: 10 }}>
-          {source_agent_id}→{target_agent_id}
+          {source_agent_name ?? source_agent_id}→{target_agent_name ?? target_agent_id}
         </span>
       )}
       {!isRelationship && agent_name && (
         <span style={{ color: "#6b6f76", fontSize: 10 }}>{agent_name}</span>
       )}
       <span style={{ color: "#3b3d42", fontWeight: 600 }}>
-        {METRIC_LABEL_KO[metric] ?? metric}
+        {metricLabel}
       </span>
       <span style={{ color: color.fg, fontWeight: 700 }}>
         {arrow} {sign}

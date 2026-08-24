@@ -10,7 +10,7 @@ const trustUp = {
   metric: "trust",
   delta: 3,
   before: 21,
-  after_preview: 24,
+  after: 24,
   reason: "TALK의 MEDIUM TRUST_UP 반응",
 };
 
@@ -22,7 +22,7 @@ const tensionUp = {
   metric: "tension",
   delta: 2,
   before: 20,
-  after_preview: 22,
+  after: 22,
   reason: "긴장 고조",
 };
 
@@ -34,16 +34,16 @@ describe("DeltaBadge", () => {
   });
 
   it("delta가 0이면 중립(회색) 표시가 된다", () => {
-    const flat = { ...trustUp, delta: 0, after_preview: 21 };
+    const flat = { ...trustUp, delta: 0, after: 21 };
     render(<DeltaBadge effect={flat} />);
     
     expect(screen.getByText(/0/)).toBeInTheDocument();
   });
   
-  it("delta가 음수이면 절댓값으로 표시된다", () => {
-    const down = { ...tensionUp, delta: -2, after_preview: 18 };
+  it("delta가 음수이면 부호를 포함해 표시된다", () => {
+    const down = { ...tensionUp, delta: -2, after: 18 };
     render(<DeltaBadge effect={down} />);
-    expect(screen.getByText(/▼\s*2/)).toBeInTheDocument();
+    expect(screen.getByText(/▼\s*-2/)).toBeInTheDocument();
   });
 
   it("negative valence 지표(fatigue) 증가는 경고색으로 표시된다", () => {
@@ -53,7 +53,7 @@ describe("DeltaBadge", () => {
       metric: "fatigue",
       delta: 8,
       before: 30,
-      after_preview: 38,
+      after: 38,
       reason: "피로 누적",
     };
     render(<DeltaBadge effect={fatigueUp} />);
