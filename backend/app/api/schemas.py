@@ -106,3 +106,49 @@ class AgentResponse(BaseModel):
     professor_profile: ProfessorProfileResponse | None
     state: AgentStateResponse
     location: LocationResponse
+
+
+class OrganizationResponse(BaseModel):
+    id: UUID
+    organization_type: str
+    name: str
+    membership_role: str | None
+
+
+class AgentDetailResponse(AgentResponse):
+    organizations: list[OrganizationResponse]
+
+
+class AgentStateDetailResponse(AgentStateResponse):
+    current_location: LocationResponse
+    updated_at: datetime
+
+
+class MemoryResponse(BaseModel):
+    id: UUID
+    content: str
+    memory_type: str
+    importance: int
+    created_tick: int
+    occurred_at: datetime
+    event_id: UUID | None
+
+
+class RelationshipResponse(BaseModel):
+    target_agent_id: UUID
+    target_agent_name: str
+    affection: int
+    closeness: int
+    trust: int
+    tension: int
+    rivalry: int
+    dependency: int
+    relationship_type: str | None
+    updated_at: datetime
+
+
+class DecisionExplanationDetailResponse(BaseModel):
+    agent_id: UUID
+    tick: int
+    alternatives: list[dict]
+    influencing_factors: list[dict]

@@ -134,6 +134,21 @@ def test_database_sink_saves_tick_batch_and_repository_reads_it(session_factory)
         assert errors[0].failure_reason == "validation failed"
 
 
+def test_database_sink_persists_only_structured_decision_explanation(session_factory) -> None:
+    result = make_result()
+
+    with session_factory() as session:
+        with session.begin():
+            DatabaseRuntimeResultSink(session).save_batch([result])
+
+    with session_factory() as session:
+        stored = get_by_idempotency_key(session, result.idempotency_key)
+        explanation = stored.intent["decision_explanation"]
+        assert set(explanation) == {"alternatives", "influencing_factors"}
+        assert "chain_of_thought" not in stored.intent
+        assert "reasoning" not in stored.intent
+
+
 def test_database_sink_treats_same_result_as_idempotent_noop(session_factory) -> None:
     result = make_result()
     with session_factory() as session:

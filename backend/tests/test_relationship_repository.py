@@ -2,9 +2,6 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, event, select, text
-from sqlalchemy.orm import Session, sessionmaker
-
 from app.domain.models import Agent, Relationship, Simulation, User
 from app.repositories.relationships import (
     InvalidRelationshipDeltaError,
@@ -13,10 +10,13 @@ from app.repositories.relationships import (
     apply_deltas,
     get_pair,
 )
-
+from sqlalchemy import create_engine, event, select, text
+from sqlalchemy.orm import sessionmaker
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required")
+pytestmark = pytest.mark.skipif(
+    not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required"
+)
 
 
 @pytest.fixture()
@@ -163,9 +163,8 @@ def test_stale_delta_causes_caller_rollback_of_entire_batch(relationship_db) -> 
         resolution_id="resolution-2",
     )
 
-    with pytest.raises(StaleRelationshipValueError):
-        with session_factory.begin() as session:
-            apply_deltas(session, [valid, stale])
+    with pytest.raises(StaleRelationshipValueError), session_factory.begin() as session:
+        apply_deltas(session, [valid, stale])
 
     with session_factory() as session:
         relationship = session.scalar(select(Relationship))
@@ -192,6 +191,7 @@ def test_apply_deltas_creates_missing_directional_pair(relationship_db) -> None:
     with session_factory() as session:
         relationship = get_pair(session, source_agent_id, target_agent_id)
         assert relationship is not None
+        assert relationship.id.version == 7
         assert relationship.simulation_id == simulation_id
         assert relationship.trust == 3
         assert get_pair(session, target_agent_id, source_agent_id) is None
@@ -206,9 +206,8 @@ def test_apply_deltas_rejects_delta_exceeding_requested_total(relationship_db) -
         applied_delta=6,
         after=26,
     )
-    with session_factory() as session:
-        with pytest.raises(InvalidRelationshipDeltaError):
-            apply_deltas(session, [invalid])
+    with session_factory() as session, pytest.raises(InvalidRelationshipDeltaError):
+        apply_deltas(session, [invalid])
 
 
 def test_apply_deltas_rejects_after_value_inconsistent_with_applied_delta(
@@ -222,19 +221,20 @@ def test_apply_deltas_rejects_after_value_inconsistent_with_applied_delta(
         applied_delta=5,
         after=27,
     )
-    with session_factory() as session:
-        with pytest.raises(
-            InvalidRelationshipDeltaError,
-            match="after = before \\+ applied_delta",
-        ):
-            apply_deltas(session, [invalid])
+    with session_factory() as session, pytest.raises(
+        InvalidRelationshipDeltaError,
+        match="after = before \\+ applied_delta",
+    ):
+        apply_deltas(session, [invalid])
 
 
 def test_apply_deltas_loads_agent_simulations_in_one_query(relationship_db) -> None:
     session_factory, _, source_agent_id, target_agent_id = relationship_db
     statements: list[str] = []
 
-    def record_statement(_conn, _cursor, statement, _parameters, _context, _executemany):
+    def record_statement(
+        _conn, _cursor, statement, _parameters, _context, _executemany
+    ):
         statements.append(statement)
 
     engine = session_factory.kw["bind"]

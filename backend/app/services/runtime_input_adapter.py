@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from typing import Any
 from uuid import UUID
 
 from app.domain.models import Agent, AgentState, Event, EventParticipant
@@ -12,7 +13,6 @@ from app.simulation.agent_runtime import (
     EventSummary,
     ScheduleSummary,
 )
-
 
 ACTIVE_STATUS_VALUES = {
     "active": True,
@@ -106,6 +106,7 @@ class RuntimeInputAdapter:
         event_participants: Mapping[UUID, Sequence[EventParticipant]],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         self._validate_uuid_sequence("preselected_agent_ids", preselected_agent_ids)
         self._validate_uuid_sequence("valid_agent_ids", valid_agent_ids)
@@ -126,6 +127,7 @@ class RuntimeInputAdapter:
             events=event_summaries,
             valid_agent_ids=valid_agent_ids,
             valid_location_ids=valid_location_ids,
+            memories_by_agent=memories_by_agent,
         )
 
     @staticmethod
