@@ -713,8 +713,8 @@ def test_default_selection_adds_professor_when_event_participant(runtime_db) -> 
     )
 
     assert adapter.calls[0]["preselected_agent_ids"] == (
-        professor_id,
         *(ids_by_fixture_key[f"student-{index:02d}"] for index in range(1, 6)),
+        professor_id,
     )
 
 
@@ -743,8 +743,8 @@ def test_default_selection_adds_professor_when_schedule_requires(runtime_db) -> 
     )
 
     assert adapter.calls[0]["preselected_agent_ids"] == (
-        ids_by_fixture_key["professor-01"],
         *(ids_by_fixture_key[f"student-{index:02d}"] for index in range(1, 6)),
+        ids_by_fixture_key["professor-01"],
     )
 
 
