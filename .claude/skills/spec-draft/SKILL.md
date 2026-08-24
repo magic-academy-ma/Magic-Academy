@@ -1,17 +1,20 @@
 ---
-description: 기능 설명 또는 FE 화면 Figma URL을 받아 스펙 초안을 생성할 때 사용. Figma URL이 있으면 FE 화면 모드로 자동 전환.
+description: 기능 설명 또는 FE 화면 디자인(Figma URL / 화면 ID / HTML 목업 경로)을 받아 스펙 초안을 생성할 때 사용. 디자인 입력이 있으면 FE 화면 모드(모드 B)로 자동 전환.
 ---
 
 # /spec-draft
 
-기능 설명 또는 Figma URL을 받아 스펙 초안을 생성한다.
-**Figma URL이 입력되면 모드 B(FE 화면 스펙)로 자동 전환된다.**
+기능 설명 또는 화면 디자인을 받아 스펙 초안을 생성한다.
+**다음 중 하나가 입력되면 모드 B(FE 화면 스펙)로 자동 전환된다:**
+- Figma URL (`https://www.figma.com/...`)
+- 화면 ID (`S0`–`S9` 등 `docs/04-feature-specs/mvp-feature-spec.md` 기준)
+- HTML 목업 경로 (`mockup/screens/*.html`)
 
 ---
 
 ## 모드 A — 일반 기능 스펙
 
-Figma URL 없이 기능 설명만 주어진 경우.
+Figma URL, 화면 ID, HTML 목업 경로 없이 기능 설명만 주어진 경우.
 
 ### 입력
 
@@ -93,26 +96,29 @@ updated: {오늘 날짜}
 
 ## 모드 B — FE 화면 스펙
 
-Figma URL이 입력된 경우. Confluence Draft → Approved → docs 이관 흐름을 거친다.
+Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우.
 
 ### 입력
 
-1. Figma URL
-2. 화면 이름 — 예: 유저 페르소나 선택 화면
-3. FR 번호 (모르면 TBD)
+1. 디자인 입력 — Figma URL, 화면 ID, HTML 목업 경로 중 하나
+2. 화면 이름 — 화면 ID나 목업에서 확인할 수 없으면 사용자에게 질문
+3. FR 번호 — `docs/04-feature-specs/mvp-feature-spec.md`에서 확인하고, 없으면 TBD
 
 ### 실행 순서
 
-1. Figma MCP (`get_design_context` + `get_screenshot`)로 디자인 컨텍스트 추출
-2. `docs/02-domain/`, `docs/03-system-design/` 참조하여 도메인 맥락 확보
+1. 입력 유형에 따라 디자인 컨텍스트 추출
+   - Figma URL: Figma MCP (`get_design_context` + `get_screenshot`) 사용
+   - 화면 ID: `docs/04-feature-specs/mvp-feature-spec.md`에서 화면명·관련 FR·기능·API를 찾고 대응하는 `../mockup/screens/*.html`을 읽는다
+   - HTML 목업 경로: 저장소 루트 기준 경로를 확인하고 해당 HTML을 읽는다
+   - 화면 ID에 대응하는 목업이 없거나 여러 개라 확정할 수 없으면 임의 선택하지 않고 사용자에게 확인한다
+2. `docs/02-domain/`, `docs/03-system-design/`과 기존 API 명세를 참조하여 도메인·연동 맥락 확보
 3. 아래 형식으로 FE 스펙 초안 작성
-4. 작성된 FE 스펙 초안을 사용자에게 보여주고 승인 받기
-5. `/confluence-post` 스킬 호출하여 Confluence Draft 생성
-6. 팀 검토 → Approved 전환 후 `docs/04-feature-specs/`에 이관
+4. 작성할 전체 초안을 사용자에게 보여주고 승인 받기
+5. 승인 후 `docs/04-feature-specs/FR-{번호두자리}-{화면명-kebab}-screen.md`에 저장
 
 ### 출력
 
-Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면명-kebab}-screen.md`)
+파일 경로: `docs/04-feature-specs/FR-{번호두자리}-{화면명-kebab}-screen.md`
 예) `FR-03-user-persona-select-screen.md`
 
 ### 스펙 초안 형식
@@ -127,14 +133,18 @@ Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면�
 ## 3. API 연동
 | Method | Endpoint | 호출 시점 | 응답 |
 ## 4. 빈 상태 / 로딩 / 에러 처리
-## 5. 테스트 포인트
+## 5. Mock Data Fixture
+- API 응답 스키마와 `docs/02-domain/` 규칙에 맞는 샘플 JSON
+- `VITE_USE_MOCK=true`에서 사용할 fixture 경로 또는 Props 주입 지점
+- API 명세에서 확정되지 않은 값은 `[미정]`으로 표시
+## 6. 테스트 포인트
 - 컴포넌트 단위 테스트 (vitest/jest)
 - API mock 또는 통합 테스트
 - E2E (핵심 경로)
 - 401·403 접근 권한
 - 지원 해상도 동작 확인
 - 접근성 기준 (키보드 탐색, aria)
-- Figma 시각 비교
+- 입력 디자인과 시각 비교
 - 로딩·빈 데이터·서버 오류·재시도 케이스
 ## 변경 이력
 | 버전 | 날짜 | 변경 내용 | 작성자 |
@@ -148,4 +158,5 @@ Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면�
 - 초안이므로 status는 `draft`로 시작한다
 - 미정 항목은 `[미정]`으로 표시하고 임의 확정하지 않는다
 - PUBLIC 저장소 — 팀원 실명·내부 KPI·시크릿 포함 금지
-- 파일 작성 또는 Confluence Draft 생성 전에 초안을 사용자에게 보여주고 승인을 받는다
+- 파일 작성 전에 초안 전체를 사용자에게 보여주고 승인을 받는다
+- 개발 중에는 Git `docs/`를 기준으로 작업하며 Confluence 이관은 마일스톤 완료 후 별도 흐름으로 수행한다
