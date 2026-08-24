@@ -3,7 +3,6 @@ title: 코드 스타일·폴더 구조 컨벤션
 source: confluence/09_CONVENTIONS/4.코드스타일·폴더구조컨벤션
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4096026/4.
 status: approved
-visibility: public
 updated: 2026-07-21
 source_updated: 2026-07-09
 ---

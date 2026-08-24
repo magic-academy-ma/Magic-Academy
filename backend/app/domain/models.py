@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID as PythonUUID
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -243,6 +244,50 @@ class EventParticipant(TimestampMixin, Base):
     result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
 
 
+class RuntimeResult(TimestampMixin, Base):
+    __tablename__ = "runtime_results"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_runtime_results_idempotency_key"),
+        UniqueConstraint(
+            "run_id",
+            "tick_number",
+            "agent_id",
+            name="uq_runtime_results_run_tick_agent",
+        ),
+        CheckConstraint("tick_number >= 0", name="ck_runtime_results_tick_number"),
+        CheckConstraint("retry_count >= 0", name="ck_runtime_results_retry_count"),
+        CheckConstraint(
+            "status IN ('PROPOSED', 'FALLBACK', 'SKIPPED')",
+            name="ck_runtime_results_status",
+        ),
+        Index("idx_runtime_results_run_tick", "run_id", "tick_number", "agent_id"),
+        Index(
+            "idx_runtime_results_run_failures",
+            "run_id",
+            "tick_number",
+            postgresql_where=text("failure_reason IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    agent_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    intent: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    result_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class Relationship(TimestampMixin, Base):
     __tablename__ = "relationships"
     __table_args__ = (
@@ -251,7 +296,7 @@ class Relationship(TimestampMixin, Base):
         UniqueConstraint("simulation_id", "source_agent_id", "target_agent_id", name="uq_relationships_pair"),
         CheckConstraint("source_agent_id <> target_agent_id", name="ck_relationships_distinct_agents"),
         CheckConstraint("affection BETWEEN -100 AND 100", name="ck_relationships_affection"),
-        CheckConstraint("closeness BETWEEN 0 AND 100", name="ck_relationships_closeness"),
+        CheckConstraint("closeness BETWEEN -100 AND 100", name="ck_relationships_closeness"),
         CheckConstraint("trust BETWEEN -100 AND 100", name="ck_relationships_trust"),
         CheckConstraint("tension BETWEEN 0 AND 100", name="ck_relationships_tension"),
         CheckConstraint("rivalry BETWEEN 0 AND 100", name="ck_relationships_rivalry"),
@@ -281,6 +326,13 @@ class AgentMemory(TimestampMixin, Base):
         CheckConstraint("created_tick >= 0", name="ck_agent_memories_created_tick"),
         Index("idx_agent_memories_agent_occurred", "agent_id", text("occurred_at DESC"), text("id DESC")),
         Index("idx_agent_memories_cleanup", "agent_id", "importance", "created_tick"),
+        Index(
+            "idx_agent_memories_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 64},
+        ),
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -292,3 +344,4 @@ class AgentMemory(TimestampMixin, Base):
     created_tick: Mapped[int] = mapped_column(BigInteger, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))

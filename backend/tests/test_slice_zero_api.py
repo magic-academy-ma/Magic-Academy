@@ -98,7 +98,15 @@ def test_invalid_issuer_or_audience_returns_401(client, claim, value) -> None:
 
 
 def test_registration_login_creation_and_idempotent_seed(client) -> None:
-    from app.domain.models import Agent, AgentState, Location, ProfessorProfile, StudentProfile
+    from app.domain.models import (
+        Agent,
+        AgentState,
+        Event,
+        EventParticipant,
+        Location,
+        ProfessorProfile,
+        StudentProfile,
+    )
     from app.services.fixtures import AGENT_FIXTURES, seed_slice_zero
 
     test_client, session_factory = client
@@ -160,6 +168,8 @@ def test_registration_login_creation_and_idempotent_seed(client) -> None:
         assert db.scalar(select(func.count()).select_from(Location)) == 2
         assert db.scalar(select(func.count()).select_from(StudentProfile)) == 5
         assert db.scalar(select(func.count()).select_from(ProfessorProfile)) == 1
+        assert db.scalar(select(func.count()).select_from(Event)) == 1
+        assert db.scalar(select(func.count()).select_from(EventParticipant)) == 2
         for stored_agent in db.scalars(select(Agent)).all():
             fixture = fixtures_by_key[stored_agent.fixture_key]
             assert (
