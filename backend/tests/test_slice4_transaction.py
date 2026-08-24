@@ -76,7 +76,7 @@ def test_execution_metadata_and_runtime_results_share_rollback_boundary() -> Non
                         seed=42,
                         model=result.model,
                         prompt_version=result.prompt_version,
-                        policy_version="policy-mvp-0.1",
+                        policy_version=None,
                     ),
                 )
                 DatabaseRuntimeResultSink(session).save_batch([result])

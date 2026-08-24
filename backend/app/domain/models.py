@@ -366,7 +366,7 @@ class RuntimeExecution(TimestampMixin, Base):
     seed: Mapped[int] = mapped_column(BigInteger, nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
-    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_version: Mapped[str | None] = mapped_column(String(100))
 
 
 class Relationship(TimestampMixin, Base):
