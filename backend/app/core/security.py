@@ -47,16 +47,11 @@ def _unauthorized() -> HTTPException:
     )
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise _unauthorized()
+def authenticate_access_token(db: Session, token: str) -> User:
     settings = get_settings()
     try:
         claims = jwt.decode(
-            credentials.credentials,
+            token,
             settings.jwt_secret,
             algorithms=["HS256"],
             audience=settings.jwt_audience,
@@ -74,6 +69,15 @@ def get_current_user(
     if user is None:
         raise _unauthorized()
     return user
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise _unauthorized()
+    return authenticate_access_token(db, credentials.credentials)
 
 
 def require_user_role(current_user: User = Depends(get_current_user)) -> User:
