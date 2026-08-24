@@ -1,8 +1,8 @@
 ---
 title: 시작하기
 status: approved
-visibility: public
 updated: 2026-07-13
+visibility: public
 ---
 
 # Magic Academy — AI 진입점
@@ -27,6 +27,19 @@ updated: 2026-07-13
 | **사건** | 관계와 조직을 변화시키는 트리거 (수업·시험·MT·축제…) |
 
 배경(시간·공간·날씨·학기)은 3축에 영향을 주지만 스스로 방향을 만들지 않는다.
+
+---
+
+## 도메인 파일 목록
+
+| 파일 | 내용 |
+|------|------|
+| `agents.md` | Agent 종류·역할·내부 상태 |
+| `relationships.md` | 관계 척도·유형·변화 규칙 |
+| `organizations.md` | 조직 목록·소속 규칙 |
+| `events.md` | 사건 목록·트리거·효과 |
+| `time-and-space.md` | Time Tick·공간·날씨 |
+| `glossary.md` | 전체 용어 정의 |
 
 ---
 

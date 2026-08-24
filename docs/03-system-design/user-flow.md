@@ -3,7 +3,6 @@ title: User Flow
 source: confluence/05_TECH/user-flow.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/17367076/User+Flow
 status: draft
-visibility: public
 updated: 2026-07-28
 source_updated: 2026-07-27
 ---

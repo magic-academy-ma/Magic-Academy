@@ -45,7 +45,7 @@ docs/
   domain/              # 3축(관계·조직·사건) + 배경 + Agent 모델 + 시스템 다이어그램   (← local/CLAUDE.md + PRD + svg) ★핵심
   architecture/        # 시스템 아키텍처 · 백엔드/프론트 구조 · ERD · API명세 · 컨벤션 · 기술스택(미정 명시) · 인프라 (← 05)
   design/              # IA·화면구조 · 플로우 · 와이어프레임 · 디자인시스템            (← 04)
-  glossary.md          # 용어 (호감도 · tick · 3축 등)
+  ~~glossary.md~~      # 폐기 (2026-08-13) — 용어 정의 각 도메인 파일에 통합
   _conventions/        # AI 협업 규칙 + 개발 컨벤션                                  (← 06_DEVELOPMENT)
   _meta/               # 이 설계 문서 · SYNC.md (동기화/분류 정책)
 ```
@@ -102,7 +102,7 @@ source_updated: 2026-07-08                        # 원본 반영 시점 (drift 
 
 ## 9. 단계 분할 (수직 슬라이스)
 
-- **Phase 1 — 뼈대**: `AGENTS.md` · `CLAUDE.md` · `.claude/settings.json` · `docs/00-index` · `docs/_conventions` · `docs/glossary` · `docs/_meta/SYNC.md` + drift/린트/스캔 스크립트.
+- **Phase 1 — 뼈대**: `AGENTS.md` · `CLAUDE.md` · `.claude/settings.json` · `docs/00-index` · `docs/_conventions` · `docs/_meta/SYNC.md` + drift/린트/스캔 스크립트.
   → 이 시점에 팀원이 clone → AI 실행 → 협업 규칙·진입점 확보 (동작하는 최소 환경)
 - **Phase 2 — 본문 이관**: `product/` · `requirements/` · `domain/` · `architecture/` · `design/` 실제 재정렬 커밋.
 

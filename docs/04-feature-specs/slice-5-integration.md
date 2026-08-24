@@ -3,7 +3,7 @@
 > **상태:** DRAFT
 > **작성자:** @박혜정
 > **담당자:** @박혜정
-> **작성일 / 최종 수정일:** 2026-08-17 / 2026-08-17
+> **작성일 / 최종 수정일:** 2026-08-17 / 2026-08-25
 > **기준 문서:** Event Master Agent 설계 · Magic Layer Agent 설계 · Policy Engine 설계 · [Policy] Signal → Delta 규칙
 > **관련 Issue:** #88 (Slice 5 — Event Master·Magic·캠페인·WebSocket 통합)
 
@@ -17,19 +17,40 @@ Slice 5 통합(`Event Master → Magic Layer → Event/Effect → Agent Context 
 
 ## 1. Event 데이터 계약
 
+
 Event Master가 매 tick 생성하는 일반 Event의 스키마는 다음과 같다.
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| event_type | str | `GROUP_PROJECT` \| `MEETING` (동적) / `CLASS` \| `EXAM` \| `MT` \| `FESTIVAL` \| `STUDENT_COUNCIL`(예정, SimulationTickService가 활성화) |
+| event_type | str | `GROUP_PROJECT` `MEETING` `CLASS` `EXAM` `MT` `FESTIVAL` `STUDENT_COUNCIL`(예정) `RANDOM_INCIDENT` |
 | title, description | str | 세계관 서술 |
 | participant_agent_ids | list[int] | 참여 Agent |
 | location | str | 장소 |
 | tick | int | 발생 tick |
 | source | str | `event_master` |
-| impact_level | str | `low`/`medium`/`high` (event_impact 파라미터 기반) |
-| importance | int | 30/50/80 (impact_level 매핑) |
-| expected_effects | object | **참고용 preview.** Policy Engine은 이 필드를 실제 delta 계산에 사용하지 않는다. 실제 수치는 Event Policy Registry(Signal→Delta 규칙 §7)의 고정값과 Agent Reaction의 typed signal로만 계산한다. |
+| impact_level | str | `low` / `medium` / `high` |
+| importance | int | 아래 매핑 규칙에 따라 계산 |
+| expected_effects | object | 참고용 preview. Policy Engine은 실제 delta 계산에 사용하지 않음 |
+
+### RANDOM_INCIDENT 정의
+
+`RANDOM_INCIDENT`는 Event Master가 생성하는 일반 Event 타입이다.
+
+- 반드시 `event_subtype`을 가진다.
+- 실제 효과는 Event Policy Registry에 등록된 `event_subtype` 규칙으로 결정된다.
+- Magic Layer의 `special_events` (`STUDENT_MISSING`, `CURSE_SPREAD`, `MAGIC_EXPLOSION`, `RITUAL_FAILURE`, `MAGICAL_DISCOVERY`)와는 별도 경로이다.
+- `special_event`는 `RANDOM_INCIDENT`로 변환하지 않는다.
+- Slice 5에서는 일반 Event 경로와 Magic Event 경로를 분리하여 처리한다.
+
+### impact_level ↔ importance 매핑
+
+| impact_level | importance |
+| --- | --- |
+| low | 30 |
+| medium | 50 |
+| high | 80 |
+
+구현체는 반드시 위 매핑을 사용한다.
 
 **Event Policy Registry 기본 효과 (참여 Agent 대상, Signal→Delta 규칙 §7):**
 
@@ -139,14 +160,39 @@ Commit 성공 후 `tick_completed` 메시지로 전 클라이언트에 broadcast
 
 클라이언트→서버 방향(`set_persona` 등 사용자 개입)은 Slice 5 범위에 포함하지 않는다.
 
+### events 필드 계약
+
+`events` 배열은 Event Master 및 Magic Layer 처리 결과가 Commit된 최종 Event 객체 목록이다.
+
+각 Event는 §1 Event 데이터 계약에서 정의한 전체 필드를 포함한다.
+
+예시 payload의 Event 객체는 가독성을 위해 일부 필드만 표시하였으며 실제 전송 시 다음 필드가 모두 포함된다.
+
+```json
+{
+  "event_type": "...",
+  "title": "...",
+  "description": "...",
+  "participant_agent_ids": [1, 2],
+  "location": "...",
+  "tick": 42,
+  "source": "event_master",
+  "impact_level": "high",
+  "importance": 80,
+  "expected_effects": {}
+}
+```
+
+Frontend는 §1 Event 계약을 기준으로 구현한다.
+
 ---
 
 ## 5. REST · WebSocket 정합성 기준
 
-1. **단일 진실 소스:** REST와 WebSocket 모두 Commit 이후 `ConflictResolutionResult` 저장값을 그대로 전송한다. 채널별 별도 필드명을 만들지 않는다.
-2. **delta 표현 통일:** `{metric, before, applied_delta, after}` 구조 고정.
-3. **버전 필드 포함:** `policy_version`, `resolver_version`, `snapshot_hash`, `resolution_id` 를 REST/WS 모두에 포함한다.
-4. **불일치 시 우선순위:** WebSocket push 유실 시 REST 재조회 결과가 항상 우선한다. WS는 알림 채널이며 진실의 원천이 아니다.
+1. 단일 진실 소스: REST와 WebSocket 모두 Commit 이후 저장값을 그대로 전송한다.
+2. delta 표현 통일: `{metric, before, applied_delta, after}`.
+3. 버전 필드 포함: `policy_version`, `resolver_version`, `resolution_id` 를 REST/WS 모두에 포함한다.
+4. WebSocket은 알림 채널이며 진실의 원천은 REST 저장 결과이다.
 
 ---
 
@@ -163,11 +209,18 @@ Commit 성공 후 `tick_completed` 메시지로 전 클라이언트에 broadcast
 - [ ] 관계 라벨 전이 1건 (FRIEND 진입 또는 이탈)
 - [ ] Reflection 적격 Event 1건 (importance ≥ 70)
 
+**Reflection 적격 조건 참고**
+
+Reflection 적격 조건은 `importance >= 70`이다.
+
+현재 Task 0 계약의 importance 매핑(30 / 50 / 80) 기준으로 Reflection 적격 Event는 `high(80)` 이벤트만 해당한다.
+
 **완료 기준:**
 
 - [ ] 각 단계 산출물이 추적 가능하다: Event Master → Magic Layer → Policy effect_candidates → Resolver resolved_effects → Commit → WebSocket → Frontend
 - [ ] REST 재조회 결과와 WebSocket push 결과가 필드 단위로 일치한다 (diff = 0)
 - [ ] §2의 STUDENT_MISSING/CURSED 사이클이 Commit까지 정상 완료된다
 - [ ] Inspector UI에서 위 8개 케이스가 모두 정상 렌더링된다
+
 
 ---

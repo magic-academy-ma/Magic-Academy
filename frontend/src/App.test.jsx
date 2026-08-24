@@ -17,6 +17,27 @@ const agents = ['professor-01', 'student-01', 'student-02', 'student-03', 'stude
   state: { hunger: 50, fatigue: 0, stress: 0, satisfaction: 50, mood: 0, current_action: null },
   location: { id: `01900000-0000-7000-8000-00000000002${index}`, code: key.startsWith('student') ? 'dormitory' : 'classroom', name: key.startsWith('student') ? '기숙사' : '교실' },
 }))
+function tickResult(overrides = {}) {
+  return {
+    previous_tick: 0,
+    current_tick: 1,
+    current_day: 1,
+    status: 'COMPLETED',
+    agent_results: [],
+    ...overrides,
+  }
+}
+
+async function setupSimulationWithAgents(fetchMock) {
+  fetchMock
+    .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
+    .mockImplementationOnce(() => response(simulation, 201))
+    .mockImplementationOnce(() => response(agents))
+  render(<App />)
+  await login()
+  await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+  await screen.findByText('Agent 6명')
+}
 
 function response(body, status = 200) {
   return Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) })
@@ -109,5 +130,165 @@ describe('Slice 0 UI', () => {
     expect(document.querySelector('.create-panel')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: simulation.name })).not.toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
+  })
+  it('shows loading state while a tick is running', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => new Promise(() => {})) // never resolves
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(screen.getByRole('button', { name: 'Tick 실행 중...' })).toBeDisabled()
+  })
+
+  it('renders a PROPOSED agent result on success', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      agent_results: [{
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        runtime_status: 'PROPOSED',
+        action_type: 'STUDY',
+        utterance: '오늘도 열심히 공부하자',
+        motivation_summary: '학업 성취 욕구가 높음',
+        decision_explanation: { influencing_factors: [{ source: 'mood', description: '기분이 좋음', direction: 'positive' }] },
+        retry_count: 0,
+        failure_reason: null,
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('STUDY')).toBeInTheDocument()
+    expect(screen.getByText('“오늘도 열심히 공부하자”')).toBeInTheDocument()
+    expect(screen.getByText('정상 진행')).toBeInTheDocument()
+  })
+
+  it('shows an empty agent-results message', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('이번 Tick에서 표시할 Agent 행동 결과가 없습니다.')).toBeInTheDocument()
+  })
+
+  it('renders a FALLBACK agent result with retry info', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      agent_results: [{
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        runtime_status: 'FALLBACK',
+        action_type: 'IDLE',
+        utterance: null,
+        motivation_summary: null,
+        decision_explanation: null,
+        retry_count: 3,
+        failure_reason: 'LLM_TIMEOUT',
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('재시도 실패 → Fallback 적용')).toBeInTheDocument()
+    expect(screen.getByText('재시도 3회 실패 — 사유: LLM_TIMEOUT')).toBeInTheDocument()
+  })
+
+  it('renders relationship_deltas as delta badges on the relationship graph', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      relationship_deltas: [{
+        effect_id: 'run:1:a:rel:TRUST_UP:b',
+        rule_id: 'REL_TRUST_UP_MEDIUM',
+        source_agent_id: agents[0].id,
+        target_agent_id: agents[1].id,
+        metric: 'trust',
+        delta: 3,
+        before: 0,
+        after_preview: 3,
+        reason: '대화 후 신뢰 상승',
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('관계 변화')).toBeInTheDocument()
+  })
+
+  it('renders a SKIPPED agent result without action details', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      agent_results: [{
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        runtime_status: 'SKIPPED',
+        action_type: null,
+        utterance: null,
+        motivation_summary: null,
+        decision_explanation: null,
+        retry_count: 0,
+        failure_reason: null,
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('이번 Tick 미참여')).toBeInTheDocument()
+    expect(screen.getByText('비활성 상태로 이번 Tick에서 행동하지 않았습니다.')).toBeInTheDocument()
+    expect(screen.queryByText('IDLE')).not.toBeInTheDocument()
+  })
+
+  it('returns to the login screen with a notice on tick auth error', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response({ error: { code: 'UNAUTHORIZED', message: '로그인이 필요하거나 만료되었습니다.' } }, 401))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('main')).toHaveClass('auth-shell')
+    expect(screen.getByRole('alert')).toHaveTextContent('로그인이 필요하거나 만료되었습니다.')
+  })
+
+  it('shows a concurrent-tick message on TICK_ALREADY_RUNNING', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response({
+      error: { code: 'TICK_ALREADY_RUNNING', message: '이미 진행 중인 Tick이 있습니다.' },
+    }, 409))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('이미 진행 중인 Tick이 있습니다')
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
+  })
+    it('does not treat a 409 with a different error code as TICK_ALREADY_RUNNING', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response({
+      error: { code: 'SIMULATION_LOCKED', message: '시뮬레이션이 잠겨 있습니다.' },
+    }, 409))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('시뮬레이션이 잠겨 있습니다.')
+    expect(screen.queryByText('이미 진행 중인 Tick이 있습니다')).not.toBeInTheDocument()
+  })
+
+  it('sends the tick advance request without a request body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+    await screen.findByText('이번 Tick에서 표시할 Agent 행동 결과가 없습니다.')
+
+    const tickCall = fetchMock.mock.calls.find(([url]) => url.includes('/ticks/advance'))
+    expect(tickCall[1]).not.toHaveProperty('body')
   })
 })
