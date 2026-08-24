@@ -459,3 +459,134 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results
     }
+
+
+def test_manual_tick_wires_memory_retriever_when_provided(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    retrieved_calls = []
+
+    async def fake_retriever(agent_id, current_tick, query_text):
+        retrieved_calls.append((agent_id, current_tick, query_text))
+        return []
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_retriever=fake_retriever,
+            )
+        )
+        db.commit()
+
+    assert len(retrieved_calls) == len(result.runtime_results) == 2
+    assert {agent_id for agent_id, _, _ in retrieved_calls} == set(
+        result.retrieval_traces.keys()
+    )
+
+
+def test_manual_tick_stores_memory_with_executed_tick(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    stored_ticks = []
+
+    async def fake_store(agent_id, event_id, candidate, tick):
+        stored_ticks.append(tick)
+        return f"memory-{agent_id}"
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_store=fake_store,
+            )
+        )
+        db.commit()
+
+    assert stored_ticks == [result.current_tick] * len(result.runtime_results)
+
+
+def test_manual_tick_reinjects_tick_n_memory_into_tick_n_plus_one_runtime(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+    from app.simulation.tick_engine import MemoryItem
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    memories_by_agent = {}
+    runtime_inputs = []
+    mock_client = MockLLMClient()
+
+    class RecordingLLMClient:
+        def generate(self, runtime_input):
+            runtime_inputs.append(runtime_input)
+            return mock_client.generate(runtime_input)
+
+    async def store(agent_id, event_id, candidate, tick):
+        memory = MemoryItem(
+            id=f"{agent_id}:{tick}",
+            content=candidate.content,
+            memory_type=candidate.memory_type,
+            importance=candidate.importance,
+            created_tick=tick,
+            event_id=event_id,
+        )
+        memories_by_agent.setdefault(agent_id, []).append(memory)
+        return memory.id
+
+    async def retrieve(agent_id, current_tick, _query_text):
+        return [
+            memory
+            for memory in memories_by_agent.get(agent_id, [])
+            if memory.created_tick < current_tick
+        ]
+
+    runtime = AgentRuntime(RecordingLLMClient(), model="test-memory-reinjection")
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        first = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+        second = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+
+    assert (first.current_tick, second.current_tick) == (1, 2)
+    assert all(second.retrieval_traces.values())
+    second_tick_inputs = [item for item in runtime_inputs if item.tick_number == 2]
+    assert len(second_tick_inputs) == len(second.runtime_results) == 2
+    assert all(item.memories for item in second_tick_inputs)
+    assert {
+        memory["created_tick"]
+        for item in second_tick_inputs
+        for memory in item.memories
+    } == {1}

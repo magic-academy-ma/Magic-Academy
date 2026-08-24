@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -34,6 +35,7 @@ class SimulationTickService:
         schedule: ScheduleSummary,
         events: Sequence[Event],
         event_participants: Mapping[UUID, Sequence[EventParticipant]],
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         agents = list_runtime_agents(db, simulation_id)
         agent_ids = self._validate_unique_agents(agents)
@@ -60,6 +62,7 @@ class SimulationTickService:
             event_participants=event_participants,
             valid_agent_ids=agent_ids,
             valid_location_ids=valid_location_ids,
+            memories_by_agent=memories_by_agent,
         )
 
     @staticmethod
