@@ -127,6 +127,53 @@ class Agent(TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class UserPersonaConfig(TimestampMixin, Base):
+    __tablename__ = "user_persona_configs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["simulation_id", "agent_id"],
+            ["agents.simulation_id", "agents.id"],
+            ondelete="RESTRICT",
+            onupdate="RESTRICT",
+            name="fk_user_persona_configs_agent",
+        ),
+        CheckConstraint(
+            "openness BETWEEN -50 AND 50 AND openness % 5 = 0",
+            name="ck_user_persona_configs_openness",
+        ),
+        CheckConstraint(
+            "conscientiousness BETWEEN -50 AND 50 AND conscientiousness % 5 = 0",
+            name="ck_user_persona_configs_conscientiousness",
+        ),
+        CheckConstraint(
+            "extraversion BETWEEN -50 AND 50 AND extraversion % 5 = 0",
+            name="ck_user_persona_configs_extraversion",
+        ),
+        CheckConstraint(
+            "agreeableness BETWEEN -50 AND 50 AND agreeableness % 5 = 0",
+            name="ck_user_persona_configs_agreeableness",
+        ),
+        CheckConstraint(
+            "emotional_stability BETWEEN -50 AND 50 AND emotional_stability % 5 = 0",
+            name="ck_user_persona_configs_emotional_stability",
+        ),
+    )
+
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        primary_key=True,
+    )
+    agent_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    mbti_type: Mapped[str] = mapped_column(String(4), nullable=False)
+    personality_rule_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    openness: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    conscientiousness: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    extraversion: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    agreeableness: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    emotional_stability: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+
 class StudentProfile(Base):
     __tablename__ = "student_profiles"
     __table_args__ = (CheckConstraint("grade BETWEEN 1 AND 4", name="ck_student_profiles_grade"),)
@@ -286,6 +333,40 @@ class RuntimeResult(TimestampMixin, Base):
     prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     result_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class RuntimeExecution(TimestampMixin, Base):
+    __tablename__ = "runtime_executions"
+    __table_args__ = (
+        UniqueConstraint("run_id", name="uq_runtime_executions_run_id"),
+        UniqueConstraint(
+            "simulation_id",
+            "tick_number",
+            name="uq_runtime_executions_simulation_tick",
+        ),
+        CheckConstraint(
+            "tick_number >= 0", name="ck_runtime_executions_tick_number"
+        ),
+        CheckConstraint("seed >= 0", name="ck_runtime_executions_seed"),
+        Index(
+            "idx_runtime_executions_simulation_tick",
+            "simulation_id",
+            text("tick_number DESC"),
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    seed: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(100), nullable=False)
 
 
 class Relationship(TimestampMixin, Base):

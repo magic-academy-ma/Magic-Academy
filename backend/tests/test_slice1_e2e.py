@@ -72,7 +72,14 @@ def register_login_create(test_client):
 
 
 def test_slice_one_full_vertical_flow(client):
-    from app.domain.models import Agent, Event, EventParticipant, RuntimeResult, Simulation
+    from app.domain.models import (
+        Agent,
+        Event,
+        EventParticipant,
+        RuntimeExecution,
+        RuntimeResult,
+        Simulation,
+    )
 
     test_client, session_factory = client
     simulation_id, headers = register_login_create(test_client)
@@ -141,6 +148,15 @@ def test_slice_one_full_vertical_flow(client):
             for result in stored
         )
         assert {result.model for result in stored} == {"test-runtime-override"}
+        execution = db.scalar(
+            select(RuntimeExecution).where(RuntimeExecution.run_id == stored_run_id)
+        )
+        assert execution.simulation_id == simulation_uuid
+        assert execution.tick_number == 1
+        assert execution.seed >= 0
+        assert execution.model == "test-runtime-override"
+        assert execution.prompt_version == "agent-runtime-10.1"
+        assert execution.policy_version == "policy-mvp-0.1"
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
@@ -173,7 +189,7 @@ def test_other_user_cannot_advance_owned_simulation(client):
 
 
 def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
-    from app.domain.models import RuntimeResult, Simulation
+    from app.domain.models import RuntimeExecution, RuntimeResult, Simulation
     from app.services.simulation_tick import SimulationTickService
 
     test_client, session_factory = client
@@ -195,6 +211,7 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
         simulation = db.get(Simulation, UUID(simulation_id))
         assert simulation.current_tick == 0
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+        assert db.scalar(select(func.count()).select_from(RuntimeExecution)) == 0
 
     monkeypatch.setattr(SimulationTickService, "run_runtime_phase", original)
     retry = test_client.post(
@@ -203,9 +220,11 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
     assert retry.status_code == 200
     with session_factory() as db:
         saved_run_ids = set(db.scalars(select(RuntimeResult.run_id)))
+        execution_run_ids = set(db.scalars(select(RuntimeExecution.run_id)))
     assert len(failed_run_ids) == 1
     assert len(saved_run_ids) == 1
     assert failed_run_ids[0] not in saved_run_ids
+    assert execution_run_ids == saved_run_ids
 
 
 def test_consecutive_ticks_use_distinct_batch_run_ids(client):
