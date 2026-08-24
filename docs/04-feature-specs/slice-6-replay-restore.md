@@ -1,7 +1,7 @@
 ---
 title: Slice 6 — 설정 저장·Replay·시점 복원 계약
 status: approved
-updated: 2026-08-21
+updated: 2026-08-25
 visibility: public
 source:
   - "GitHub Issue #116"
@@ -79,7 +79,9 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 
 ### 4.1 Snapshot 경계
 
-- Snapshot은 성공한 Tick batch commit 직후 상태를 나타낸다.
+- Snapshot은 Tick의 다른 상태 변화와 같은 transaction에서 commit 직전에 저장한다.
+- Tick 결과와 Snapshot 저장이 모두 성공한 경우에만 한 번에 commit하며, 저장된
+  Snapshot은 해당 batch commit 직후 상태를 나타낸다.
 - Tick 0 초기 상태도 하나의 Snapshot으로 저장한다.
 - 식별자는 UUIDv7 `snapshot_id`를 사용한다.
 - `(simulation_id, tick_number)`는 유일해야 한다.
@@ -94,10 +96,13 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - Organization membership 상태
 - Event와 Event participant 결과
 - Agent Memory
-- Runtime 결과와 실행 식별자
+- Runtime 결과와 실행 식별자(원본 Replay·감사용)
 - 해당 Tick에 적용된 설정값과 정책·Resolver 버전
 
-Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원에 필요한 값을 불변 payload로 보존한다.
+Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 Replay에 필요한 값을
+불변 payload로 보존한다. Runtime 결과는 원본 Replay·감사용 실행 이력이므로 payload에
+보존하되 새 분기의 DB 행으로 복제하지 않는다. 새 분기의 과거 실행 이력은
+`origin_snapshot_id`가 가리키는 원본 Snapshot에서 조회한다.
 
 ### 4.3 Replay
 
@@ -112,6 +117,10 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원에 
 - 선택 Snapshot 이후의 원본 기록은 삭제하거나 덮어쓰지 않는다.
 - 복원 결과는 기존 Simulation을 과거 시점으로 되감지 않고 새 Simulation 분기로 생성한다.
 - 복원된 Simulation은 새 ID를 가지며 원본 Simulation과 Snapshot 출처를 기록한다.
+- 복원된 Simulation의 초기 `status`는 원본 상태와 관계없이 `paused`다. 복원이
+  완료되는 것만으로 Tick을 실행하지 않으며, 사용자가 명시적으로 재개한 뒤 다음
+  Tick부터 실행한다.
+- Runtime 결과의 전역 unique `run_id`와 `idempotency_key`는 새 분기에서 재사용하지 않는다.
 
 ### 4.5 오류 계약
 
@@ -123,6 +132,7 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원에 
 | 잘못된 tick·설정값·요청 조합 | 400 | `INVALID_REPLAY_REQUEST` |
 | 실행 중 설정 잠김·복원 불가 상태 | 409 | `RESTORE_CONFLICT` |
 | Snapshot과 실행 기록 불일치 | 409 | `SNAPSHOT_MISMATCH` |
+| 지원하지 않는 Snapshot schema version | 409 | `UNSUPPORTED_SNAPSHOT_SCHEMA` |
 
 ## 5. Task 경계와 통합 순서
 
@@ -141,11 +151,14 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원에 
 ## 6. Task 0 결정 사항
 
 1. **복원 방식**: 기존 Simulation을 되감지 않고 새 Simulation 분기로 복원한다.
-2. **Snapshot 생성 단위**: Tick 0과 성공한 모든 Tick의 batch commit 직후 Snapshot을 저장한다.
+2. **Snapshot 생성 단위**: Tick 0과 모든 Tick의 batch transaction 안에서 Snapshot을
+   저장하고 전체 결과를 한 번에 commit한다.
 3. **Snapshot 상태 범위**: 4.2의 전체 범위를 불변 payload로 저장한다.
 4. **설정 범위**: `event_frequency`, `event_impact`, `magic_enabled`, User Persona 설정을 버전 관리한다.
 5. **보존 정책**: MVP에서는 Snapshot을 기간·개수 제한 없이 보존한다.
 6. **동일 Tick 정렬 기준**: Tick 안의 원본 출력 순서를 보존하는 별도 sequence를 저장한다.
+7. **복원 분기 상태**: 새 분기는 `paused`로 생성하며 명시적 재개 전 Tick을 실행하지 않는다.
+8. **Runtime 결과**: 원본 Replay·감사용 payload로 보존하고 새 분기 DB에는 복제하지 않는다.
 
 ## 7. Task 0 완료 기준
 
