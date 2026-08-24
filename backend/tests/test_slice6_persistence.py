@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.domain.models import (
     Agent,
     AgentState,
+    RuntimeResult,
     Simulation,
     SimulationConfig,
     SimulationSnapshot,
@@ -16,6 +17,8 @@ from app.repositories.simulation_snapshots import SnapshotAlreadyExistsError
 from app.services.fixtures import seed_slice_zero
 from app.services.simulation_snapshots import (
     InvalidSimulationConfigError,
+    SnapshotAccessDeniedError,
+    SnapshotNotFoundError,
     SimulationConfigInput,
     SimulationSnapshotService,
 )
@@ -174,6 +177,93 @@ def test_restore_creates_new_branch_with_remapped_state(persistence_context) -> 
         assert session.scalar(
             select(AgentState.stress).where(AgentState.agent_id == restored_student.id)
         ) == 77
+
+
+def test_restore_keeps_runtime_results_as_source_history(persistence_context) -> None:
+    session_factory, owner_id, simulation_id = persistence_context
+    service = SimulationSnapshotService()
+    with session_factory.begin() as session:
+        source_agent_id = session.scalar(
+            select(Agent.id).where(
+                Agent.simulation_id == simulation_id,
+                Agent.fixture_key == "student-01",
+            )
+        )
+        session.add(
+            RuntimeResult(
+                id=uuid7(),
+                run_id="source-run-1",
+                tick_number=0,
+                agent_id=source_agent_id,
+                status="PROPOSED",
+                action_type="IDLE",
+                intent={},
+                retry_count=0,
+                model="test-model",
+                prompt_version="test-prompt-v1",
+                idempotency_key="source-run-1:0:student-01",
+                result_fingerprint="a" * 64,
+            )
+        )
+        session.flush()
+        snapshot = service.create_snapshot(
+            session, session.get(Simulation, simulation_id)
+        )
+        snapshot_id = snapshot.id
+        assert len(snapshot.payload["runtime_results"]) == 1
+
+    with session_factory.begin() as session:
+        service.restore_as_branch(
+            session,
+            snapshot_id,
+            owner_id=owner_id,
+            name="Restored without copied execution history",
+        )
+
+    with session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 1
+
+
+def test_restore_rejects_different_owner(persistence_context) -> None:
+    session_factory, _, simulation_id = persistence_context
+    service = SimulationSnapshotService()
+    with session_factory.begin() as session:
+        snapshot = service.create_snapshot(
+            session, session.get(Simulation, simulation_id)
+        )
+        snapshot_id = snapshot.id
+
+    with session_factory() as session:
+        with pytest.raises(SnapshotAccessDeniedError):
+            service.restore_as_branch(
+                session,
+                snapshot_id,
+                owner_id=uuid7(),
+                name="Unauthorized branch",
+            )
+
+
+def test_restore_rejects_unsupported_snapshot_schema(persistence_context) -> None:
+    session_factory, owner_id, simulation_id = persistence_context
+    service = SimulationSnapshotService()
+    with session_factory.begin() as session:
+        snapshot = service.create_snapshot(
+            session, session.get(Simulation, simulation_id)
+        )
+        snapshot.payload = {
+            **snapshot.payload,
+            "schema_version": "unsupported-snapshot-version",
+        }
+        snapshot_id = snapshot.id
+
+    with session_factory() as session:
+        with pytest.raises(SnapshotNotFoundError, match="unsupported snapshot schema"):
+            service.restore_as_branch(
+                session,
+                snapshot_id,
+                owner_id=owner_id,
+                name="Unsupported schema branch",
+            )
 
 
 def test_restore_failure_can_roll_back_entire_branch(

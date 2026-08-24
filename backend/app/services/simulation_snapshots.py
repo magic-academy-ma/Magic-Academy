@@ -164,6 +164,11 @@ class SimulationSnapshotService:
         organization_ids = {row["id"]: uuid7() for row in payload["organizations"]}
         event_ids = {row["id"]: uuid7() for row in payload["events"]}
 
+        # RuntimeResult rows are immutable source execution history, not world state.
+        # They remain in the Snapshot payload for Replay/audit, but are not inserted
+        # into the restored branch because their globally unique idempotency keys and
+        # run identifiers belong to the source execution.
+
         for row in payload["locations"]:
             session.add(Location(id=location_ids[row["id"]], simulation_id=restored.id, code=row["code"], name=row["name"], is_active=row["is_active"]))
         for row in payload["agents"]:
