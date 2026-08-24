@@ -15,6 +15,7 @@ from app.simulation.agent_runtime import (
     AgentRuntimeResult,
     Block,
     EventSummary,
+    RelationshipSummary,
     ScheduleSummary,
 )
 
@@ -53,6 +54,7 @@ class RuntimeOrchestrator:
         events: Sequence[EventSummary],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        relationships: Sequence[RelationshipSummary] = (),
     ) -> RuntimeBatchExecutionResult:
         selected_agents = self._target_selector.select(
             agent_candidates,
@@ -76,6 +78,8 @@ class RuntimeOrchestrator:
                 schedule=schedule,
                 valid_agent_ids=valid_agent_ids,
                 valid_location_ids=valid_location_ids,
+                agent_candidates=agent_candidates,
+                relationships=relationships,
             )
             for agent in selected_agents
         )

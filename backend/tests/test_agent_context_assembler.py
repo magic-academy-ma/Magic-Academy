@@ -88,7 +88,7 @@ def test_assembles_slice_one_student_class_context() -> None:
     assert runtime_input.model_dump(mode="json")["events"][0]["event_type"] == "class"
 
 
-def test_preserves_collection_order_without_mutating_inputs() -> None:
+def test_sorts_reference_ids_without_mutating_inputs() -> None:
     inputs = make_inputs()
     inputs["valid_agent_ids"] = list(reversed(STUDENT_IDS))
     inputs["valid_location_ids"] = list(reversed(LOCATION_IDS))
@@ -96,8 +96,8 @@ def test_preserves_collection_order_without_mutating_inputs() -> None:
 
     runtime_input = AgentContextAssembler().assemble(**inputs)
 
-    assert runtime_input.valid_agent_ids == list(reversed(STUDENT_IDS))
-    assert runtime_input.valid_location_ids == list(reversed(LOCATION_IDS))
+    assert runtime_input.valid_agent_ids == STUDENT_IDS
+    assert runtime_input.valid_location_ids == LOCATION_IDS
     assert inputs == original
 
 
