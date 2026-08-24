@@ -23,6 +23,8 @@ class SchemaModelTests(unittest.TestCase):
                 "agent_memories",
                 "relationships",
                 "runtime_results",
+                "runtime_executions",
+                "user_persona_configs",
                 "organizations",
                 "organization_memberships",
                 "events",
@@ -49,6 +51,9 @@ class SchemaModelTests(unittest.TestCase):
             "uq_relationships_pair",
             "uq_runtime_results_idempotency_key",
             "uq_runtime_results_run_tick_agent",
+            "uq_runtime_executions_run_id",
+            "uq_runtime_executions_simulation_tick",
+            "idx_runtime_executions_simulation_tick",
             "uq_organizations_simulation_type_name",
             "uq_organizations_simulation_id_id",
             "uq_organization_memberships_active",
@@ -76,6 +81,7 @@ class SchemaModelTests(unittest.TestCase):
             "relationships": {"agents"},
             "organization_memberships": {"agents", "organizations"},
             "events": {"locations"},
+            "user_persona_configs": {"agents"},
         }
         for table_name, target_names in expected_targets.items():
             table = Base.metadata.tables[table_name]
