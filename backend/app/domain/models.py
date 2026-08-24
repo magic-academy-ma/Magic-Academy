@@ -296,7 +296,7 @@ class Relationship(TimestampMixin, Base):
         UniqueConstraint("simulation_id", "source_agent_id", "target_agent_id", name="uq_relationships_pair"),
         CheckConstraint("source_agent_id <> target_agent_id", name="ck_relationships_distinct_agents"),
         CheckConstraint("affection BETWEEN -100 AND 100", name="ck_relationships_affection"),
-        CheckConstraint("closeness BETWEEN 0 AND 100", name="ck_relationships_closeness"),
+        CheckConstraint("closeness BETWEEN -100 AND 100", name="ck_relationships_closeness"),
         CheckConstraint("trust BETWEEN -100 AND 100", name="ck_relationships_trust"),
         CheckConstraint("tension BETWEEN 0 AND 100", name="ck_relationships_tension"),
         CheckConstraint("rivalry BETWEEN 0 AND 100", name="ck_relationships_rivalry"),

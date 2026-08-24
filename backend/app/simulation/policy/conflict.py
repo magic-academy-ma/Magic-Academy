@@ -1,5 +1,4 @@
-from app.simulation.policy.constants import METRIC_RANGE
-from app.simulation.policy.models import EffectCandidate
+from app.simulation.policy.models import METRIC_RANGE, EffectCandidate
 
 
 def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate]:
@@ -21,11 +20,14 @@ def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate
                 rule_id=c.rule_id,
                 reason=c.reason,
             )
+        else:
+            groups[key].rule_id = f"{groups[key].rule_id}|{c.rule_id}"
+            groups[key].reason = f"{groups[key].reason} + {c.reason}"
         groups[key].delta += c.delta
 
     result = []
     for resolved in groups.values():
-        lo, hi = METRIC_RANGE.get(resolved.metric, (0, 100))
+        lo, hi = METRIC_RANGE[resolved.metric]
         resolved.after_preview = max(lo, min(hi, resolved.before + resolved.delta))
         result.append(resolved)
 

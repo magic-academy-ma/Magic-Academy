@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event as ThreadEvent
 from uuid import UUID
@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
-
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 if os.getenv("CI") == "true" and not TEST_DATABASE_URL:
@@ -72,7 +71,15 @@ def register_login_create(test_client):
 
 
 def test_slice_one_full_vertical_flow(client):
-    from app.domain.models import Agent, Event, EventParticipant, RuntimeResult, Simulation
+    from app.domain.models import (
+        Agent,
+        AgentState,
+        Event,
+        EventParticipant,
+        Relationship,
+        RuntimeResult,
+        Simulation,
+    )
 
     test_client, session_factory = client
     simulation_id, headers = register_login_create(test_client)
@@ -101,6 +108,7 @@ def test_slice_one_full_vertical_flow(client):
         "FALLBACK",
         "SKIPPED",
     }
+    assert body["relationship_deltas"] == []
 
     with session_factory() as db:
         simulation_uuid = UUID(simulation_id)
@@ -150,6 +158,67 @@ def test_slice_one_full_vertical_flow(client):
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
+        states = list(
+            db.scalars(select(AgentState).where(AgentState.agent_id.in_(participant_ids)))
+        )
+        assert {state.fatigue for state in states} == {17}
+        assert db.scalar(select(func.count()).select_from(Relationship)) == 0
+
+
+def test_slice_two_policy_applies_directional_relationship_delta(client, monkeypatch):
+    from app.domain.models import Agent, Relationship
+    from app.simulation.agent_runtime import MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+    original_generate = MockLLMClient.generate
+
+    def generate_relationship_signal(self, runtime_input):
+        response = original_generate(self, runtime_input)
+        target_agent_id = next(
+            agent_id
+            for agent_id in runtime_input.events[0].participant_agent_ids
+            if agent_id != runtime_input.agent.agent_id
+        )
+        response["reaction"]["relationship_signals"] = [
+            {
+                "signal_type": "TRUST_UP",
+                "intensity": "MEDIUM",
+                "target_agent_id": str(target_agent_id),
+            }
+        ]
+        return response
+
+    monkeypatch.setattr(MockLLMClient, "generate", generate_relationship_signal)
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    deltas = response.json()["relationship_deltas"]
+    assert len(deltas) == 2
+    assert {(delta["metric"], delta["delta"]) for delta in deltas} == {
+        ("trust", 3)
+    }
+
+    with session_factory() as db:
+        agents = list(
+            db.scalars(select(Agent).where(Agent.simulation_id == UUID(simulation_id)))
+        )
+        participants = {
+            agent.id for agent in agents if agent.fixture_key in {"student-01", "professor-01"}
+        }
+        relationships = list(db.scalars(select(Relationship)))
+        assert len(relationships) == 2
+        assert {
+            (relationship.source_agent_id, relationship.target_agent_id, relationship.trust)
+            for relationship in relationships
+        } == {
+            (source, target, 3)
+            for source in participants
+            for target in participants
+            if source != target
+        }
 
 
 def test_other_user_cannot_advance_owned_simulation(client):
@@ -206,6 +275,43 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
     assert len(failed_run_ids) == 1
     assert len(saved_run_ids) == 1
     assert failed_run_ids[0] not in saved_run_ids
+
+
+def test_policy_changes_and_runtime_results_roll_back_together(client, monkeypatch):
+    from app.domain.models import Agent, AgentState, RuntimeResult, Simulation
+    from app.services import manual_tick
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+    original = manual_tick.evaluate_and_apply_policy
+
+    def fail_after_policy(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("commit boundary failed")
+
+    monkeypatch.setattr(manual_tick, "evaluate_and_apply_policy", fail_after_policy)
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 500
+    with session_factory() as db:
+        simulation_uuid = UUID(simulation_id)
+        simulation = db.get(Simulation, simulation_uuid)
+        participant_ids = set(
+            db.scalars(
+                select(Agent.id).where(
+                    Agent.simulation_id == simulation_uuid,
+                    Agent.fixture_key.in_(("student-01", "professor-01")),
+                )
+            )
+        )
+        states = list(
+            db.scalars(select(AgentState).where(AgentState.agent_id.in_(participant_ids)))
+        )
+        assert simulation.current_tick == 0
+        assert {state.fatigue for state in states} == {15}
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
 
 
 def test_consecutive_ticks_use_distinct_batch_run_ids(client):

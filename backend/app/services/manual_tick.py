@@ -7,6 +7,7 @@ from uuid6 import uuid7
 
 from app.domain.models import Agent, Event, EventParticipant, Simulation
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
+from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_policy
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
 from app.services.simulation_tick import SimulationTickService
@@ -38,6 +39,7 @@ class ManualTickResult:
     current_day: int
     agent_names: dict[UUID, str]
     runtime_results: tuple[AgentRuntimeResult, ...]
+    policy_result: PolicyCommitResult
     retrieval_traces: dict[str, list[str]]
     retrieved_memories: dict[str, tuple[MemoryItem, ...]]
 
@@ -131,6 +133,7 @@ async def advance_manual_tick(
         end_tick=current_tick,
     )
     batch = None
+    policy_result = None
 
     async def run_runtime_batch(
         selected_agents: list[TickAgent],
@@ -151,6 +154,18 @@ async def advance_manual_tick(
         )
         return {str(result.agent_id): result for result in batch.results}
 
+    async def evaluate_policy_batch(policy_inputs):
+        nonlocal policy_result
+        policy_result = evaluate_and_apply_policy(
+            db,
+            simulation_id=simulation.id,
+            run_id=run_id,
+            tick_number=current_tick,
+            runtime_results=tuple(item.runtime_result for item in policy_inputs),
+        )
+        if policy is not None:
+            await policy(policy_inputs)
+
     candidates_by_id = {agent.id: agent for agent in agents}
     tick_candidates = [
         TickAgent(
@@ -170,7 +185,7 @@ async def advance_manual_tick(
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
-        policy=policy,
+        policy=evaluate_policy_batch,
     ).run_tick(
         tick_candidates,
         TickEvent(
@@ -180,7 +195,7 @@ async def advance_manual_tick(
         ),
         snapshot,
     )
-    if tick_result.status != "completed" or batch is None:
+    if tick_result.status != "completed" or batch is None or policy_result is None:
         raise RuntimeError("TickEngine completed without a Runtime batch")
     simulation.current_tick = current_tick
     simulation.current_day = current_day
@@ -191,6 +206,7 @@ async def advance_manual_tick(
         current_day=current_day,
         agent_names={agent.id: agent.name for agent in agents},
         runtime_results=batch.results,
+        policy_result=policy_result,
         retrieval_traces=tick_result.retrieval_traces,
         retrieved_memories={
             agent_id: tuple(memories)

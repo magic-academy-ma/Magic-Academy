@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
+import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -181,8 +182,36 @@ export default function App() {
   // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
   // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
+  const relationshipDeltas = tickResult?.relationship_deltas ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
+
+  const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+  const relationshipAgentIds = [
+    ...new Set(
+      relationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
+    ),
+  ];
+  const flowNodes = relationshipAgentIds.map((id, index) => ({
+    id: String(id),
+    position: { x: (index % 4) * 200, y: Math.floor(index / 4) * 150 },
+    data: { label: agentNameById[id] ?? String(id) },
+  }));
+  const edgesByPair = new Map();
+  for (const delta of relationshipDeltas) {
+    const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
+    if (!edgesByPair.has(key)) {
+      edgesByPair.set(key, {
+        id: `e-${key}`,
+        source: String(delta.source_agent_id),
+        target: String(delta.target_agent_id),
+        type: "delta",
+        data: { effects: [] },
+      });
+    }
+    edgesByPair.get(key).data.effects.push(delta);
+  }
+  const flowEdges = [...edgesByPair.values()];
 
   return (
     <div className="app-shell">
@@ -293,6 +322,12 @@ export default function App() {
 										  })}
 										</ul>
                   )}
+
+                  <h4>관계 변화</h4>
+                  <RelationshipFlow
+                    nodes={flowNodes}
+                    edges={flowEdges}
+                  />
                 </div>
               )}
             </div>

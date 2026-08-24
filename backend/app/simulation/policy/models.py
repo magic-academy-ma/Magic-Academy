@@ -1,11 +1,17 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from app.simulation.policy.types import PolicyRuntimeResult
+from app.domain.relationship_metrics import RELATIONSHIP_METRIC_RANGES
+from app.simulation.agent_runtime import AgentRuntimeResult
+
+METRIC_RANGE: dict[str, tuple[int, int]] = {
+    **RELATIONSHIP_METRIC_RANGES,
+    "mood": (-100, 100),
+    "hunger": (0, 100),
+    "fatigue": (0, 100),
+    "stress": (0, 100),
+    "satisfaction": (0, 100),
+}
 
 
 class PolicyStatus(str, Enum):
@@ -48,7 +54,7 @@ class PolicyEvaluationInput:
     policy_version: str
     agent_snapshots: dict[str, AgentSnapshot]
     relationship_snapshots: list[RelationshipSnapshot]
-    runtime_results: list[PolicyRuntimeResult]
+    runtime_results: list[AgentRuntimeResult]
     valid_agent_ids: set[str]
 
 

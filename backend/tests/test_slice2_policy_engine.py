@@ -1,6 +1,28 @@
 """Slice 2 Policy Engine 단위 테스트"""
+from uuid import UUID
+
 import pytest
-from app.simulation.policy.types import RelationshipSignalType, SignalIntensity, StateSignalType
+from app.simulation.agent_runtime import (
+    ActionAlternative,
+    ActionType,
+    AgentReaction,
+    AgentRuntimeResult,
+    DecisionExplanation,
+    IntentCandidate,
+    ReactionValence,
+    RelationshipSignal,
+    RelationshipSignalType,
+    RelativePriority,
+    RuntimeStatus,
+    SignalIntensity,
+    StateSignal,
+    StateSignalType,
+)
+
+
+AGENT_A = UUID("00000000-0000-0000-0000-00000000000a")
+AGENT_B = UUID("00000000-0000-0000-0000-00000000000b")
+AGENT_X = UUID("00000000-0000-0000-0000-00000000000f")
 
 
 # ── signal_policy ──────────────────────────────────────────────────────────────
@@ -50,55 +72,46 @@ def test_mood_down_low_returns_negative_2():
     assert get_state_delta(StateSignalType.MOOD_DOWN, SignalIntensity.LOW) == -2
 
 
-# ── validators ─────────────────────────────────────────────────────────────────
-
 def _make_rel_signal(signal_type, intensity, target_id):
-    from app.simulation.policy.types import RelationshipSignal
     return RelationshipSignal(signal_type=signal_type, intensity=intensity, target_agent_id=target_id)
 
 
 def _make_runtime_result(agent_id, target_id, rel_signals=None, state_signals=None):
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult
-    return PolicyRuntimeResult(
+    action_type = ActionType.TALK if target_id is not None else ActionType.WAIT
+    return AgentRuntimeResult(
+        run_id="sim-test-1",
+        tick_number=1,
         agent_id=agent_id,
-        action_type="TALK",
-        target_agent_id=target_id,
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            relationship_signals=rel_signals or [],
-            state_signals=state_signals or [],
+        status=RuntimeStatus.PROPOSED,
+        intent=IntentCandidate(
+            action_type=action_type,
+            target_agent_id=target_id,
+            target_location_id=None,
+            related_event_id=None,
+            utterance=None,
+            motivation_summary="test",
+            reaction=AgentReaction(
+                valence=ReactionValence.POSITIVE,
+                relationship_signals=rel_signals or [],
+                state_signals=state_signals or [],
+            ),
+            decision_explanation=DecisionExplanation(
+                alternatives=[ActionAlternative(
+                    action_type=action_type,
+                    description="test",
+                    relative_priority=RelativePriority.HIGH,
+                    selected=True,
+                )],
+                influencing_factors=[],
+            ),
+            memory_candidates=[],
         ),
+        retry_count=0,
+        failure_reason=None,
+        model="test-model",
+        prompt_version="test-prompt-v1",
+        idempotency_key=f"sim-test-1:1:{agent_id}",
     )
-
-
-def test_self_target_relationship_signal_is_rejected():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        "agent-a", "agent-a",
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, "agent-a")],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={"agent-a", "agent-b"})
-    assert any("self" in e.lower() for e in errors)
-
-
-def test_invalid_target_agent_is_rejected():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        "agent-a", "agent-x",
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, "agent-x")],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={"agent-a", "agent-b"})
-    assert any("invalid" in e.lower() or "target" in e.lower() for e in errors)
-
-
-def test_valid_signal_has_no_errors():
-    from app.simulation.policy.validators import validate_runtime_result
-    result = _make_runtime_result(
-        "agent-a", "agent-b",
-        rel_signals=[_make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, "agent-b")],
-    )
-    errors = validate_runtime_result(result, valid_agent_ids={"agent-a", "agent-b"})
-    assert errors == []
 
 
 # ── engine ─────────────────────────────────────────────────────────────────────
@@ -109,42 +122,37 @@ def _make_eval_input(runtime_results, rel_snapshots=None, agent_snapshots=None):
         run_id="sim-test-1",
         tick_number=1,
         policy_version="policy-mvp-0.1",
-        agent_snapshots=agent_snapshots or {
-            "agent-a": AgentSnapshot(agent_id="agent-a", hunger=50, fatigue=20, stress=10, satisfaction=50),
-            "agent-b": AgentSnapshot(agent_id="agent-b", hunger=50, fatigue=20, stress=10, satisfaction=50),
+        agent_snapshots=agent_snapshots if agent_snapshots is not None else {
+            str(AGENT_A): AgentSnapshot(agent_id=str(AGENT_A), hunger=50, fatigue=20, stress=10, satisfaction=50),
+            str(AGENT_B): AgentSnapshot(agent_id=str(AGENT_B), hunger=50, fatigue=20, stress=10, satisfaction=50),
         },
-        relationship_snapshots=rel_snapshots or [
-            RelationshipSnapshot(source_agent_id="agent-a", target_agent_id="agent-b", trust=20, tension=5),
-            RelationshipSnapshot(source_agent_id="agent-b", target_agent_id="agent-a", trust=15, tension=3),
+        relationship_snapshots=rel_snapshots if rel_snapshots is not None else [
+            RelationshipSnapshot(source_agent_id=str(AGENT_A), target_agent_id=str(AGENT_B), trust=20, tension=5),
+            RelationshipSnapshot(source_agent_id=str(AGENT_B), target_agent_id=str(AGENT_A), trust=15, tension=3),
         ],
         runtime_results=runtime_results,
-        valid_agent_ids={"agent-a", "agent-b"},
+        valid_agent_ids={str(AGENT_A), str(AGENT_B)},
     )
 
 
 def test_trust_up_produces_positive_effect_candidate():
     from app.simulation.policy.engine import evaluate_policy
     from app.simulation.policy.models import PolicyStatus
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [PolicyRuntimeResult(
-        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            relationship_signals=[RelationshipSignal(
-                signal_type=RelationshipSignalType.TRUST_UP,
-                intensity=SignalIntensity.MEDIUM,
-                target_agent_id="agent-b",
-            )],
-        ),
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[_make_rel_signal(
+            RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B
+        )],
     )]
     result = evaluate_policy(_make_eval_input(results))
     assert result.status == PolicyStatus.EVALUATED
     trust_effects = [e for e in result.effect_candidates if e.metric == "trust"]
     assert len(trust_effects) == 1
     assert trust_effects[0].delta == 3
-    assert trust_effects[0].source_agent_id == "agent-a"
-    assert trust_effects[0].target_agent_id == "agent-b"
+    assert trust_effects[0].source_agent_id == str(AGENT_A)
+    assert trust_effects[0].target_agent_id == str(AGENT_B)
     assert trust_effects[0].before == 20
     assert trust_effects[0].after_preview == 23
 
@@ -160,43 +168,33 @@ def test_unknown_policy_version_is_rejected():
 
 def test_ab_signal_does_not_affect_ba():
     from app.simulation.policy.engine import evaluate_policy
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [PolicyRuntimeResult(
-        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            relationship_signals=[RelationshipSignal(
-                signal_type=RelationshipSignalType.TRUST_UP,
-                intensity=SignalIntensity.MEDIUM,
-                target_agent_id="agent-b",
-            )],
-        ),
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[_make_rel_signal(
+            RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B
+        )],
     )]
     result = evaluate_policy(_make_eval_input(results))
-    ba_trust = [e for e in result.effect_candidates if e.metric == "trust" and e.source_agent_id == "agent-b"]
+    ba_trust = [e for e in result.effect_candidates if e.metric == "trust" and e.source_agent_id == str(AGENT_B)]
     assert len(ba_trust) == 0
 
 
 def test_trust_preview_clamped_at_100():
     from app.simulation.policy.engine import evaluate_policy
     from app.simulation.policy.models import RelationshipSnapshot
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    results = [PolicyRuntimeResult(
-        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            relationship_signals=[RelationshipSignal(
-                signal_type=RelationshipSignalType.TRUST_UP,
-                intensity=SignalIntensity.HIGH,  # delta +5
-                target_agent_id="agent-b",
-            )],
-        ),
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[_make_rel_signal(
+            RelationshipSignalType.TRUST_UP, SignalIntensity.HIGH, AGENT_B
+        )],
     )]
     rel_snapshots = [
-        RelationshipSnapshot(source_agent_id="agent-a", target_agent_id="agent-b", trust=98, tension=0),
-        RelationshipSnapshot(source_agent_id="agent-b", target_agent_id="agent-a", trust=0, tension=0),
+        RelationshipSnapshot(source_agent_id=str(AGENT_A), target_agent_id=str(AGENT_B), trust=98, tension=0),
+        RelationshipSnapshot(source_agent_id=str(AGENT_B), target_agent_id=str(AGENT_A), trust=0, tension=0),
     ]
     result = evaluate_policy(_make_eval_input(results, rel_snapshots=rel_snapshots))
     trust_effect = next(e for e in result.effect_candidates if e.metric == "trust")
@@ -206,21 +204,107 @@ def test_trust_preview_clamped_at_100():
 
 def test_mood_up_produces_state_effect():
     from app.simulation.policy.engine import evaluate_policy
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, StateSignal
 
-    results = [PolicyRuntimeResult(
-        agent_id="agent-a", action_type="REST", target_agent_id=None,
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            state_signals=[StateSignal(signal_type=StateSignalType.MOOD_UP, intensity=SignalIntensity.MEDIUM)],
-        ),
+    results = [_make_runtime_result(
+        AGENT_A,
+        None,
+        state_signals=[StateSignal(
+            signal_type=StateSignalType.MOOD_UP, intensity=SignalIntensity.MEDIUM
+        )],
     )]
     result = evaluate_policy(_make_eval_input(results))
     mood_effects = [e for e in result.effect_candidates if e.metric == "mood"]
     assert len(mood_effects) == 1
     assert mood_effects[0].delta == 5
-    assert mood_effects[0].source_agent_id == "agent-a"
+    assert mood_effects[0].source_agent_id == str(AGENT_A)
     assert mood_effects[0].target_agent_id is None
+
+
+def test_invalid_relationship_signal_keeps_valid_effects():
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.models import PolicyStatus
+
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[
+            _make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B),
+            _make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_X),
+        ],
+        state_signals=[StateSignal(
+            signal_type=StateSignalType.MOOD_UP, intensity=SignalIntensity.LOW
+        )],
+    )]
+
+    result = evaluate_policy(_make_eval_input(results))
+
+    assert result.status == PolicyStatus.PARTIAL
+    assert {(effect.metric, effect.target_agent_id) for effect in result.effect_candidates} == {
+        ("trust", str(AGENT_B)),
+        ("mood", None),
+    }
+    assert result.rejected_effects[0]["reason"] == "INVALID_RELATIONSHIP_TARGET"
+
+
+def test_closeness_preview_allows_negative_value():
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.models import RelationshipSnapshot
+
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[_make_rel_signal(
+            RelationshipSignalType.CLOSENESS_DOWN, SignalIntensity.HIGH, AGENT_B
+        )],
+    )]
+    relationships = [RelationshipSnapshot(
+        source_agent_id=str(AGENT_A),
+        target_agent_id=str(AGENT_B),
+        trust=0,
+        tension=0,
+        closeness=0,
+    )]
+
+    result = evaluate_policy(_make_eval_input(results, rel_snapshots=relationships))
+
+    closeness_effect = next(effect for effect in result.effect_candidates if effect.metric == "closeness")
+    assert closeness_effect.after_preview == -5
+
+
+def test_conflicting_relationship_signals_are_both_rejected():
+    from app.simulation.policy.engine import evaluate_policy
+    from app.simulation.policy.models import PolicyStatus
+
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[
+            _make_rel_signal(RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B),
+            _make_rel_signal(RelationshipSignalType.TRUST_DOWN, SignalIntensity.MEDIUM, AGENT_B),
+        ],
+    )]
+
+    result = evaluate_policy(_make_eval_input(results))
+
+    assert result.status == PolicyStatus.PARTIAL
+    assert [effect for effect in result.effect_candidates if effect.metric == "trust"] == []
+    assert len(result.rejected_effects) == 2
+    assert any("conflicting" in warning for warning in result.warnings)
+
+
+def test_duplicate_relationship_signals_are_deduplicated():
+    from app.simulation.policy.engine import evaluate_policy
+
+    signal = _make_rel_signal(
+        RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B
+    )
+    results = [_make_runtime_result(AGENT_A, AGENT_B, rel_signals=[signal, signal])]
+
+    result = evaluate_policy(_make_eval_input(results))
+
+    trust_effects = [effect for effect in result.effect_candidates if effect.metric == "trust"]
+    assert len(trust_effects) == 1
+    assert trust_effects[0].delta == 3
 
 
 # ── conflict ───────────────────────────────────────────────────────────────────
@@ -279,38 +363,74 @@ def test_summed_delta_clamped_at_range():
     assert committed[0].after_preview == 100
 
 
-# ── signal 단위 거부 ────────────────────────────────────────────────────────────
+def test_merged_candidates_join_rule_id_and_reason():
+    from app.simulation.policy.conflict import resolve_conflicts
+    from app.simulation.policy.models import EffectCandidate, EffectTargetType
+    c1 = EffectCandidate(
+        effect_id="e1", target_type=EffectTargetType.RELATIONSHIP,
+        source_agent_id="a", target_agent_id="b", metric="trust",
+        delta=3, before=20, after_preview=23,
+        rule_id="REL_TRUST_UP_MEDIUM", reason="MEDIUM 반응",
+    )
+    c2 = EffectCandidate(
+        effect_id="e2", target_type=EffectTargetType.RELATIONSHIP,
+        source_agent_id="a", target_agent_id="b", metric="trust",
+        delta=5, before=20, after_preview=25,
+        rule_id="REL_TRUST_UP_HIGH", reason="HIGH 반응",
+    )
+    committed = resolve_conflicts([c1, c2])
+    assert len(committed) == 1
+    assert committed[0].delta == 8
+    assert "REL_TRUST_UP_MEDIUM" in committed[0].rule_id
+    assert "REL_TRUST_UP_HIGH" in committed[0].rule_id
+    assert "MEDIUM 반응" in committed[0].reason
+    assert "HIGH 반응" in committed[0].reason
 
-def test_invalid_signal_does_not_reject_valid_signals_of_same_agent():
-    """잘못된 signal 하나가 같은 agent의 정상 signal까지 거부하면 안 된다."""
+
+def test_missing_relationship_snapshot_treats_as_neutral_zero():
     from app.simulation.policy.engine import evaluate_policy
-    from app.simulation.policy.models import PolicyStatus
-    from app.simulation.policy.types import AgentReaction, PolicyRuntimeResult, RelationshipSignal
 
-    # agent-a → self (잘못된 signal) + agent-a → agent-b (정상 signal)
-    results = [PolicyRuntimeResult(
-        agent_id="agent-a", action_type="TALK", target_agent_id="agent-b",
-        reaction=AgentReaction(
-            valence="POSITIVE",
-            relationship_signals=[
-                RelationshipSignal(
-                    signal_type=RelationshipSignalType.TRUST_UP,
-                    intensity=SignalIntensity.MEDIUM,
-                    target_agent_id="agent-a",   # self-target: 잘못된 signal
-                ),
-                RelationshipSignal(
-                    signal_type=RelationshipSignalType.TRUST_UP,
-                    intensity=SignalIntensity.MEDIUM,
-                    target_agent_id="agent-b",   # 정상 signal
-                ),
-            ],
-        ),
+    results = [_make_runtime_result(
+        AGENT_A,
+        AGENT_B,
+        rel_signals=[_make_rel_signal(
+            RelationshipSignalType.TRUST_UP, SignalIntensity.MEDIUM, AGENT_B
+        )],
     )]
-    result = evaluate_policy(_make_eval_input(results))
-    assert result.status == PolicyStatus.PARTIAL
-    # 잘못된 signal은 rejected에 기록
-    assert len(result.rejected_effects) == 1
-    # 정상 signal은 effect_candidates에 포함
+    # 첫 만남 — relationship snapshot 없음
+    result = evaluate_policy(_make_eval_input(results, rel_snapshots=[]))
     trust_effects = [e for e in result.effect_candidates if e.metric == "trust"]
     assert len(trust_effects) == 1
-    assert trust_effects[0].target_agent_id == "agent-b"
+    assert trust_effects[0].before == 0
+
+
+def test_duplicate_state_signals_are_deduplicated():
+    from app.simulation.policy.engine import evaluate_policy
+
+    signal = StateSignal(signal_type=StateSignalType.STRESS_DOWN, intensity=SignalIntensity.LOW)
+    results = [_make_runtime_result(AGENT_A, None, state_signals=[signal, signal])]
+    result = evaluate_policy(_make_eval_input(results))
+    stress_effects = [e for e in result.effect_candidates if e.metric == "stress"]
+    assert len(stress_effects) == 1
+
+
+def test_resolve_conflicts_raises_key_error_for_unknown_metric():
+    from app.simulation.policy.conflict import resolve_conflicts
+    from app.simulation.policy.models import EffectCandidate, EffectTargetType
+
+    candidates = [
+        EffectCandidate(
+            effect_id="test:a:b:unknown_metric",
+            target_type=EffectTargetType.RELATIONSHIP,
+            source_agent_id="a",
+            target_agent_id="b",
+            metric="unknown_metric",
+            delta=5,
+            before=10,
+            after_preview=15,
+            rule_id="TEST",
+            reason="test",
+        )
+    ]
+    with pytest.raises(KeyError):
+        resolve_conflicts(candidates)

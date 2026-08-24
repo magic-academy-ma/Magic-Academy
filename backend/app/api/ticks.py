@@ -47,12 +47,25 @@ class AgentMemoryResponse(BaseModel):
     memories: list[AgentMemoryItem]
 
 
+class RelationshipDeltaResponse(BaseModel):
+    effect_id: str
+    rule_id: str
+    source_agent_id: UUID
+    target_agent_id: UUID
+    metric: str
+    delta: int
+    before: int
+    after_preview: int
+    reason: str
+
+
 class TickAdvanceResponse(BaseModel):
     simulation_id: UUID
     previous_tick: int
     current_tick: int
     current_day: int
     status: str
+    relationship_deltas: list[RelationshipDeltaResponse]
     agent_results: list[AgentTickResultResponse]
     retrieved_memories: list[AgentMemoryResponse] = Field(default_factory=list)
 
@@ -95,6 +108,21 @@ def advance_tick(
         current_tick=result.current_tick,
         current_day=result.current_day,
         status="COMPLETED",
+        relationship_deltas=[
+            RelationshipDeltaResponse(
+                effect_id=effect.effect_id,
+                rule_id=effect.rule_id,
+                source_agent_id=UUID(effect.source_agent_id),
+                target_agent_id=UUID(effect.target_agent_id),
+                metric=effect.metric,
+                delta=effect.after_preview - effect.before,
+                before=effect.before,
+                after_preview=effect.after_preview,
+                reason=effect.reason,
+            )
+            for effect in result.policy_result.relationship_effects
+            if effect.target_agent_id is not None
+        ],
         agent_results=[
             AgentTickResultResponse(
                 agent_id=runtime_result.agent_id,

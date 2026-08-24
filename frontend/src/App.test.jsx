@@ -198,6 +198,28 @@ describe('Slice 0 UI', () => {
     expect(screen.getByText('재시도 3회 실패 — 사유: LLM_TIMEOUT')).toBeInTheDocument()
   })
 
+  it('renders relationship_deltas as delta badges on the relationship graph', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      relationship_deltas: [{
+        effect_id: 'run:1:a:rel:TRUST_UP:b',
+        rule_id: 'REL_TRUST_UP_MEDIUM',
+        source_agent_id: agents[0].id,
+        target_agent_id: agents[1].id,
+        metric: 'trust',
+        delta: 3,
+        before: 0,
+        after_preview: 3,
+        reason: '대화 후 신뢰 상승',
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('관계 변화')).toBeInTheDocument()
+  })
+
   it('renders a SKIPPED agent result without action details', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     await setupSimulationWithAgents(fetchMock)

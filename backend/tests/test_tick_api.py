@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from app.services.manual_tick import tick_position
 
 
@@ -25,9 +24,13 @@ def test_tick_position_rejects_non_positive_tick():
         tick_position(0)
 
 
-def test_tick_response_contract_preserves_public_fields_only():
-    from app.api.ticks import AgentTickResultResponse, TickAdvanceResponse
-    from app.api.ticks import DecisionExplanationResponse
+def test_tick_response_contract_does_not_expose_internal_fields():
+    from app.api.ticks import (
+        AgentTickResultResponse,
+        DecisionExplanationResponse,
+        RelationshipDeltaResponse,
+        TickAdvanceResponse,
+    )
 
     response = TickAdvanceResponse(
         simulation_id=uuid4(),
@@ -35,6 +38,19 @@ def test_tick_response_contract_preserves_public_fields_only():
         current_tick=1,
         current_day=1,
         status="COMPLETED",
+        relationship_deltas=[
+            RelationshipDeltaResponse(
+                effect_id="run:1:a:rel:TRUST_UP:b",
+                rule_id="REL_TRUST_UP_MEDIUM",
+                source_agent_id=uuid4(),
+                target_agent_id=uuid4(),
+                metric="trust",
+                delta=3,
+                before=0,
+                after_preview=3,
+                reason="대화 후 신뢰 상승",
+            )
+        ],
         agent_results=[
             AgentTickResultResponse(
                 agent_id=uuid4(),
@@ -54,6 +70,7 @@ def test_tick_response_contract_preserves_public_fields_only():
 
     assert response["status"] == "COMPLETED"
     assert response["agent_results"][0]["runtime_status"] == "PROPOSED"
+    assert response["relationship_deltas"][0]["delta"] == 3
     assert response["retrieved_memories"] == []
     assert "participant_ids" not in response
     assert "runtime_outputs" not in response
