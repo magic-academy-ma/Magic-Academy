@@ -263,6 +263,72 @@ def test_consecutive_ticks_use_distinct_batch_run_ids(client):
     )
 
 
+def test_same_seed_reaches_runtime_and_matches_execution_metadata(client):
+    from app.domain.models import RuntimeExecution, Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    class DeterministicSeedLLM(MockLLMClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.received_seeds = []
+
+        def generate(self, runtime_input):
+            self.received_seeds.append(runtime_input.seed)
+            response = super().generate(runtime_input)
+            response["motivation_summary"] = f"seed-result-{runtime_input.seed % 7}"
+            return response
+
+    test_client, session_factory = client
+    first_id, headers = register_login_create(test_client)
+    second = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Same Seed Run"}
+    )
+    assert second.status_code == 201
+    simulation_ids = [first_id, second.json()["id"]]
+    fake_llm = DeterministicSeedLLM()
+    runtime = AgentRuntime(fake_llm, model="deterministic-seed-runtime")
+    normalized_results = []
+
+    for simulation_id in simulation_ids:
+        with session_factory() as db:
+            simulation = db.get(Simulation, UUID(simulation_id))
+            result = asyncio.run(
+                advance_manual_tick(db, simulation, runtime=runtime, seed=4242)
+            )
+            normalized_results.append(
+                [
+                    (
+                        runtime_result.intent.action_type,
+                        runtime_result.intent.motivation_summary,
+                    )
+                    for runtime_result in result.runtime_results
+                ]
+            )
+            db.commit()
+
+    with session_factory() as db:
+        executions = list(
+            db.scalars(
+                select(RuntimeExecution)
+                .where(
+                    RuntimeExecution.simulation_id.in_(
+                        [UUID(value) for value in simulation_ids]
+                    )
+                )
+                .order_by(RuntimeExecution.simulation_id)
+            )
+        )
+
+    assert normalized_results[0] == normalized_results[1]
+    assert fake_llm.received_seeds == [4242, 4242, 4242, 4242]
+    assert len({execution.run_id for execution in executions}) == 2
+    assert {execution.seed for execution in executions} == {4242}
+    assert {execution.model for execution in executions} == {
+        "deterministic-seed-runtime"
+    }
+
+
 def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):
     from app.simulation.agent_runtime import AgentRuntime
 

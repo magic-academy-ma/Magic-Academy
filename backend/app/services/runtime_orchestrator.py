@@ -49,6 +49,7 @@ class RuntimeOrchestrator:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agent_candidates: Sequence[AgentContext],
         preselected_agent_ids: Sequence[UUID],
@@ -65,6 +66,7 @@ class RuntimeOrchestrator:
             self._context_assembler.assemble(
                 run_id=run_id,
                 tick_number=tick_number,
+                seed=seed,
                 block=block,
                 agent_id=agent.agent_id,
                 fixture_key=agent.fixture_key,
