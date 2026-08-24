@@ -154,9 +154,6 @@ export default function App() {
   // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
   const students = agents.filter((agent) => agent.agent_type === "student");
 
-  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
-  const students = agents.filter((agent) => agent.agent_type === "student");
-
   async function runTick() {
     setTickLoading(true);
     setTickError(null);

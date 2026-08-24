@@ -37,8 +37,8 @@ export default function UserPersonaSetup({
   const [mbtiType, setMbtiType] = useState("");
   const [bigFive, setBigFive] = useState(null);
 
-  // App.jsx가 onSaved로 인라인 함수를 넘기므로, 그 함수를 effect의 의존성으로 두면
-  // 매 렌더마다 재조회가 일어난다. ref로 최신 함수만 참조하고 effect deps에서는 제외한다.
+  // App.jsx가 onSaved로 인라인 함수를 넘기므로,
+  // effect의 의존성에는 포함하지 않고 최신 함수만 ref로 참조한다.
   const onSavedRef = useRef(onSaved);
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export default function UserPersonaSetup({
         });
 
         if (cancelled) return;
+
         setConfig(configResult);
 
         try {
@@ -75,23 +76,29 @@ export default function UserPersonaSetup({
             }, {})
           );
 
-          setLocked(Boolean(persona.locked));          // 이미 설정된(또는 잠긴) Persona를 마운트 시점에 발견한 경우에도 상위에 알린다.
-          // App.jsx가 이 값을 받아야 새로고침 후에도 Inspector·Agent 목록의 Persona 표시가 정확해진다.
+          setLocked(Boolean(persona.locked));
+
+          // 이미 설정된 Persona를 발견한 경우 상위 컴포넌트에도 알린다.
           onSavedRef.current?.(persona);
         } catch (personaError) {
-          if (personaError.status !== 404) throw personaError;
+          if (personaError.status !== 404) {
+            throw personaError;
+          }
 
           // 404 = 아직 User Persona가 설정되지 않음.
-          // 정상 흐름이므로 에러로 표시하지 않는다.
           setSelectedAgentId("");
           setMbtiType("");
           setBigFive(null);
           setLocked(false);
         }
       } catch (requestError) {
-        if (!cancelled) setError(requestError.message);
+        if (!cancelled) {
+          setError(requestError.message);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -100,7 +107,7 @@ export default function UserPersonaSetup({
     return () => {
       cancelled = true;
     };
-  }, [simulationId, token]);
+  }, [simulationId, token, refreshKey]);
 
   function selectMbti(nextMbti) {
     setMbtiType(nextMbti);
@@ -127,59 +134,59 @@ export default function UserPersonaSetup({
       return { ...prev, [key]: next };
     });
   }
+
   async function save() {
     setSaving(true);
     setError("");
-    async function save() {
-      setSaving(true);
-      setError("");
 
-      try {
-        const result = await setUserPersona(
-          simulationId,
-          {
-            agent_id: selectedAgentId,
-            mbti_type: mbtiType,
-            personality_rule_version: config.rule_version,
-            ...bigFive,
-          },
-          { token }
-        );
-
-        await startSimulation(simulationId, { token });
-
-        setLocked(true);
-        onSavedRef.current?.(result);
-      } catch (requestError) {
-        setError(requestError.message);
-      } finally {
-        setSaving(false);
-      }
-    }
-    if (loading) {
-      return (
-        <div className="panel persona-setup">
-          <h2>User Persona</h2>
-          <p className="message">Persona 설정을 불러오는 중...</p>
-        </div>
+    try {
+      const result = await setUserPersona(
+        simulationId,
+        {
+          agent_id: selectedAgentId,
+          mbti_type: mbtiType,
+          personality_rule_version: config.rule_version,
+          ...bigFive,
+        },
+        { token }
       );
-    }
 
-    if (!config) {
-      return (
-        <div className="panel persona-setup">
-          <h2>User Persona</h2>
+      await startSimulation(simulationId, { token });
 
-          {error && (
-            <p className="message error" role="alert">
-              {error}
-            </p>
-          )}
-        </div>
-      );
+      setLocked(true);
+      onSavedRef.current?.(result);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
     }
   }
+
+  if (loading) {
+    return (
+      <div className="panel persona-setup">
+        <h2>User Persona</h2>
+        <p className="message">Persona 설정을 불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (!config) {
+    return (
+      <div className="panel persona-setup">
+        <h2>User Persona</h2>
+
+        {error && (
+          <p className="message error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const mbtiOptions = Object.keys(config.mbti_rules);
+
   const canSave =
     Boolean(selectedAgentId && mbtiType && bigFive) && !saving;
 
