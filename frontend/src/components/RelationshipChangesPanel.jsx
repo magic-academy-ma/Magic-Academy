@@ -2,8 +2,7 @@ function formatDelta(delta) {
   return delta > 0 ? `+${delta}` : `${delta}`;
 }
 
-// changes는 {affection, trust, tension, ...} delta 값만 제공 (§14.5, before/after 없음)
-export default function RelationshipChangesPanel({ updates }) {
+export default function RelationshipChangesPanel({ updates = [] }) {
   if (updates.length === 0) return null;
 
   return (
@@ -15,8 +14,8 @@ export default function RelationshipChangesPanel({ updates }) {
         </tr>
       </thead>
       <tbody>
-        {updates.map((u, idx) => (
-          <tr key={`${u.relationship_id}-${idx}`}>
+        {updates.map((u) => (
+          <tr key={u.relationship_id}>
             <td>
               Agent {u.source_agent_id} → {u.target_agent_id}
             </td>

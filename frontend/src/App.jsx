@@ -197,19 +197,25 @@ export default function App() {
     setAuthNotice(notice);
   }
 
+    async function fetchAgents(simulationId) {
+    const agentList = await apiRequest(
+      `/v1/simulations/${simulationId}/agents`,
+      {
+        token: auth.access_token,
+      }
+    );
+
+    setAgents(agentList);
+
+    return agentList;
+  }
+
   async function loadAgents(simulationId) {
     setLoading(true);
     setError("");
 
     try {
-      const agentList = await apiRequest(
-        `/v1/simulations/${simulationId}/agents`,
-        {
-          token: auth.access_token,
-        }
-      );
-
-      setAgents(agentList);
+      const agentList = await fetchAgents(simulationId);
       setSelectedAgent(agentList[0] ?? null);
     } catch (requestError) {
       if (requestError.status === 401) {
@@ -226,15 +232,10 @@ export default function App() {
   // loadAgents와 달리 loading/error 상태를 건드리지 않는 조용한 재조회
   const refreshAgentsSilently = useCallback(
     async (simulationId) => {
-      try {
-        const agentList = await apiRequest(
-          `/v1/simulations/${simulationId}/agents`,
-          {
-            token: auth.access_token,
-          }
-        );
+      if (!auth) return;
 
-        setAgents(agentList);
+      try {
+        await fetchAgents(simulationId);
       } catch (requestError) {
         if (requestError.status === 401) {
           resetSession();
