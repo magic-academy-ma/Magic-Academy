@@ -29,5 +29,10 @@ Thumbs.db
 .vscode/
 *.swp
 
+# ─── Worktrees ────────────────────────────────────────
+.worktrees/
+
 # ─── Claude Code ──────────────────────────────────────
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**
