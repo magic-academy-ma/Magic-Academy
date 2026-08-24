@@ -3,6 +3,7 @@ import {
   getUserPersonaConfig,
   getUserPersona,
   setUserPersona,
+  startSimulation,
 } from "../api/client.js";
 
 const BIG_FIVE_TRAITS = [
@@ -126,58 +127,58 @@ export default function UserPersonaSetup({
       return { ...prev, [key]: next };
     });
   }
-
   async function save() {
     setSaving(true);
     setError("");
+    async function save() {
+      setSaving(true);
+      setError("");
 
-    try {
-      const result = await setUserPersona(
-        simulationId,
-        {
-          agent_id: selectedAgentId,
-          mbti_type: mbtiType,
-          personality_rule_version: config.rule_version,
-          ...bigFive,
-        },
-        { token }
+      try {
+        const result = await setUserPersona(
+          simulationId,
+          {
+            agent_id: selectedAgentId,
+            mbti_type: mbtiType,
+            personality_rule_version: config.rule_version,
+            ...bigFive,
+          },
+          { token }
+        );
+
+        await startSimulation(simulationId, { token });
+
+        setLocked(true);
+        onSavedRef.current?.(result);
+      } catch (requestError) {
+        setError(requestError.message);
+      } finally {
+        setSaving(false);
+      }
+    }
+    if (loading) {
+      return (
+        <div className="panel persona-setup">
+          <h2>User Persona</h2>
+          <p className="message">Persona 설정을 불러오는 중...</p>
+        </div>
       );
+    }
 
-      setLocked(Boolean(result.locked));
-      onSavedRef.current?.(result);
-    } catch (requestError) {
-      // 400 INVALID_PERSONALITY_CONFIGURATION: 범위·단위·규칙버전 불일치
-      // 404 RESOURCE_NOT_FOUND: Simulation 또는 Student 없음
-      // 409 CONFLICT: 이미 적용됨 또는 Simulation 시작으로 잠김
-      setError(requestError.message);
-    } finally {
-      setSaving(false);
+    if (!config) {
+      return (
+        <div className="panel persona-setup">
+          <h2>User Persona</h2>
+
+          {error && (
+            <p className="message error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      );
     }
   }
-
-  if (loading) {
-    return (
-      <div className="panel persona-setup">
-        <h2>User Persona</h2>
-        <p className="message">Persona 설정을 불러오는 중...</p>
-      </div>
-    );
-  }
-
-  if (!config) {
-    return (
-      <div className="panel persona-setup">
-        <h2>User Persona</h2>
-
-        {error && (
-          <p className="message error" role="alert">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
   const mbtiOptions = Object.keys(config.mbti_rules);
   const canSave =
     Boolean(selectedAgentId && mbtiType && bigFive) && !saving;

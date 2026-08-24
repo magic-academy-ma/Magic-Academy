@@ -166,25 +166,54 @@ describe("UserPersonaSetup", () => {
     expect(screen.getByRole("group", { name: /Student 선택/ })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Persona 저장" })).not.toBeInTheDocument();
   });
-
-  it("저장 성공 시 onSaved 콜백에 응답을 전달하고 올바른 요청 본문을 보낸다", async () => {
+  it("Persona 저장 후 Simulation을 시작하고 locked 상태로 입력을 잠근다", async () => {
     const fetchMock = mockInitialLoad();
-    fetchMock.mockImplementationOnce(() => response({ data: appliedPersona({ locked: false }) }));
+
+    // POST /user-persona
+    fetchMock.mockImplementationOnce(() =>
+      response({ data: appliedPersona({ locked: false }) })
+    );
+
+    // POST /start
+    fetchMock.mockImplementationOnce(() =>
+      response({
+        data: {
+          id: "sim_01",
+          status: "RUNNING",
+          started_at: "2026-08-25T03:00:00Z",
+        },
+      })
+    );
+
     const onSaved = vi.fn();
     const user = userEvent.setup();
 
-    render(<UserPersonaSetup simulationId="sim_01" students={students} token="t" onSaved={onSaved} />);
+    render(
+      <UserPersonaSetup
+        simulationId="sim_01"
+        students={students}
+        token="t"
+        onSaved={onSaved}
+      />
+    );
+
     await screen.findByLabelText(students[0].name);
+
     await user.click(screen.getByLabelText(students[2].name));
     await user.selectOptions(screen.getByLabelText("MBTI preset"), "INFP");
     await user.click(screen.getByRole("button", { name: "Persona 저장" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalled();
+      expect(screen.getByText(/Simulation이 시작되어/)).toBeInTheDocument();
+    });
 
-    const [url, options] = fetchMock.mock.calls[2];
-    expect(url).toContain("/v1/simulations/sim_01/user-persona");
-    expect(options.method).toBe("POST");
-    expect(JSON.parse(options.body)).toEqual({
+    // Persona 저장 요청 확인
+    const [personaUrl, personaOptions] = fetchMock.mock.calls[2];
+
+    expect(personaUrl).toContain("/v1/simulations/sim_01/user-persona");
+    expect(personaOptions.method).toBe("POST");
+    expect(JSON.parse(personaOptions.body)).toEqual({
       agent_id: students[2].id,
       mbti_type: "INFP",
       personality_rule_version: "mbti-big-five-v0.1",
@@ -194,6 +223,23 @@ describe("UserPersonaSetup", () => {
       agreeableness: 20,
       emotional_stability: 0,
     });
+
+    // Simulation 시작 요청 확인
+    const [startUrl, startOptions] = fetchMock.mock.calls[3];
+
+    expect(startUrl).toContain("/v1/simulations/sim_01/start");
+    expect(startOptions.method).toBe("POST");
+
+    // Simulation 시작 후 입력이 잠겼는지 확인
+    expect(
+      screen.getByRole("group", { name: /Student 선택/ })
+    ).toBeDisabled();
+
+    expect(screen.getByLabelText("MBTI preset")).toBeDisabled();
+
+    expect(
+      screen.queryByRole("button", { name: "Persona 저장" })
+    ).not.toBeInTheDocument();
   });
 
   it("400 오류 시 서버 message를 그대로 표시한다", async () => {

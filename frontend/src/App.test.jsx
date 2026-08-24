@@ -27,16 +27,15 @@ function tickResult(overrides = {}) {
     ...overrides,
   }
 }
+async function setupSimulationWithAgents() {
+  const fetchMock = createFetchMock()
 
-async function setupSimulationWithAgents(fetchMock) {
-  fetchMock
-    .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
-    .mockImplementationOnce(() => response(simulation, 201))
-    .mockImplementationOnce(() => response(agents))
   render(<App />)
   await login()
   await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
   await screen.findByText('Agent 6명')
+
+  return fetchMock
 }
 
 // User Persona 설정 옵션 (UserPersonaSetup이 workspace 진입과 동시에 조회한다).
@@ -167,8 +166,7 @@ describe('Slice 0 UI', () => {
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
   })
   it('shows loading state while a tick is running', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => new Promise(() => {})) // never resolves
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
@@ -177,8 +175,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('renders a PROPOSED agent result on success', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({
       agent_results: [{
         agent_id: agents[0].id,
@@ -201,8 +198,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('shows an empty agent-results message', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
@@ -211,8 +207,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('renders a FALLBACK agent result with retry info', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({
       agent_results: [{
         agent_id: agents[0].id,
@@ -234,8 +229,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('renders a SKIPPED agent result without action details', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({
       agent_results: [{
         agent_id: agents[0].id,
@@ -258,8 +252,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('returns to the login screen with a notice on tick auth error', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response({ error: { code: 'UNAUTHORIZED', message: '로그인이 필요하거나 만료되었습니다.' } }, 401))
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
@@ -269,8 +262,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('shows a concurrent-tick message on TICK_ALREADY_RUNNING', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response({
       error: { code: 'TICK_ALREADY_RUNNING', message: '이미 진행 중인 Tick이 있습니다.' },
     }, 409))
@@ -280,9 +272,8 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('이미 진행 중인 Tick이 있습니다')
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
-    it('does not treat a 409 with a different error code as TICK_ALREADY_RUNNING', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+  it('does not treat a 409 with a different error code as TICK_ALREADY_RUNNING', async () => {
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response({
       error: { code: 'SIMULATION_LOCKED', message: '시뮬레이션이 잠겨 있습니다.' },
     }, 409))
@@ -294,8 +285,7 @@ describe('Slice 0 UI', () => {
   })
 
   it('sends the tick advance request without a request body', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
-    await setupSimulationWithAgents(fetchMock)
+    const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
