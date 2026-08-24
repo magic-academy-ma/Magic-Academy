@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from app.api.auth import router as auth_router
 from app.api.agents import router as agents_router
+from app.api.auth import router as auth_router
 from app.api.simulations import router as simulations_router
 from app.api.ticks import router as ticks_router
 
