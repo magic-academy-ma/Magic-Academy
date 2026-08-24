@@ -27,9 +27,8 @@ export async function apiRequest(path, { token, ...options } = {}) {
   }
 
   if (!response.ok) {
+
     // 두 가지 에러 포맷을 모두 지원한다.
-    // - {"code","message","details"}: User Persona API
-    // - {"detail": "..."}: 기존 FastAPI 기본 예외 포맷
     const message =
       (typeof body?.message === "string" && body.message) ||
       (typeof body?.error?.message === "string" && body.error.message) ||
@@ -88,4 +87,4 @@ export async function startSimulation(simulationId, { token } = {}) {
     }
   );
   return response.data;
-}
+

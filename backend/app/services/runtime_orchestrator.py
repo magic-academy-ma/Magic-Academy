@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -30,6 +31,8 @@ class RuntimeBatchExecutionResult:
 
 
 class RuntimeOrchestrator:
+    MAX_CONCURRENT_RUNTIMES = 6
+
     def __init__(
         self,
         runtime: AgentRuntimeExecutor,
@@ -84,10 +87,10 @@ class RuntimeOrchestrator:
     def run_batch(
         self, runtime_inputs: Sequence[AgentRuntimeInput]
     ) -> RuntimeBatchExecutionResult:
-        results = tuple(
-            self._runtime.run(runtime_input)
-            for runtime_input in runtime_inputs
-        )
+        with ThreadPoolExecutor(
+            max_workers=self.MAX_CONCURRENT_RUNTIMES
+        ) as executor:
+            results = tuple(executor.map(self._runtime.run, runtime_inputs))
         save_result = self._result_sink.save_batch(results)
         return RuntimeBatchExecutionResult(
             results=results,

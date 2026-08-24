@@ -3,7 +3,6 @@ title: Definition of Done
 source: confluence/09_CONVENTIONS/11.DefinitionOfDone
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4358231/11.+Definition+of+Done
 status: approved
-visibility: public
 updated: 2026-07-21
 source_updated: 2026-07-09
 ---

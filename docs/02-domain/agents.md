@@ -1,5 +1,8 @@
 ---
 title: Agent 정의
+status: approved
+updated: 2026-07-28
+visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
   - "Magic Layer 설계 (Confluence #6619141)"
@@ -11,9 +14,7 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/6619141
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
-status: approved
-visibility: public
-updated: 2026-07-28
+source_updated: 2026-07-28
 ---
 
 # Agent 정의
@@ -44,13 +45,13 @@ updated: 2026-07-28
 
 모든 Agent는 아래 내부 상태를 보유하며, 이 상태가 행동과 관계 변화의 입력이 된다.
 
-| 상태 | 설명 |
-|------|------|
-| 배고픔 | 식사 이벤트로 감소 |
-| 피로도 | Tick 경과·수업·활동으로 누적, 수면(밤 스킵) 시 감소 |
-| 스트레스 | 시험·갈등·과제로 누적 |
-| 만족도 | 긍정 사건·관계 호전으로 상승 |
-| 기분 | 위 4개 상태와 관계 변화의 복합 결과 |
+| 상태 | 범위 | 설명 |
+|------|------|------|
+| 배고픔 | 0~100 | 식사 이벤트로 감소 |
+| 피로도 | 0~100 | Tick 경과·수업·활동으로 누적, 수면(밤 스킵) 시 감소 |
+| 스트레스 | 0~100 | 시험·갈등·과제로 누적 |
+| 만족도 | 0~100 | 긍정 사건·관계 호전으로 상승 |
+| 기분 | -100~100 | 위 4개 상태와 관계 변화의 복합 결과 |
 
 ---
 
