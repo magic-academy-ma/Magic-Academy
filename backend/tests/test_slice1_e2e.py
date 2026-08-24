@@ -490,3 +490,31 @@ def test_manual_tick_wires_memory_retriever_when_provided(client):
     assert {agent_id for agent_id, _, _ in retrieved_calls} == set(
         result.retrieval_traces.keys()
     )
+
+
+def test_manual_tick_stores_memory_with_executed_tick(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    stored_ticks = []
+
+    async def fake_store(agent_id, event_id, candidate, tick):
+        stored_ticks.append(tick)
+        return f"memory-{agent_id}"
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_store=fake_store,
+            )
+        )
+        db.commit()
+
+    assert stored_ticks == [result.current_tick] * len(result.runtime_results)
