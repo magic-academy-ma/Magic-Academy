@@ -11,7 +11,13 @@ Slice 0~3 누적 회귀는 별도 시나리오 없이 `pytest -q`(전체 backend
 결과로 확인한다.
 """
 
+import os
+
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.orm import sessionmaker
+from uuid6 import uuid7
 
 from app.simulation.agent_runtime import AgentRuntimeResult
 from app.simulation.tick_engine import (
@@ -264,34 +270,207 @@ async def test_agent_result_id_mapping_independent_of_completion_order() -> None
 # ── 의존 Task 병합 후 활성화할 시나리오 ───────────────────────────────────────
 
 
-@pytest.mark.skip(reason="User Persona 선정(Task 2, #111)·저장(Task 3, #112) 병합 후 활성화")
-def test_user_persona_uses_ordinary_student_runtime() -> None:
+async def test_user_persona_uses_ordinary_student_runtime() -> None:
     """User Persona로 지정된 Student도 별도 Runtime 없이 기존 Student Runtime을 사용한다."""
+    students = make_students()
+    user_persona = students[0]  # TickEngine 레벨에서 AgentType.STUDENT로 편성
+    runtime_received_ids: list[str] = []
+
+    async def recording_runtime(agents, event, snapshot):
+        runtime_received_ids.extend(agent.id for agent in agents)
+        return student_runtime_results(agents)
+
+    engine = TickEngine(runtime=recording_runtime)
+
+    result = await engine.run_tick(
+        agents=students,
+        event=make_event(),
+        snapshot=make_snapshot(),
+    )
+
+    assert user_persona.id in runtime_received_ids
+    assert result.runtime_outputs[user_persona.id].status == "PROPOSED"
 
 
-@pytest.mark.skip(reason="User Persona 저장·활성 상태 연동(Task 3, #112) 병합 후 활성화")
-def test_inactive_user_persona_is_skipped() -> None:
+async def test_inactive_user_persona_is_skipped() -> None:
     """비활성 User Persona는 LLM 호출 없이 SKIPPED 결과로 포함된다."""
+    inactive_persona_id = STUDENT_IDS[0]
+    students = make_students(inactive_ids={inactive_persona_id})
+
+    async def runtime_with_skip(agents, event, snapshot):
+        return {
+            agent.id: make_runtime_result(
+                agent.id, status="SKIPPED" if not agent.is_active else "PROPOSED"
+            )
+            for agent in agents
+        }
+
+    engine = TickEngine(runtime=runtime_with_skip)
+
+    result = await engine.run_tick(
+        agents=students,
+        event=make_event(),
+        snapshot=make_snapshot(),
+    )
+
+    assert result.runtime_outputs[inactive_persona_id].status == "SKIPPED"
+    assert result.status == "completed"
 
 
-@pytest.mark.skip(reason="저장·transaction 경계(Task 3, #112) 병합 후 활성화")
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="TEST_DATABASE_URL is required")
 def test_storage_failure_rolls_back_entire_tick() -> None:
     """Tick 결과 저장 실패 시 Tick·Memory·Relationship·실행 기록이 모두 rollback된다."""
+    from app.domain.models import Agent, RuntimeExecution, RuntimeResult, Simulation, User
+    from app.services.database_runtime_results import DatabaseRuntimeResultSink
+    from app.services.execution_metadata import ExecutionMetadataInput, record_execution_metadata
+    from app.services.fixtures import seed_slice_zero
+    from tests.runtime_factories import make_runtime_result as factory_make_runtime_result
+
+    db_url = os.getenv("TEST_DATABASE_URL")
+    db_engine = create_engine(db_url)
+    session_factory = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    with db_engine.begin() as conn:
+        conn.execute(text("TRUNCATE users, simulations RESTART IDENTITY CASCADE"))
+
+    owner_id = uuid7()
+    simulation_id = uuid7()
+    with session_factory.begin() as session:
+        session.add(User(id=owner_id, username="acceptance-rollback", display_name="Rollback", password_hash="x", roles=["USER"]))
+        session.flush()
+        session.add(Simulation(id=simulation_id, owner_id=owner_id, name="Rollback"))
+        session.flush()
+        seed_slice_zero(session, simulation_id)
+
+    with session_factory() as session:
+        with pytest.raises(RuntimeError):
+            with session.begin():
+                agent_id = session.scalar(
+                    select(Agent.id).where(Agent.simulation_id == simulation_id, Agent.fixture_key == "student-01")
+                )
+                run_id = str(uuid7())
+                result = factory_make_runtime_result(agent_id=str(agent_id)).model_copy(
+                    update={"run_id": run_id, "tick_number": 1, "agent_id": agent_id,
+                            "idempotency_key": f"{run_id}:1:{agent_id}"}
+                )
+                record_execution_metadata(
+                    session,
+                    ExecutionMetadataInput(simulation_id=simulation_id, run_id=run_id, tick_number=1,
+                                          seed=1, model=result.model, prompt_version=result.prompt_version,
+                                          policy_version=None),
+                )
+                DatabaseRuntimeResultSink(session).save_batch([result])
+                raise RuntimeError("fatal commit failure")
+
+    with session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(RuntimeExecution)) == 0
+        assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+    db_engine.dispose()
 
 
-@pytest.mark.skip(reason="실행 메타데이터 저장(Task 3, #112) 병합 후 활성화")
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="TEST_DATABASE_URL is required")
 def test_execution_metadata_is_persisted() -> None:
     """run_id·seed·model·prompt_version·policy_version이 실행 기록에 저장된다."""
+    from app.domain.models import RuntimeExecution, Simulation, User
+    from app.services.execution_metadata import ExecutionMetadataInput, record_execution_metadata
+
+    db_url = os.getenv("TEST_DATABASE_URL")
+    db_engine = create_engine(db_url)
+    session_factory = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    with db_engine.begin() as conn:
+        conn.execute(text("TRUNCATE users, simulations RESTART IDENTITY CASCADE"))
+
+    owner_id = uuid7()
+    simulation_id = uuid7()
+    run_id = str(uuid7())
+    with session_factory.begin() as session:
+        session.add(User(id=owner_id, username="acceptance-metadata", display_name="Metadata", password_hash="x", roles=["USER"]))
+        session.flush()
+        session.add(Simulation(id=simulation_id, owner_id=owner_id, name="Metadata"))
+        session.flush()
+        record_execution_metadata(
+            session,
+            ExecutionMetadataInput(simulation_id=simulation_id, run_id=run_id, tick_number=1,
+                                   seed=7, model="mock-llm", prompt_version="agent-runtime-10.1",
+                                   policy_version="policy-mvp-0.1"),
+        )
+
+    with session_factory() as session:
+        stored = session.scalar(select(RuntimeExecution).where(RuntimeExecution.run_id == run_id))
+        assert stored.simulation_id == simulation_id
+        assert stored.tick_number == 1
+        assert stored.seed == 7
+        assert stored.model == "mock-llm"
+        assert stored.prompt_version == "agent-runtime-10.1"
+        assert stored.policy_version == "policy-mvp-0.1"
+    db_engine.dispose()
 
 
-@pytest.mark.skip(reason="6-Agent roster 편성(Task 1, #110) 병합 후 활성화")
-def test_roster_contains_five_students_and_one_professor() -> None:
+async def test_roster_contains_five_students_and_one_professor() -> None:
     """roster가 Student 5명(User Persona 포함)·Professor 1명으로 구성되고 중복이 없다. (AUP-01)"""
+    students = make_students()
+    professor = make_professor()
+    roster: list[TickAgent] = []
+
+    async def recording_runtime(agents, event, snapshot):
+        roster.extend(agents)
+        return student_runtime_results(agents)
+
+    engine = TickEngine(runtime=recording_runtime)
+
+    await engine.run_tick(
+        agents=[*students, professor],
+        event=make_event(participant_ids=[PROFESSOR_ID]),
+        snapshot=make_snapshot(),
+    )
+
+    participant_ids = [a.id for a in roster]
+    assert len(participant_ids) == 6
+    assert len(set(participant_ids)) == 6
+    assert sum(1 for a in roster if a.agent_type == AgentType.STUDENT) == 5
+    assert sum(1 for a in roster if a.agent_type == AgentType.PROFESSOR) == 1
 
 
-@pytest.mark.skip(reason="User Persona 잠금·API 경계(Task 3, #112) 병합 후 활성화")
+@pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="TEST_DATABASE_URL is required")
 def test_direct_command_to_user_persona_after_start_is_rejected() -> None:
     """Simulation 시작 후 User Persona 직접 명령·성격 변경 요청은 HTTP 409로 거부된다. (AUP-07)"""
+    from app.core.database import get_db
+    from app.main import app
+
+    db_url = os.getenv("TEST_DATABASE_URL")
+    db_engine = create_engine(db_url)
+    session_factory = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    with db_engine.begin() as conn:
+        conn.execute(text("TRUNCATE users, simulations RESTART IDENTITY CASCADE"))
+
+    def override_db():
+        with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            creds = {"username": "aup07-user", "display_name": "AUP-07", "password": "Aup07-pass!"}
+            assert client.post("/v1/auth/register", json=creds).status_code == 201
+            login = client.post("/v1/auth/login", json={"username": creds["username"], "password": creds["password"]})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            sim = client.post("/v1/simulations", headers=headers, json={"name": "AUP-07"}).json()
+            agents = client.get(f"/v1/simulations/{sim['id']}/agents", headers=headers).json()
+            student = next(a for a in agents if a["fixture_key"] == "student-03")
+            persona_payload = {
+                "agent_id": student["id"], "mbti_type": "INFP",
+                "personality_rule_version": "mbti-big-five-v0.1",
+                "openness": 25, "conscientiousness": -25, "extraversion": -25,
+                "agreeableness": 20, "emotional_stability": 0,
+            }
+            assert client.post(f"/v1/simulations/{sim['id']}/user-persona", headers=headers, json=persona_payload).status_code == 200
+            assert client.post(f"/v1/simulations/{sim['id']}/start", headers=headers, json={}).status_code == 200
+
+            response = client.post(f"/v1/simulations/{sim['id']}/user-persona", headers=headers, json=persona_payload)
+            assert response.status_code == 409
+            assert response.json()["code"] == "CONFLICT"
+    finally:
+        app.dependency_overrides.clear()
+        db_engine.dispose()
 
 
 async def test_same_seed_produces_identical_results() -> None:
