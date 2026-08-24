@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
+import { DeltaGroup } from "./components/DeltaDisplay.jsx";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import "./App.css";
 
@@ -182,6 +183,7 @@ export default function App() {
   // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
   // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
+  const stateDeltas = tickResult?.state_deltas ?? [];
   const relationshipDeltas = tickResult?.relationship_deltas ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
@@ -321,6 +323,13 @@ export default function App() {
 										    );
 										  })}
 										</ul>
+                  )}
+
+                  <h4>상태 변화</h4>
+                  {stateDeltas.length === 0 ? (
+                    <p className="message">이번 Tick에는 상태 변화가 없습니다.</p>
+                  ) : (
+                    <DeltaGroup effects={stateDeltas} />
                   )}
 
                   <h4>관계 변화</h4>

@@ -70,6 +70,7 @@ class EffectCandidate:
     after_preview: int
     rule_id: str
     reason: str
+    effect_ids: tuple[str, ...] = ()
 
 
 @dataclass

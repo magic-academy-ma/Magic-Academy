@@ -55,13 +55,16 @@ export function DeltaBadge({ effect, compact = false }) {
     metric,
     delta,
     before,
+    after,
     after_preview,
     reason,
     rule_id,
     source_agent_id,
     target_agent_id,
+    agent_name,
   } = effect;
   const color = getDeltaColor(metric, delta);
+  const committedAfter = after ?? after_preview;
   const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "▬";
   const sign = delta > 0 ? `+${delta}` : `${Math.abs(delta)}`;
   const isRelationship = isRelationshipEffect(effect);
@@ -102,6 +105,9 @@ export function DeltaBadge({ effect, compact = false }) {
           {source_agent_id}→{target_agent_id}
         </span>
       )}
+      {!isRelationship && agent_name && (
+        <span style={{ color: "#6b6f76", fontSize: 10 }}>{agent_name}</span>
+      )}
       <span style={{ color: "#3b3d42", fontWeight: 600 }}>
         {METRIC_LABEL_KO[metric] ?? metric}
       </span>
@@ -110,10 +116,7 @@ export function DeltaBadge({ effect, compact = false }) {
       </span>
       {!compact && (
         <span style={{ color: "#9a9da3" }}>
-          {before} → {after_preview}
-          <sup style={{ marginLeft: 3, color: "#c7c9cd", fontSize: 9 }}>
-            preview
-          </sup>
+          {before} → {committedAfter}
         </span>
       )}
     </div>

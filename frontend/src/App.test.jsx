@@ -220,6 +220,32 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByText('관계 변화')).toBeInTheDocument()
   })
 
+  it('renders committed state deltas separately from relationship deltas', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      state_deltas: [{
+        effect_id: 'run:1:a:state:FATIGUE_UP',
+        rule_id: 'STATE_FATIGUE_UP_MEDIUM',
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        metric: 'fatigue',
+        delta: 5,
+        before: 10,
+        after: 15,
+        reason: '수업 참여 후 피로 상승',
+      }],
+      relationship_deltas: [],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('heading', { name: '상태 변화' })).toBeInTheDocument()
+    expect(screen.getByText('피로')).toBeInTheDocument()
+    expect(screen.getAllByText(agents[0].name).length).toBeGreaterThan(0)
+    expect(screen.getByText('10 → 15')).toBeInTheDocument()
+  })
+
   it('renders a SKIPPED agent result without action details', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     await setupSimulationWithAgents(fetchMock)
