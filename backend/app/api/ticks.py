@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
 from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
+from app.services.memory_dependency import get_memory_hooks
 from app.services.runtime_dependency import get_agent_runtime
 from app.services.simulations import require_owned_simulation
 from app.simulation.agent_runtime import AgentRuntime
@@ -82,10 +83,20 @@ def advance_tick(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
+    memory_hooks: tuple = Depends(get_memory_hooks),
 ):
     simulation = require_owned_simulation(db, simulation_id, current_user)
+    memory_retriever, memory_store = memory_hooks
     try:
-        result = asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=memory_retriever,
+                memory_store=memory_store,
+            )
+        )
         db.commit()
     except TickAlreadyRunningError:
         db.rollback()

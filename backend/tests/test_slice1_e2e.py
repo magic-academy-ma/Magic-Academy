@@ -459,3 +459,34 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results
     }
+
+
+def test_manual_tick_wires_memory_retriever_when_provided(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    retrieved_calls = []
+
+    async def fake_retriever(agent_id, current_tick, query_text):
+        retrieved_calls.append((agent_id, current_tick, query_text))
+        return []
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_retriever=fake_retriever,
+            )
+        )
+        db.commit()
+
+    assert len(retrieved_calls) == len(result.runtime_results) == 2
+    assert {agent_id for agent_id, _, _ in retrieved_calls} == set(
+        result.retrieval_traces.keys()
+    )

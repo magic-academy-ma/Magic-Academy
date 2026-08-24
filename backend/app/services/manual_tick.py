@@ -20,6 +20,8 @@ from app.simulation.agent_runtime import (
 from app.simulation.tick_engine import (
     AgentType,
     MemoryItem,
+    MemoryRetrieverFn,
+    MemoryStoreFn,
     PolicyFn,
     TickAgent,
     TickEngine,
@@ -60,6 +62,8 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    memory_retriever: MemoryRetrieverFn | None = None,
+    memory_store: MemoryStoreFn | None = None,
 ) -> ManualTickResult:
     locked = db.scalar(
         select(
@@ -181,11 +185,13 @@ async def advance_manual_tick(
     ]
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
-        current_tick=previous_tick,
+        current_tick=current_tick,
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=evaluate_policy_batch,
+        memory_retriever=memory_retriever,
+        memory_store=memory_store,
     ).run_tick(
         tick_candidates,
         TickEvent(
