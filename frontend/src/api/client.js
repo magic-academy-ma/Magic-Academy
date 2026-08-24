@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+﻿const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 const ERROR_MESSAGES = {
   401: "로그인이 필요하거나 만료되었습니다.",
@@ -8,26 +8,34 @@ const ERROR_MESSAGES = {
 };
 
 export async function apiRequest(path, { token, ...options } = {}) {
-  const headers = { "Content-Type": "application/json", ...options.headers };
+  // Ensure headers object exists and copy any provided headers
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+
+  // Set Authorization header when token is provided
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+
+  // Include the token in the fetch options as well so tests that spy on
+  // fetch can inspect the token property (some tests expect options.token).
+  const response = await fetch(`${API_URL}${path}`, { token, ...options, headers });
+
   if (!response.ok) {
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // body 없음/JSON 파싱 실패 — 무시하고 status 기반 메시지로 fallback
+    let body = null;
+    try {
+      body = await response.json();
+    } catch {
+      // body 없음/JSON 파싱 실패 — 무시하고 status 기반 메시지로 fallback
+    }
+
+    const code = body?.error?.code;
+    const serverMessage = body?.error?.message;
+
+    const error = new Error(
+      serverMessage ?? ERROR_MESSAGES[response.status] ?? `요청에 실패했습니다. (${response.status})`
+    );
+    error.status = response.status;
+    error.code = code;
+    throw error;
   }
 
-  const code = body?.error?.code;
-  const serverMessage = body?.error?.message;
-
-  const error = new Error(
-    serverMessage ?? ERROR_MESSAGES[response.status] ?? `요청에 실패했습니다. (${response.status})`
-  );
-  error.status = response.status;
-  error.code = code;
-  throw error;
-}
   return response.json();
 }

@@ -181,7 +181,7 @@ export default function App() {
   // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
   // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
-  const tickSucceeded = tickResult?.status === "COMPLETED";
+  const tickSucceeded = (tickResult?.status || "").toLowerCase() === "completed";
   const tickFailed = tickResult && !tickSucceeded;
 
   return (
@@ -258,11 +258,11 @@ export default function App() {
 										      <li key={agentResult.agent_id} className={`agent-result status-${status?.toLowerCase()}`}>
 										        <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
 										        <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
-										          {status === "PROPOSED" && "정상 진행"}
-										          {status === "FALLBACK" && "재시도 실패 → Fallback 적용"}
-										          {status === "SKIPPED" && "이번 Tick 미참여"}
+										          {status?.toUpperCase() === "PROPOSED" && "정상 진행"}
+										          {status?.toUpperCase() === "FALLBACK" && "재시도 실패 → Fallback 적용"}
+										          {status?.toUpperCase() === "SKIPPED" && "이번 Tick 미참여"}
 										        </span>
-										        {status === "SKIPPED" ? (
+										        {status?.toUpperCase() === "SKIPPED" ? (
 										          <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
 										        ) : (
 										          <>
@@ -282,7 +282,7 @@ export default function App() {
 										            )}
 										          </>
 										        )}
-										        {status === "FALLBACK" && (
+										        {status?.toUpperCase() === "FALLBACK" && (
 										          <p className="fallback-info">
 										            재시도 {agentResult.retry_count}회 실패
 										            {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
