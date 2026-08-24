@@ -30,6 +30,7 @@ class SimulationTickService:
         simulation_id: UUID,
         run_id: UUID,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         preselected_agent_ids: Sequence[UUID] | None = None,
         schedule_requires_professor: bool = False,
@@ -64,6 +65,7 @@ class SimulationTickService:
         return self._runtime_input_adapter.run(
             run_id=str(run_id),
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agents=agents,
             preselected_agent_ids=preselected_agent_ids,

@@ -150,6 +150,7 @@ async def advance_manual_tick(
             simulation_id=simulation.id,
             run_id=run_id,
             tick_number=current_tick,
+            seed=execution_seed,
             block=block,
             preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
             schedule=schedule,
@@ -174,6 +175,7 @@ async def advance_manual_tick(
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
         current_tick=previous_tick,
+        data={"execution_seed": execution_seed},
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,

@@ -186,6 +186,7 @@ class ScheduleSummary(StrictModel):
 class AgentRuntimeInput(StrictModel):
     run_id: str
     tick_number: int = Field(ge=0)
+    seed: int = Field(default=0, ge=0)
     block: Block
     agent: AgentContext
     nearby_agents: list[dict[str, Any]]
