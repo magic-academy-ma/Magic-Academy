@@ -104,7 +104,7 @@ class TestSelectionInvariants:
         assert selected == tuple(STUDENT_IDS)
 
     def test_selection_order_follows_agent_snapshot_order(self) -> None:
-        """반환 순서는 Agent 목록 순서를 그대로 보존한다."""
+        """Student 간 상대 순서는 Agent 목록 순서를 그대로 보존한다."""
         reversed_students = list(reversed(make_students()))
         agents = reversed_students + [make_professor()]
 
@@ -113,6 +113,18 @@ class TestSelectionInvariants:
         )
 
         assert selected == (*reversed(STUDENT_IDS), PROFESSOR_ID)
+
+    def test_professor_placed_after_students_regardless_of_snapshot_order(self) -> None:
+        """Agent 조회 순서(fixture_key 오름차순 등)로 Professor가 Student보다 먼저
+        와도, 최종 편성 순서는 Student 전원 → Professor로 고정된다
+        (Slice 4 Task 0 계약: canonical 순서는 fixture_key 정렬에 의존하지 않는다)."""
+        agents = [make_professor()] + make_students()
+
+        selected = select_tick_participant_ids(
+            agents, schedule_requires_professor=True
+        )
+
+        assert selected == (*STUDENT_IDS, PROFESSOR_ID)
 
     def test_non_runtime_agent_type_is_excluded(self) -> None:
         """student/professor/user_persona 이외 agent_type은 실행 대상에서 제외된다."""
