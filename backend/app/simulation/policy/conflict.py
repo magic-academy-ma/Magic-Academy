@@ -19,10 +19,12 @@ def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate
                 after_preview=c.before,
                 rule_id=c.rule_id,
                 reason=c.reason,
+                effect_ids=c.effect_ids or (c.effect_id,),
             )
         else:
             groups[key].rule_id = f"{groups[key].rule_id}|{c.rule_id}"
             groups[key].reason = f"{groups[key].reason} + {c.reason}"
+            groups[key].effect_ids += c.effect_ids or (c.effect_id,)
         groups[key].delta += c.delta
 
     result = []

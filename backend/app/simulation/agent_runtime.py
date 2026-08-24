@@ -240,6 +240,8 @@ class InfluencingFactor(StrictModel):
 
 
 class DecisionExplanation(StrictModel):
+    """Inspector용 구조화 설명이며 모델의 내부 chain-of-thought가 아니다."""
+
     alternatives: list[ActionAlternative] = Field(min_length=1, max_length=3)
     influencing_factors: list[InfluencingFactor]
 
