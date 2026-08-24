@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
@@ -8,6 +9,8 @@ from uuid6 import uuid7
 from app.domain.models import (
     Agent,
     AgentState,
+    Event,
+    EventParticipant,
     Location,
     ProfessorProfile,
     StudentProfile,
@@ -49,6 +52,7 @@ AGENT_FIXTURES = (
 )
 
 LOCATIONS = {"dormitory": "기숙사", "classroom": "교실"}
+SLICE_ONE_CLASS_TITLE = "통합마법학 개론"
 
 
 def seed_slice_zero(db: Session, simulation_id: UUID) -> None:
@@ -165,3 +169,57 @@ def seed_slice_zero(db: Session, simulation_id: UUID) -> None:
             )
         )
         db.execute(state_statement)
+
+    seed_slice_one_class_event(db, simulation_id, location_ids["classroom"])
+
+
+def seed_slice_one_class_event(
+    db: Session, simulation_id: UUID, classroom_id: UUID
+) -> None:
+    event = db.scalar(
+        select(Event).where(
+            Event.simulation_id == simulation_id,
+            Event.event_type == "class",
+            Event.title == SLICE_ONE_CLASS_TITLE,
+        )
+    )
+    if event is None:
+        event = Event(
+            id=uuid7(),
+            simulation_id=simulation_id,
+            location_id=classroom_id,
+            event_type="class",
+            title=SLICE_ONE_CLASS_TITLE,
+            description="아델과 에단 교수가 참여하는 Slice 1 수업",
+            status="scheduled",
+            simulation_day=1,
+            event_metadata={"fixture_key": "slice-1-class-01"},
+        )
+        db.add(event)
+        db.flush()
+
+    participant_ids = set(
+        db.scalars(
+            select(Agent.id).where(
+                Agent.simulation_id == simulation_id,
+                Agent.fixture_key.in_(("student-01", "professor-01")),
+            )
+        )
+    )
+    existing_ids = set(
+        db.scalars(
+            select(EventParticipant.agent_id).where(
+                EventParticipant.event_id == event.id
+            )
+        )
+    )
+    for agent_id in participant_ids - existing_ids:
+        db.add(
+            EventParticipant(
+                id=uuid7(),
+                event_id=event.id,
+                agent_id=agent_id,
+                participant_role="participant",
+                result={},
+            )
+        )

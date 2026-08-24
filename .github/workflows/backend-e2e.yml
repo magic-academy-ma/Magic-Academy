@@ -1,0 +1,65 @@
+name: Backend E2E
+
+on:
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  slice-1-postgresql-e2e:
+    name: Slice 1 PostgreSQL E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.5-pg16
+        env:
+          POSTGRES_DB: magic_academy_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d magic_academy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql+psycopg://postgres:test-password@localhost:5432/magic_academy_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:test-password@localhost:5432/magic_academy_test
+      JWT_SECRET: test-secret-key-minimum-32-characters-long
+      POSTGRES_DB: magic_academy_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_PORT: "5432"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Apply database migrations
+        run: python -m alembic upgrade head
+
+      - name: Run Slice 1 PostgreSQL E2E and runtime regressions
+        run: >-
+          python -m pytest -q
+          tests/test_slice1_e2e.py
+          tests/test_tick_api.py
+          tests/test_slice_zero_api.py
+          tests/test_agent_runtime.py
+          tests/test_agent_runtime_graph.py
+          tests/test_runtime_orchestrator.py
