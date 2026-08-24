@@ -16,7 +16,9 @@ from app.domain.models import (
 from app.repositories.simulation_snapshots import SnapshotAlreadyExistsError
 from app.services.fixtures import seed_slice_zero
 from app.services.simulation_snapshots import (
+    InitialSettingsLockedError,
     InvalidSimulationConfigError,
+    SimulationSettingsLockedError,
     SnapshotAccessDeniedError,
     SimulationConfigInput,
     SimulationSnapshotService,
@@ -112,11 +114,67 @@ def test_invalid_config_and_locked_status_are_rejected(persistence_context) -> N
                 SimulationConfigInput("always", "medium", True, {}),
             )
         simulation.status = "completed"
-        with pytest.raises(InvalidSimulationConfigError, match="locked"):
+        with pytest.raises(SimulationSettingsLockedError, match="locked"):
             service.save_config(
                 session,
                 simulation,
                 SimulationConfigInput("medium", "medium", True, {}),
+            )
+
+
+@pytest.mark.parametrize("simulation_status", ["running", "paused"])
+def test_active_config_allows_event_changes_but_locks_initial_settings(
+    persistence_context,
+    simulation_status,
+) -> None:
+    session_factory, _, simulation_id = persistence_context
+    service = SimulationSnapshotService()
+    with session_factory() as session:
+        simulation = session.get(Simulation, simulation_id)
+        initial = service.save_config(
+            session,
+            simulation,
+            SimulationConfigInput(
+                "medium",
+                "medium",
+                True,
+                {"agent_id": "student-03"},
+            ),
+        )
+        simulation.status = simulation_status
+        updated = service.save_config(
+            session,
+            simulation,
+            SimulationConfigInput(
+                "high",
+                "low",
+                initial.magic_enabled,
+                initial.user_persona_settings,
+            ),
+        )
+        assert (updated.event_frequency, updated.event_impact) == ("high", "low")
+
+        with pytest.raises(InitialSettingsLockedError, match="initial settings"):
+            service.save_config(
+                session,
+                simulation,
+                SimulationConfigInput(
+                    "high",
+                    "low",
+                    False,
+                    initial.user_persona_settings,
+                ),
+            )
+        with pytest.raises(InitialSettingsLockedError, match="initial settings"):
+            service.save_config(
+                session,
+                simulation,
+                SimulationConfigInput(
+                    "high",
+                    "low",
+                    initial.magic_enabled,
+                    {"agent_id": "student-04"},
+                ),
             )
 
 
@@ -137,7 +195,9 @@ def test_snapshot_is_immutable_per_tick_and_contains_ordered_state(
             service.create_snapshot(session, simulation)
 
 
-def test_restore_creates_new_branch_with_remapped_state(persistence_context) -> None:
+def test_restore_reconstructs_snapshot_without_database_writes(
+    persistence_context,
+) -> None:
     session_factory, owner_id, simulation_id = persistence_context
     service = SimulationSnapshotService()
     with session_factory.begin() as session:
@@ -148,42 +208,32 @@ def test_restore_creates_new_branch_with_remapped_state(persistence_context) -> 
             .where(Agent.fixture_key == "student-01")
         )
         source_state.stress = 77
-        service.save_config(
-            session,
-            source,
-            SimulationConfigInput("medium", "medium", True, {}),
-        )
-        source.status = "completed"
         snapshot = service.create_snapshot(session, source)
         snapshot_id = snapshot.id
 
-    with session_factory.begin() as session:
-        restored = service.restore_as_branch(
-            session, snapshot_id, owner_id=owner_id, name="Restored branch"
-        )
-        restored_id = restored.id
-        assert restored.id != simulation_id
-        assert restored.origin_simulation_id == simulation_id
-        assert restored.origin_snapshot_id == snapshot_id
-        assert restored.status == "paused"
-
     with session_factory() as session:
-        restored_agents = list(
-            session.scalars(select(Agent).where(Agent.simulation_id == restored_id))
+        restored = service.restore_snapshot(
+            session,
+            snapshot_id,
+            owner_id=owner_id,
         )
-        assert len(restored_agents) == 6
-        assert not ({agent.id for agent in restored_agents} & {
-            agent.id
-            for agent in session.scalars(
-                select(Agent).where(Agent.simulation_id == simulation_id)
-            )
-        })
         restored_student = next(
-            agent for agent in restored_agents if agent.fixture_key == "student-01"
+            row
+            for row in restored["agent_states"]
+            if row["agent_id"]
+            == next(
+                agent["id"]
+                for agent in restored["agents"]
+                if agent["fixture_key"] == "student-01"
+            )
         )
-        assert session.scalar(
-            select(AgentState.stress).where(AgentState.agent_id == restored_student.id)
-        ) == 77
+        assert restored_student["stress"] == 77
+        assert restored["simulation"]["id"] == str(simulation_id)
+        assert session.scalar(select(func.count()).select_from(Simulation)) == 1
+        assert session.scalar(select(func.count()).select_from(Agent)) == 6
+        assert not session.new
+        assert not session.dirty
+        assert not session.deleted
 
 
 def test_restore_keeps_runtime_results_as_source_history(persistence_context) -> None:
@@ -219,16 +269,15 @@ def test_restore_keeps_runtime_results_as_source_history(persistence_context) ->
         snapshot_id = snapshot.id
         assert len(snapshot.payload["runtime_results"]) == 1
 
-    with session_factory.begin() as session:
-        service.restore_as_branch(
+    with session_factory() as session:
+        restored = service.restore_snapshot(
             session,
             snapshot_id,
             owner_id=owner_id,
-            name="Restored without copied execution history",
         )
-
-    with session_factory() as session:
+        assert len(restored["runtime_results"]) == 1
         assert session.scalar(select(func.count()).select_from(RuntimeResult)) == 1
+        assert session.scalar(select(func.count()).select_from(Simulation)) == 1
 
 
 def test_restore_rejects_different_owner(persistence_context) -> None:
@@ -242,11 +291,10 @@ def test_restore_rejects_different_owner(persistence_context) -> None:
 
     with session_factory() as session:
         with pytest.raises(SnapshotAccessDeniedError):
-            service.restore_as_branch(
+            service.restore_snapshot(
                 session,
                 snapshot_id,
                 owner_id=uuid7(),
-                name="Unauthorized branch",
             )
 
 
@@ -268,17 +316,14 @@ def test_restore_rejects_unsupported_snapshot_schema(persistence_context) -> Non
             UnsupportedSnapshotSchemaError,
             match="unsupported snapshot schema",
         ):
-            service.restore_as_branch(
+            service.restore_snapshot(
                 session,
                 snapshot_id,
                 owner_id=owner_id,
-                name="Unsupported schema branch",
             )
 
 
-def test_restore_failure_can_roll_back_entire_branch(
-    persistence_context, monkeypatch
-) -> None:
+def test_restore_returns_a_copy_of_the_immutable_payload(persistence_context) -> None:
     session_factory, owner_id, simulation_id = persistence_context
     service = SimulationSnapshotService()
     with session_factory.begin() as session:
@@ -287,15 +332,11 @@ def test_restore_failure_can_roll_back_entire_branch(
         )
         snapshot_id = snapshot.id
 
-    def fail_restore(*args, **kwargs):
-        raise RuntimeError("restore failed")
+    with session_factory() as session:
+        restored = service.restore_snapshot(session, snapshot_id, owner_id=owner_id)
+        restored["simulation"]["name"] = "mutated response"
 
-    monkeypatch.setattr(service, "_restore_state", fail_restore)
     with session_factory() as session:
-        with pytest.raises(RuntimeError, match="restore failed"):
-            service.restore_as_branch(
-                session, snapshot_id, owner_id=owner_id, name="Broken branch"
-            )
-        session.rollback()
-    with session_factory() as session:
+        stored = session.get(SimulationSnapshot, snapshot_id)
+        assert stored.payload["simulation"]["name"] == "Slice 6 Source"
         assert session.scalar(select(func.count()).select_from(Simulation)) == 1

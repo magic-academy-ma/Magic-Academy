@@ -56,17 +56,9 @@ def upgrade() -> None:
         sa.CheckConstraint("config_version >= 1", name="ck_simulation_snapshots_config_version"),
     )
     op.create_index("idx_simulation_snapshots_timeline", "simulation_snapshots", ["simulation_id", "tick_number"])
-    op.add_column("simulations", sa.Column("origin_simulation_id", postgresql.UUID(as_uuid=True)))
-    op.add_column("simulations", sa.Column("origin_snapshot_id", postgresql.UUID(as_uuid=True)))
-    op.create_foreign_key("fk_simulations_origin_simulation", "simulations", "simulations", ["origin_simulation_id"], ["id"], ondelete="RESTRICT")
-    op.create_foreign_key("fk_simulations_origin_snapshot", "simulations", "simulation_snapshots", ["origin_snapshot_id"], ["id"], ondelete="RESTRICT")
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_simulations_origin_snapshot", "simulations", type_="foreignkey")
-    op.drop_constraint("fk_simulations_origin_simulation", "simulations", type_="foreignkey")
-    op.drop_column("simulations", "origin_snapshot_id")
-    op.drop_column("simulations", "origin_simulation_id")
     op.drop_index("idx_simulation_snapshots_timeline", table_name="simulation_snapshots")
     op.drop_table("simulation_snapshots")
     op.drop_table("simulation_configs")

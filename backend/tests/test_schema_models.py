@@ -103,6 +103,8 @@ class SchemaModelTests(unittest.TestCase):
         simulations = Base.metadata.tables["simulations"]
         agents = Base.metadata.tables["agents"]
         self.assertFalse(simulations.c.owner_id.nullable)
+        self.assertNotIn("origin_simulation_id", simulations.c)
+        self.assertNotIn("origin_snapshot_id", simulations.c)
         self.assertTrue({"fixture_key", "fixture_version"} <= set(agents.c.keys()))
         self.assertFalse(agents.c.fixture_key.nullable)
         self.assertFalse(agents.c.fixture_version.nullable)

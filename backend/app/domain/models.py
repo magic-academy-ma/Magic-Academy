@@ -69,25 +69,6 @@ class Simulation(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    origin_simulation_id: Mapped[PythonUUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "simulations.id",
-            name="fk_simulations_origin_simulation",
-            ondelete="RESTRICT",
-        ),
-    )
-    origin_snapshot_id: Mapped[PythonUUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(
-            "simulation_snapshots.id",
-            name="fk_simulations_origin_snapshot",
-            ondelete="RESTRICT",
-            use_alter=True,
-        ),
-    )
-
-
 class SimulationConfig(TimestampMixin, Base):
     __tablename__ = "simulation_configs"
     __table_args__ = (
