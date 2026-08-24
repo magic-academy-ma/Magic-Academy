@@ -112,11 +112,11 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
             )
 
         state_directions: dict[str, set[int]] = {}
-        for signal in reaction.state_signals:
-            metric = STATE_SIGNAL_TO_METRIC.get(signal.signal_type)
+        for state_signal in reaction.state_signals:
+            metric = STATE_SIGNAL_TO_METRIC.get(state_signal.signal_type)
             if metric is not None:
                 state_directions.setdefault(metric, set()).add(
-                    1 if signal.signal_type.value.endswith("_UP") else -1
+                    1 if state_signal.signal_type.value.endswith("_UP") else -1
                 )
         conflicting_state_metrics = {
             metric
@@ -189,22 +189,22 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 )
             )
 
-        for signal in reaction.state_signals:
-            metric = STATE_SIGNAL_TO_METRIC.get(signal.signal_type)
+        for state_signal in reaction.state_signals:
+            metric = STATE_SIGNAL_TO_METRIC.get(state_signal.signal_type)
             if metric is None:
-                warnings.append(f"unknown state signal: {signal.signal_type}")
+                warnings.append(f"unknown state signal: {state_signal.signal_type}")
                 continue
             if metric in conflicting_state_metrics:
                 rejected.append(
                     {
                         "agent_id": source_agent_id,
-                        "signal_type": signal.signal_type,
+                        "signal_type": state_signal.signal_type,
                         "reason": "CONFLICTING_DUPLICATE_EFFECT",
                     }
                 )
                 has_rejection = True
                 continue
-            rule_id = f"STATE_{signal.signal_type}_{signal.intensity}"
+            rule_id = f"STATE_{state_signal.signal_type}_{state_signal.intensity}"
             state_effect_source_key = (
                 runtime_result.idempotency_key,
                 "AGENT_STATE",
@@ -216,11 +216,14 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 continue
             seen_effect_source_keys.add(state_effect_source_key)
             current = state_index.get(source_agent_id, {}).get(metric, 0)
-            delta = get_state_delta(signal.signal_type, signal.intensity)
+            delta = get_state_delta(
+                state_signal.signal_type,
+                state_signal.intensity,
+            )
             after_preview = _clamp_preview(current, delta, metric)
             effect_candidates.append(
                 EffectCandidate(
-                    effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:state:{signal.signal_type}",
+                    effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:state:{state_signal.signal_type}",
                     target_type=EffectTargetType.AGENT_STATE,
                     source_agent_id=source_agent_id,
                     target_agent_id=None,
@@ -229,7 +232,7 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                     before=current,
                     after_preview=after_preview,
                     rule_id=rule_id,
-                    reason=f"{signal.intensity} {signal.signal_type} 반응",
+                    reason=f"{state_signal.intensity} {state_signal.signal_type} 반응",
                 )
             )
 
