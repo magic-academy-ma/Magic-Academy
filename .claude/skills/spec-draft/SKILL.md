@@ -4,7 +4,7 @@ description: 기능 설명 또는 FE 화면 Figma URL을 받아 스펙 초안을
 
 # /spec-draft
 
-기능 설명 또는 Figma URL을 받아 스펙 초안을 생성한다.
+기능 설명 또는 Figma URL을 받아 스펙 초안을 생성한다.  
 **Figma URL이 입력되면 모드 B(FE 화면 스펙)로 자동 전환된다.**
 
 ---
@@ -93,7 +93,7 @@ updated: {오늘 날짜}
 
 ## 모드 B — FE 화면 스펙
 
-Figma URL이 입력된 경우. Confluence Draft → Approved → docs 이관 흐름을 거친다.
+Figma URL이 입력된 경우. `docs/04-feature-specs/`에 스펙을 생성하고 Mock Data를 내장하여 즉시 화면 구현을 지원한다.
 
 ### 입력
 
@@ -105,20 +105,27 @@ Figma URL이 입력된 경우. Confluence Draft → Approved → docs 이관 흐
 
 1. Figma MCP (`get_design_context` + `get_screenshot`)로 디자인 컨텍스트 추출
 2. `docs/02-domain/`, `docs/03-system-design/` 참조하여 도메인 맥락 확보
-3. 아래 형식으로 FE 스펙 초안 작성
-4. 작성된 FE 스펙 초안을 사용자에게 보여주고 승인 받기
-5. `/confluence-post` 스킬 호출하여 Confluence Draft 생성
-6. 팀 검토 → Approved 전환 후 `docs/04-feature-specs/`에 이관
+3. 아래 형식으로 FE 스펙 파일(`docs/04-feature-specs/FR-{번호두자리}-{화면명-kebab}-screen.md`) 작성
+4. 스펙의 Mock Data를 바탕으로 백엔드 대기 없이 즉시 React 컴포넌트 구현 초안 작성
 
 ### 출력
 
-Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면명-kebab}-screen.md`)
+파일 경로: `docs/04-feature-specs/FR-{번호두자리}-{화면명-kebab}-screen.md`  
 예) `FR-03-user-persona-select-screen.md`
 
 ### 스펙 초안 형식
 
 ```markdown
-> **상태**: Draft / **작성자**: {작성자} / **작성일**: YYYY-MM-DD
+---
+title: "[화면명] FE 스펙"
+status: draft
+visibility: public
+updated: YYYY-MM-DD
+---
+
+# FR-XX [화면명] FE 스펙
+
+> **상태**: Draft / **작성자**: @작성자 / **작성일**: YYYY-MM-DD
 
 ## 0. 개요 및 목적
 ## 1. 컴포넌트 트리
@@ -127,18 +134,23 @@ Confluence Draft 페이지 (이관 시 파일명: `FR-{번호두자리}-{화면�
 ## 3. API 연동
 | Method | Endpoint | 호출 시점 | 응답 |
 ## 4. 빈 상태 / 로딩 / 에러 처리
-## 5. 테스트 포인트
+## 5. Mock Data Fixture (백엔드 미완성 시 프론트 독립 실행용)
+```json
+{
+  "example_field": "value"
+}
+```
+## 6. 테스트 포인트
 - 컴포넌트 단위 테스트 (vitest/jest)
-- API mock 또는 통합 테스트
+- Mock Data 기반 독립 렌더링 확인
 - E2E (핵심 경로)
 - 401·403 접근 권한
 - 지원 해상도 동작 확인
-- 접근성 기준 (키보드 탐색, aria)
 - Figma 시각 비교
 - 로딩·빈 데이터·서버 오류·재시도 케이스
 ## 변경 이력
 | 버전 | 날짜 | 변경 내용 | 작성자 |
-| 1.0.0 | YYYY-MM-DD | 최초 작성 | {작성자} |
+| 1.0.0 | YYYY-MM-DD | 최초 작성 | @작성자 |
 ```
 
 ---
