@@ -1,7 +1,7 @@
 """allow signed relationship closeness values
 
 Revision ID: 20260812_0047
-Revises: 20260806_0003
+Revises: 20260814_0005
 """
 
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "20260812_0047"
-down_revision = "20260806_0003"
+down_revision = "20260814_0005"
 branch_labels = None
 depends_on = None
 
