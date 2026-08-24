@@ -115,7 +115,30 @@ Event Master가 참여 후보 선정에 사용하는 `agent_summaries`(L1) 필�
 | active_status, current_location_id | 참여 가능 여부·장소 조건 |
 | mood, stress, fatigue | 상태 조건 판단 |
 
-`relationship_summaries`는 MEETING 후보 선정에만 사용한다. 이 필드 목록은 Task 2(Agent별 Context 분리, 가윤)의 Context Assembler 구현과 함께 최종 확정되며, Task 0은 이 표를 Slice 5 착수 시점의 작업 기준으로 확정한다.
+Event Master의 L1 `agent_summaries`와 Agent Runtime의 `nearby_agents`는 용도가 다르다. L1은 Event Master가 Event 참여 후보를 선정하기 위한 전체 후보 snapshot이고, `nearby_agents`는 각 observer Agent가 현재 관찰할 수 있는 Agent만 포함하는 Runtime 전용 부분집합이다. Event Master의 `relationship_summaries`는 MEETING 후보 선정에만 사용한다.
+
+Agent Runtime의 `nearby_agents`는 다음 `AgentSummary` 필드를 사용한다.
+
+| Runtime AgentSummary 필드 | 설명 |
+| --- | --- |
+| agent_id, name, agent_type | 관찰 가능한 Agent 식별 |
+| active_status, current_location_id | 활성 상태와 현재 위치 |
+| mood, stress, fatigue | Runtime 판단용 상태 요약 |
+
+Agent Runtime의 `relationships`는 다음 `RelationshipSummary` 필드를 사용한다.
+
+| Runtime RelationshipSummary 필드 | 설명 |
+| --- | --- |
+| source_agent_id, target_agent_id | 방향성 관계의 observer와 visible Agent |
+| affection, closeness, trust | 호감도·친밀도·신뢰도 |
+| tension, rivalry, dependency | 긴장도·경쟁·의존도 |
+
+Runtime Context 가시성 규칙은 다음과 같다.
+
+- `nearby_agents`에는 observer와 같은 위치의 active Agent만 포함한다. observer 자신, 비활성 Agent, 다른 위치 Agent는 제외한다.
+- `relationships`에는 `observer → visible Agent` 방향의 관계만 포함한다.
+- Event는 observer가 participant이거나 Event 위치가 observer의 현재 위치와 같을 때 노출한다.
+- mandatory Schedule Event는 위 Event 가시성 조건과 관계없이 항상 노출한다. non-mandatory Schedule Event에는 이 예외를 적용하지 않는다.
 
 ---
 

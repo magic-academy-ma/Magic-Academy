@@ -66,6 +66,7 @@ def make_inputs() -> dict:
         ),
         "valid_agent_ids": STUDENT_IDS.copy(),
         "valid_location_ids": LOCATION_IDS.copy(),
+        "agent_candidates": [],
     }
 
 
@@ -80,7 +81,7 @@ def test_assembles_slice_one_student_class_context() -> None:
     assert runtime_input.agent.active_status is True
     assert runtime_input.agent.agent_id == STUDENT_IDS[0]
     assert runtime_input.events[0].event_id == CLASS_EVENT_ID
-    assert runtime_input.valid_agent_ids == STUDENT_IDS
+    assert runtime_input.valid_agent_ids == []
     assert runtime_input.valid_location_ids == LOCATION_IDS
     assert runtime_input.relationships == []
     assert runtime_input.memories == []
@@ -88,7 +89,7 @@ def test_assembles_slice_one_student_class_context() -> None:
     assert runtime_input.model_dump(mode="json")["events"][0]["event_type"] == "class"
 
 
-def test_sorts_reference_ids_without_mutating_inputs() -> None:
+def test_empty_observation_set_has_no_valid_agent_ids_without_mutating_inputs() -> None:
     inputs = make_inputs()
     inputs["valid_agent_ids"] = list(reversed(STUDENT_IDS))
     inputs["valid_location_ids"] = list(reversed(LOCATION_IDS))
@@ -96,7 +97,7 @@ def test_sorts_reference_ids_without_mutating_inputs() -> None:
 
     runtime_input = AgentContextAssembler().assemble(**inputs)
 
-    assert runtime_input.valid_agent_ids == STUDENT_IDS
+    assert runtime_input.valid_agent_ids == []
     assert runtime_input.valid_location_ids == LOCATION_IDS
     assert inputs == original
 
@@ -106,6 +107,30 @@ def test_same_input_produces_equal_runtime_input() -> None:
     assembler = AgentContextAssembler()
 
     assert assembler.assemble(**inputs) == assembler.assemble(**inputs)
+
+
+def test_non_mandatory_off_location_schedule_event_is_not_visible() -> None:
+    inputs = make_inputs()
+    inputs["events"] = [
+        EventSummary(
+            event_id=CLASS_EVENT_ID,
+            event_type="class",
+            location_id=LOCATION_IDS[1],
+            participant_agent_ids=[],
+        )
+    ]
+    inputs["schedule"] = ScheduleSummary(
+        event_id=CLASS_EVENT_ID,
+        schedule_type="class",
+        is_mandatory=False,
+        location_id=LOCATION_IDS[1],
+        start_tick=3,
+        end_tick=3,
+    )
+
+    runtime_input = AgentContextAssembler().assemble(**inputs)
+
+    assert runtime_input.events == []
 
 
 @pytest.mark.parametrize(

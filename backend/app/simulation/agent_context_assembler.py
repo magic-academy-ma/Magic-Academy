@@ -36,7 +36,7 @@ class AgentContextAssembler:
         schedule: ScheduleSummary,
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
-        agent_candidates: Sequence[AgentContext] | None = None,
+        agent_candidates: Sequence[AgentContext],
         relationships: Sequence[RelationshipSummary] = (),
     ) -> AgentRuntimeInput:
         observer = AgentContext(
@@ -78,10 +78,9 @@ class AgentContextAssembler:
                 relationship.source_agent_id.int,
             ),
         )
-        runtime_valid_agent_ids = (
-            sorted(observable_agent_ids, key=lambda value: value.int)
-            if agent_candidates is not None
-            else sorted(set(valid_agent_ids), key=lambda value: value.int)
+        runtime_valid_agent_ids = sorted(
+            observable_agent_ids,
+            key=lambda value: value.int,
         )
         return AgentRuntimeInput(
             run_id=run_id,
@@ -100,10 +99,10 @@ class AgentContextAssembler:
     @staticmethod
     def _nearby_agents(
         observer: AgentContext,
-        agent_candidates: Sequence[AgentContext] | None,
+        agent_candidates: Sequence[AgentContext],
         valid_agent_ids: set[UUID],
     ) -> list[AgentSummary]:
-        if agent_candidates is None or observer.current_location_id is None:
+        if observer.current_location_id is None:
             return []
         summaries = [
             AgentSummary(
@@ -137,7 +136,10 @@ class AgentContextAssembler:
             if not (
                 observer.agent_id in event.participant_agent_ids
                 or event.location_id == observer.current_location_id
-                or event.event_id == schedule.event_id
+                or (
+                    schedule.is_mandatory
+                    and event.event_id == schedule.event_id
+                )
             ):
                 continue
             visible_events.append(

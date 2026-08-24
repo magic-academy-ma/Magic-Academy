@@ -223,7 +223,9 @@ class AgentRuntimeInput(StrictModel):
         events_by_id = {event.event_id: event for event in self.events}
         scheduled_event = events_by_id.get(self.schedule.event_id)
         if scheduled_event is None:
-            raise ValueError("schedule event_id must be included in events")
+            if self.schedule.is_mandatory:
+                raise ValueError("mandatory schedule event_id must be included in events")
+            return self
         if scheduled_event.event_type != self.schedule.schedule_type:
             raise ValueError("schedule_type must match the linked event_type")
         if scheduled_event.location_id != self.schedule.location_id:
