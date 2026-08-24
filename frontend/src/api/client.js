@@ -13,7 +13,11 @@ const ERROR_MESSAGES = {
 export async function apiRequest(path, { token, ...options } = {}) {
   const headers = { "Content-Type": "application/json", ...options.headers };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+  });
 
   let body;
   try {
@@ -24,17 +28,20 @@ export async function apiRequest(path, { token, ...options } = {}) {
 
   if (!response.ok) {
     // 두 가지 에러 포맷을 모두 지원한다.
-    // - {"code","message","details"}: User Persona API 등 1단계 API 명세서 §12 계약
-    // - {"detail": "..."}: 기존 FastAPI 기본 예외 포맷 (auth 등 Slice 0 엔드포인트)
+    // - {"code","message","details"}: User Persona API
+    // - {"detail": "..."}: 기존 FastAPI 기본 예외 포맷
     const message =
       (typeof body?.message === "string" && body.message) ||
+      (typeof body?.error?.message === "string" && body.error.message) ||
       (typeof body?.detail === "string" && body.detail) ||
       ERROR_MESSAGES[response.status] ||
       `요청에 실패했습니다. (${response.status})`;
+
     const error = new Error(message);
     error.status = response.status;
-    error.code = body?.code;
+    error.code = body?.code ?? body?.error?.code;
     error.details = body?.details;
+
     throw error;
   }
 
@@ -43,30 +50,42 @@ export async function apiRequest(path, { token, ...options } = {}) {
 
 // --- User Persona (Slice 4 Task 4) ---
 export async function getUserPersonaConfig(simulationId, { token } = {}) {
-  const response = await apiRequest(`/v1/simulations/${simulationId}/user-persona/config`, { token });
+  const response = await apiRequest(
+    `/v1/simulations/${simulationId}/user-persona/config`,
+    { token }
+  );
   return response.data;
 }
 
 // 아직 User Persona가 설정되지 않았으면 404 RESOURCE_NOT_FOUND를 던진다.
 export async function getUserPersona(simulationId, { token } = {}) {
-  const response = await apiRequest(`/v1/simulations/${simulationId}/user-persona`, { token });
+  const response = await apiRequest(
+    `/v1/simulations/${simulationId}/user-persona`,
+    { token }
+  );
   return response.data;
 }
 
 export async function setUserPersona(simulationId, payload, { token } = {}) {
-  const response = await apiRequest(`/v1/simulations/${simulationId}/user-persona`, {
-    token,
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const response = await apiRequest(
+    `/v1/simulations/${simulationId}/user-persona`,
+    {
+      token,
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
   return response.data;
 }
 
 export async function startSimulation(simulationId, { token } = {}) {
-  const response = await apiRequest(`/v1/simulations/${simulationId}/start`, {
-    token,
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  const response = await apiRequest(
+    `/v1/simulations/${simulationId}/start`,
+    {
+      token,
+      method: "POST",
+      body: JSON.stringify({}),
+    }
+  );
   return response.data;
 }
