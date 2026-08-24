@@ -53,7 +53,12 @@ def student_runtime_results(agents: list[TickAgent]) -> dict[str, AgentRuntimeRe
     return {agent.id: make_runtime_result(agent.id) for agent in agents}
 
 
-def make_runtime_result(agent_id: str, *, status: str = "PROPOSED") -> AgentRuntimeResult:
+def make_runtime_result(
+    agent_id: str,
+    *,
+    status: str = "PROPOSED",
+    motivation_summary: str = "수업 내용을 복습한다.",
+) -> AgentRuntimeResult:
     return AgentRuntimeResult.model_validate(
         {
             "run_id": "slice-4-acceptance-run",
@@ -66,7 +71,7 @@ def make_runtime_result(agent_id: str, *, status: str = "PROPOSED") -> AgentRunt
                 "target_location_id": None,
                 "related_event_id": None,
                 "utterance": None,
-                "motivation_summary": "수업 내용을 복습한다.",
+                "motivation_summary": motivation_summary,
                 "reaction": {"valence": "NEUTRAL"},
                 "decision_explanation": {
                     "alternatives": [
@@ -279,9 +284,38 @@ def test_execution_metadata_is_persisted() -> None:
     """run_id·seed·model·prompt_version·policy_version이 실행 기록에 저장된다."""
 
 
-@pytest.mark.skip(
-    reason="실행 메타데이터의 seed 필드(Task 3, #112) 병합 후 활성화 — "
-    "현재 스키마에는 seed가 존재하지 않는다"
-)
-def test_same_seed_produces_identical_results() -> None:
-    """동일 seed로 실행한 두 Tick의 Agent 결과가 A/B 비교에서 동일하다."""
+async def test_same_seed_produces_identical_results() -> None:
+    """동일 seed로 실행한 두 Tick의 Agent 결과가 A/B 비교에서 동일하다.
+
+    seed는 Task 3(#112)에서 tick 실행 메타데이터로 저장되며 TickEngine 자체에는
+    seed 파라미터가 없다. 운영 LLM은 seed만으로 응답 원문 전체의 완전한 동일성을
+    보장하기 어려우므로, deterministic Fake Runtime으로 실행 대상·결과 순서·
+    Agent ID 매핑·페이로드 동일성을 검증한다 (Task 0, #109 결정). 운영 LLM 응답
+    원문 전체 일치는 PASS 조건에서 제외한다.
+    """
+    students = make_students()
+    professor = make_professor()
+    agents = [*students, professor]
+    event = make_event(participant_ids=[PROFESSOR_ID])
+    seed = 42
+
+    def build_seeded_runtime(seed: int):
+        async def seeded_runtime(agents, event, snapshot):
+            return {
+                agent.id: make_runtime_result(
+                    agent.id, motivation_summary=f"seed:{seed}-agent:{agent.id}"
+                )
+                for agent in agents
+            }
+
+        return seeded_runtime
+
+    engine_a = TickEngine(runtime=build_seeded_runtime(seed))
+    engine_b = TickEngine(runtime=build_seeded_runtime(seed))
+
+    result_a = await engine_a.run_tick(agents=agents, event=event, snapshot=make_snapshot())
+    result_b = await engine_b.run_tick(agents=agents, event=event, snapshot=make_snapshot())
+
+    assert list(result_a.runtime_outputs.keys()) == list(result_b.runtime_outputs.keys())
+    for agent_id in result_a.runtime_outputs:
+        assert result_a.runtime_outputs[agent_id] == result_b.runtime_outputs[agent_id]
