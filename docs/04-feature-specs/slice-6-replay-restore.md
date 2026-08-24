@@ -6,6 +6,8 @@ visibility: public
 source:
   - "GitHub Issue #116"
   - "GitHub Issue #117"
+  - "docs/01-product/functional-requirements.md"
+  - "docs/01-product/simulation-parameters.md"
   - "docs/03-system-design/event-master.md"
   - "docs/03-system-design/tick-engine.md"
 ---
@@ -24,7 +26,8 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - Replay는 새 Tick, Intent, Event, Memory 또는 관계 변화를 생성하지 않는다.
 - Replay 결과의 순서와 식별자는 원본 실행 기록과 같아야 한다.
 - 복원과 설정 변경은 인증된 Simulation 소유자만 수행한다.
-- Snapshot 저장 또는 복원 중 하나라도 실패하면 전체 transaction을 rollback한다.
+- Snapshot 저장에 실패하면 같은 Tick transaction 전체를 rollback한다.
+- 조회·복원은 읽기 전용이며 성공·실패와 관계없이 DB 상태를 변경하지 않는다.
 
 ## 2. 용어와 책임 경계
 
@@ -33,7 +36,7 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 | Simulation 설정 | Tick 실행 조건에 영향을 주는 버전 관리 대상 값 |
 | Snapshot | 특정 Simulation 시점의 복원 가능한 상태 묶음 |
 | Replay | Snapshot과 실행 기록을 읽어 과거 결과를 순서대로 조회하는 read-only 동작 |
-| 복원 | 선택한 Snapshot의 상태를 다시 현재 상태로 적용하는 write 동작 |
+| 복원 | 선택한 Snapshot의 상태·관계·Memory를 읽기 전용으로 재구성하는 동작 |
 | 원본 실행 | Runtime·Policy·Resolver·Commit을 거쳐 실제 상태를 만든 Tick 실행 |
 
 ### 범위에 포함
@@ -41,7 +44,7 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - 설정 저장 및 버전 기록
 - 성공한 실행 시점 Snapshot 저장
 - Snapshot과 실행 기록 조회
-- 지정 시점 상태 복원
+- 지정 시점 Snapshot 조회 및 상태 재구성
 - Replay 무재실행 보장
 - 소유권 및 오류 응답
 
@@ -49,6 +52,7 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 
 - 과거 입력으로 Runtime·LLM·Tick을 다시 실행하는 재시뮬레이션
 - 원본 실행 기록 수정
+- Snapshot을 적용한 새 Simulation 분기 생성과 계보 관리
 - 여러 Simulation 사이의 Snapshot 공유
 - 사용자 임의 Snapshot 편집
 
@@ -63,8 +67,13 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 | `event_frequency` | `low`, `medium`, `high` | `medium` |
 | `event_impact` | `low`, `medium`, `high` | `medium` |
 
-- 실행 중 변경한 설정은 현재 Tick에 영향을 주지 않고 다음 Tick Snapshot부터 적용한다.
-- Tick 실행과 설정 변경이 경합하면 현재 Tick은 기존 설정으로 완료한다.
+- 일반 Event의 `event_frequency`, `event_impact`는 `ready`, `running`, `paused`
+  상태에서 변경할 수 있다. 실행 중 변경은 현재 Tick에 영향을 주지 않고 다음 Tick
+  Snapshot부터 적용한다.
+- Tick 실행과 일반 Event 설정 변경이 경합하면 현재 Tick은 시작 시 고정한 기존 설정
+  버전으로 완료하고 변경값은 다음 Tick부터 적용한다.
+- `magic_enabled`와 User Persona 설정은 `ready`에서만 변경할 수 있으며 Simulation
+  시작 후에는 고정한다.
 - Replay와 복원은 각 Tick에 저장된 설정 Snapshot을 사용한다.
 - 동적 Event 확률 판정은 `simulation_id`, `tick_number`, 해당 Tick 설정 Snapshot을 입력으로 사용한다.
 
@@ -100,9 +109,9 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - 해당 Tick에 적용된 설정값과 정책·Resolver 버전
 
 Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 Replay에 필요한 값을
-불변 payload로 보존한다. Runtime 결과는 원본 Replay·감사용 실행 이력이므로 payload에
-보존하되 새 분기의 DB 행으로 복제하지 않는다. 새 분기의 과거 실행 이력은
-`origin_snapshot_id`가 가리키는 원본 Snapshot에서 조회한다.
+불변 payload로 보존한다. Runtime 결과는 원본 Replay·감사용 실행 이력으로 payload에
+보존한다. 조회·복원은 payload를 읽어 응답을 재구성할 뿐 DB 행을 생성·수정·삭제하지
+않는다.
 
 ### 4.3 Replay
 
@@ -111,16 +120,15 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 - Replay 요청은 Simulation의 현재 상태를 변경하지 않는다.
 - 원본 기록이나 Snapshot이 누락되거나 서로 일치하지 않으면 새 실행으로 보완하지 않고 오류를 반환한다.
 
-### 4.4 복원
+### 4.4 시점 복원
 
-- 소유권 확인 후 한 transaction에서 복원한다.
-- 선택 Snapshot 이후의 원본 기록은 삭제하거나 덮어쓰지 않는다.
-- 복원 결과는 기존 Simulation을 과거 시점으로 되감지 않고 새 Simulation 분기로 생성한다.
-- 복원된 Simulation은 새 ID를 가지며 원본 Simulation과 Snapshot 출처를 기록한다.
-- 복원된 Simulation의 초기 `status`는 원본 상태와 관계없이 `paused`다. 복원이
-  완료되는 것만으로 Tick을 실행하지 않으며, 사용자가 명시적으로 재개한 뒤 다음
-  Tick부터 실행한다.
-- Runtime 결과의 전역 unique `run_id`와 `idempotency_key`는 새 분기에서 재사용하지 않는다.
+- 인증된 Simulation 소유자만 Snapshot을 조회·복원할 수 있다.
+- 복원 응답은 선택한 Tick의 상태·관계·Memory를 Snapshot payload에서 재구성한다.
+- 복원은 원본 Simulation의 현재 상태, 실행 기록, Snapshot을 변경하지 않는다.
+- 복원은 새 Simulation, Tick, Runtime 결과 또는 실행 계보를 생성하지 않는다.
+- Runtime, LLM, Tick Engine, Event Master와 Magic Layer를 호출하지 않는다.
+- Snapshot payload와 저장된 실행 기록이 일치하지 않으면 새 실행으로 보완하지 않고
+  오류를 반환한다.
 
 ### 4.5 오류 계약
 
@@ -130,7 +138,8 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 | 다른 사용자의 Simulation·Snapshot 접근 | 403 | `SIMULATION_ACCESS_DENIED` |
 | Simulation·Snapshot·실행 기록 없음 | 404 | `REPLAY_RESOURCE_NOT_FOUND` |
 | 잘못된 tick·설정값·요청 조합 | 400 | `INVALID_REPLAY_REQUEST` |
-| 실행 중 설정 잠김·복원 불가 상태 | 409 | `RESTORE_CONFLICT` |
+| 변경할 수 없는 상태에서 일반 Event 설정 변경 | 409 | `SIMULATION_SETTINGS_LOCKED` |
+| 시작 후 Magic·Persona 설정 변경 | 409 | `INITIAL_SETTINGS_LOCKED` |
 | Snapshot과 실행 기록 불일치 | 409 | `SNAPSHOT_MISMATCH` |
 | 지원하지 않는 Snapshot schema version | 409 | `UNSUPPORTED_SNAPSHOT_SCHEMA` |
 
@@ -139,7 +148,7 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 | Task | 책임 | 선행 조건 |
 | --- | --- | --- |
 | Task 0 (#117) | 본 계약 확정 및 증빙 기준 동결 | 없음 |
-| Task 1 (#118) | 설정·Snapshot 저장, 조회·복원 transaction | Task 0 |
+| Task 1 (#118) | 설정·Snapshot 저장과 읽기 전용 조회·복원 | Task 0 |
 | Task 3 (#120) | 설정·Replay·복원 UI와 오류 표시 | Task 0, API 연동은 Task 1 |
 | Task 4 (#121) | Runtime·LLM·Tick 호출 0회 검증과 guard | Task 0, 통합 검증은 Task 1 |
 | Task 2 (#119) | 인수·누적 회귀 및 최종 증빙 | Task 1·3·4 |
@@ -150,21 +159,26 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 
 ## 6. Task 0 결정 사항
 
-1. **복원 방식**: 기존 Simulation을 되감지 않고 새 Simulation 분기로 복원한다.
+1. **복원 방식**: Snapshot 상태를 읽기 전용으로 재구성하며 Simulation과 실행 이력을
+   변경하거나 새 분기를 생성하지 않는다.
 2. **Snapshot 생성 단위**: Tick 0과 모든 Tick의 batch transaction 안에서 Snapshot을
    저장하고 전체 결과를 한 번에 commit한다.
 3. **Snapshot 상태 범위**: 4.2의 전체 범위를 불변 payload로 저장한다.
-4. **설정 범위**: `event_frequency`, `event_impact`, `magic_enabled`, User Persona 설정을 버전 관리한다.
+4. **설정 범위**: `event_frequency`, `event_impact`, `magic_enabled`, User Persona 설정을
+   버전 관리한다. 일반 Event 설정만 실행 중 변경할 수 있고 Magic·Persona 설정은
+   시작 후 잠근다.
 5. **보존 정책**: MVP에서는 Snapshot을 기간·개수 제한 없이 보존한다.
 6. **동일 Tick 정렬 기준**: Tick 안의 원본 출력 순서를 보존하는 별도 sequence를 저장한다.
-7. **복원 분기 상태**: 새 분기는 `paused`로 생성하며 명시적 재개 전 Tick을 실행하지 않는다.
-8. **Runtime 결과**: 원본 Replay·감사용 payload로 보존하고 새 분기 DB에는 복제하지 않는다.
+7. **시점 복원 부작용**: 새 Simulation·Tick·실행 계보 생성과 원본 변경은 모두 금지한다.
+8. **Runtime 결과**: 원본 Replay·감사용 payload로 보존하고 조회 시에만 사용한다.
+9. **격리수준 책임**: Tick 시작 world state의 `REPEATABLE READ` 적용은 Tick Engine
+   경계에서 담당하고, Task 2 누적 PostgreSQL 회귀 테스트에서 검증한다.
 
 ## 7. Task 0 완료 기준
 
 - [x] 6장의 모든 항목이 확정되어 있다.
 - [x] Task 1·3·4가 동일한 설정·Snapshot·Replay 계약을 참조한다.
 - [x] Replay 무재실행 규칙과 실패 방식이 명확하다.
-- [x] Snapshot 저장 및 복원 transaction 경계가 명확하다.
+- [x] Snapshot 저장 transaction과 읽기 전용 복원 경계가 명확하다.
 - [x] API 오류 상태가 확정되어 있다.
 - [x] Task별 테스트 증빙 위치와 최종 통합 순서가 합의되어 있다.
