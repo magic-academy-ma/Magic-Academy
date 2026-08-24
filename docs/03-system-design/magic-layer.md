@@ -2,9 +2,9 @@
 title: Magic Layer Agent 설계
 source: confluence/05_TECH/magic-layer.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/9371768/Magic+Layer+Agent
-status: approved
-updated: 2026-07-28
-source_updated: 2026-07-24
+status: draft
+updated: 2026-08-25
+source_updated: 2026-08-13
 ---
 
 **기준 문서:** 시스템 아키텍처 (#8290305) · Tick Engine 스펙 (#12910622) · Policy Engine 설계 (#14090319)
@@ -28,6 +28,8 @@ Magic Layer는 Tick Orchestrator를 위해 Event Master가 생성한 일반 이�
 | active_effects | 이전 특수 사건으로 인해 유지 중인 세계 상태 효과 |
 
 `regular_events`가 빈 리스트인 경우 변환은 생략한다.
+
+Magic Layer는 TickOrchestrator가 활동 Tick으로 판단하고 Magic 기능이 활성화된 경우에만 호출된다. 야간 전환 또는 기능 비활성 상태에서는 일반 Event 변환과 특수 Event 후보 생성을 모두 건너뛴다.
 
 ---
 
@@ -224,13 +226,14 @@ LLM이 책임 소재와 구체적인 수치를 직접 결정하지 않는다.
 
 ### MAGICAL_DISCOVERY
 
-다른 특수 사건 후보가 존재하지 않는 경우의 기본값이다.
+다른 특수 사건 후보가 없고 별도의 발견 조건까지 충족한 경우에만 후보가 된다.
 
 ```
 MAGIC_EXPLOSION 후보 없음
 AND CURSE_SPREAD 후보 없음
 AND STUDENT_MISSING 후보 없음
 AND RITUAL_FAILURE 후보 없음
+AND 교수와 학생이 연구 공간에 함께 존재
 → MAGICAL_DISCOVERY 후보
 ```
 
@@ -281,6 +284,18 @@ MAGICAL_DISCOVERY
 
 ---
 
+## 3.3 Magic 파라미터 적용
+
+사용자는 시뮬레이션 시작 전에 Magic 사건의 빈도와 영향도를 `low`, `medium`, `high` 중 하나로 설정한다. 설정값은 실행 시작 시 고정된 초기 조건이 되며 실행 도중에는 바꾸지 않는다.
+
+* 빈도는 세계 상태 조건을 통과한 후보의 최종 생성 여부와 일일 상한을 조절한다. 조건이 없는 사건을 새로 만들지는 않는다.
+* 영향도는 사건 중요도, 참여 Agent 상한, 동일 참여자 쿨다운과 Policy 효과 배율을 조절한다.
+* 확률 판정은 Simulation·Tick·파라미터 snapshot에서 만든 seed를 사용해 replay 가능한 결과를 보장한다.
+* Tick당 생성되는 특수 사건은 최대 1건이다. 고위험 조합은 허용하되 동일 Agent의 고영향 사건 참여를 하루 1회로 제한한다.
+* 구체 delta와 최종 clamp는 Policy Engine과 Conflict Resolver가 담당한다.
+
+---
+
 ## 4. 동작 설계
 
 ### 4.1 처리 흐름
@@ -295,7 +310,7 @@ regular_events + world_state + active_effects 수신
 ③ 사건별 발생 조건 판정 → 특수 사건 후보 목록 생성
         ↓
     후보 없음 → special_events = []
-    후보 있음 → 우선순위에 따라 사건 선택
+    후보 있음 → 빈도·상한 판정 후 우선순위에 따라 사건 선택
         ↓
 ④ 사건 대상 Agent / 장소 결정
         ↓
@@ -432,4 +447,3 @@ Magic Layer 자체는 stateless로 유지할 수 있다. 이전 사건의 지속
 ```
 
 ---
-

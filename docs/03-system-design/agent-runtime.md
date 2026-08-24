@@ -3,8 +3,8 @@ title: Agent Runtime 설계
 source: confluence/05_TECH/agent-runtime.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790/Agent+Runtime
 status: draft
-updated: 2026-07-28
-source_updated: 2026-07-22
+updated: 2026-08-25
+source_updated: 2026-08-14
 ---
 
 **기준 문서:** 시스템 아키텍처 (#8290305) · Tick Engine 스펙 (#12910622) · Policy Engine 설계 (#14090319)
@@ -13,7 +13,7 @@ source_updated: 2026-07-22
 
 ## 0. 한 줄 정의
 
-Agent Runtime은 Tick Orchestrator가 전달한 현재 상태·관계·기억·마법화된 사건을 바탕으로 각 활성 Agent의 행동을 병렬 결정하고, DB를 직접 수정하지 않은 채 tick당 하나의 Intent와 Memory 후보를 반환한다.
+Agent Runtime은 Tick Orchestrator가 전달한 현재 상태·관계·기억·마법화된 사건을 바탕으로 preselected Agent의 행동을 결정하고, DB를 직접 수정하지 않은 채 Agent당 하나의 Intent와 Memory 후보를 반환한다. Slice 1은 순차 실행하고 확장 단계에서 제한된 병렬 실행으로 전환한다.
 
 ### 0.1 MVP 확정 범위
 
@@ -43,14 +43,23 @@ Agent Runtime이 실행되기 전에 다음 정보가 준비되어 있어야 한
 | RelationshipSnapshot | AgentContextAssembler | 현재 Agent와 다른 Agent 사이의 방향성 관계 |
 | RetrievedMemory | MemorySearchService | 최신 Memory 2개와 RAG 검색 Memory 3개 |
 | FinalEvent | Event Master → Magic Layer → Orchestrator | 마법 세계관 변환이 끝난 일반 사건과 마법 특수 사건 |
+| PreselectedAgentSet | TickOrchestrator | 이번 tick에 Runtime 결과를 생성할 Agent ID 목록 |
 | ValidTargetSet | SimulationTickService | 이번 tick에 참조 가능한 Agent ID와 Location ID |
 
 기본 동작:
-- 이벤트가 없어도 활성 Student Agent는 상태·성격·기억을 바탕으로 자율 행동한다.
-- Professor Agent는 자신이 참여해야 하는 수업·시험·사건이 있을 때만 실행한다.
+- TickOrchestrator가 현재 Slice와 schedule·최종 Event를 기준으로 Runtime 실행 대상을 최종 편성한다.
+- Slice 1은 지정 Student 1명과 조건을 만족하는 Professor를, 확장 단계는 Student 5명과 조건부 Professor를 대상으로 사용한다.
+- 실행 대상으로 편성된 비활성 Agent도 Runtime에 전달하며 LLM 호출 없이 `SKIPPED` 결과를 반환한다.
+- Runtime 실행 대상과 같은 Simulation에서 참조 가능한 전체 Agent 집합은 서로 다른 범위다.
 - Memory나 Relationship이 없으면 빈 목록으로 처리한다.
 - 필수 필드인 `tick`, `agent`, `state`가 없으면 LLM을 호출하지 않고 `WAIT` fallback을 반환한다.
-- 비활성 Agent는 LLM을 호출하지 않고 `SKIPPED` 결과를 반환한다.
+
+### 0.3 Slice 1 실행 계약
+
+- RuntimeOrchestrator는 caller가 전달한 순서대로 실행하고 결과 순서를 보존한다. 실행 대상을 다시 선정하거나 재정렬하지 않는다.
+- SimulationTickService는 같은 Simulation의 snapshot과 Event·참여자·Location 경계를 검증한 뒤 Runtime adapter를 호출한다.
+- 모든 Agent 결과를 만든 뒤 `save_batch()`를 정확히 한 번 호출한다. `PROPOSED`·`FALLBACK`·`SKIPPED`를 모두 정상 batch 결과에 포함한다.
+- 입력 경계 검증에 실패하면 Runtime과 저장 경로를 호출하지 않는다.
 
 ---
 
@@ -90,6 +99,7 @@ Agent Runtime은 다음 문제를 해결한다.
 - 일반 대학 생활 사건 생성 → Event Master
 - 일반 사건의 마법 세계관 변환과 마법 특수 사건 생성 → Magic Layer
 - 학사 일정과 tick 시작·종료 관리 → SimulationTickService
+- Agent 실행 목록 최종 편성 → TickOrchestrator
 - 관계·상태의 실제 숫자 delta 결정 → Policy Engine
 - 여러 Intent의 충돌 해결 → Conflict Resolver
 - Agent State, Relationship, Memory, Event의 DB 저장 → Commit 단계
@@ -140,7 +150,7 @@ Agent Runtime은 다음 문제를 해결한다.
 
 ### 3.2 출력: AgentRuntimeResult
 
-> 출력 구조는 위 필드 정의 기준으로 구성된다. 최상위 필드: `run_id`, `tick_number`, `agent_id`, `status`, `intent`, `decision_explanation`, `memory_retrieval_trace`, `memory_candidates`, `reflection_candidate`
+> 출력 구조는 위 필드 정의 기준으로 구성된다. 최상위 필드: `run_id`, `tick_number`, `agent_id`, `status`, `idempotency_key`, `retry_count`, `failure_reason`, `intent`, `decision_explanation`, `memory_retrieval_trace`, `memory_candidates`, `reflection_candidate`
 
 `status` 값:
 
@@ -149,6 +159,8 @@ Agent Runtime은 다음 문제를 해결한다.
 | PROPOSED | 정상적으로 생성·검증된 Intent |
 | FALLBACK | LLM 또는 입력 오류로 `WAIT` Intent가 생성됨 |
 | SKIPPED | 비활성 Agent이므로 LLM을 호출하지 않음 |
+
+`idempotency_key`는 실행·Tick·Agent를 결합한 canonical 형식과 정확히 일치해야 하며, 자동 보정하지 않는다.
 
 ### 3.3 MVP Action Type
 
@@ -198,13 +210,13 @@ Policy Engine은 `signal + intensity + action_type + event_type + 현재 수치`
 1. SimulationTickService가 tick과 학사 일정을 확정한다.
 2. Event Master가 일반 사건을 만든다.
 3. Magic Layer가 일반 사건을 마법화하고 필요 시 특수 사건을 추가한다.
-4. Orchestrator가 활성 Agent와 조건부 Professor 실행 대상을 정한다.
+4. Orchestrator가 현재 Slice에 맞는 Student와 조건부 Professor 실행 대상을 정한다.
 5. AgentContextAssembler가 Agent별로 보이는 상태·관계·Memory·Event를 조립한다.
-6. Student Agent 5명과 실행 조건을 만족한 Professor Agent를 병렬 실행한다.
+6. Slice 1은 preselected batch를 순차 실행하고, 확장 단계는 제한된 병렬 방식으로 실행한다.
 7. 각 Agent Runtime은 Intent 하나와 Memory 후보를 반환한다.
 8. Policy Engine이 정성적 signal을 숫자 delta로 변환한다.
 9. Conflict Resolver가 상충하는 행동과 중복 효과를 조정한다.
-10. Orchestrator가 tick 단위 트랜잭션으로 결과를 Commit한다.
+10. Commit Service가 RuntimeResult를 다른 승인 결과와 함께 원자적으로 저장한다.
 
 ### 4.2 Agent 내부 LangGraph (9노드)
 
@@ -251,7 +263,7 @@ Agent당 저장 Memory는 최대 10개. 10개 초과 시:
 ### 4.4 행동 결정 규칙
 
 #### Student Agent
-- 활성 Student Agent 5명은 Event 참여 여부와 관계없이 매 tick 실행한다.
+- Slice 1의 지정 Student와 확장 단계의 Student 5명은 Event 참여 여부와 관계없이 각 단계의 실행 대상에 포함한다.
 - 일정 의무, 현재 Event, 생리적 상태, 관계·Memory, MBTI 대표 성향을 함께 고려한다.
 - 여러 Event에 참여해도 대표 Intent는 하나만 반환한다.
 - User Persona Agent는 일반 Student와 같은 Runtime을 사용한다.
@@ -310,18 +322,20 @@ Event Master와 Magic Layer의 `expected_effects`는 **제안값**이며 DB에 �
 }
 ```
 
-- Orchestrator가 병렬 실행 목록을 만들 때 비활성 Agent를 제외한다.
+- Orchestrator는 실행 조건을 만족한 Agent를 활성 여부와 무관하게 preselected batch에 포함한다.
 - Agent Runtime도 입력 검증 단계에서 `active_status`를 확인한다.
-- 비활성 Agent가 잘못 전달되면 LLM을 호출하지 않고 `SKIPPED`를 반환한다.
+- 비활성 Agent는 LLM을 호출하지 않고 `SKIPPED`를 반환하며 batch 저장에 포함한다.
 - `inactive_until_tick`이 지난 Agent의 재활성화는 SimulationTickService가 담당한다.
 
-### 4.9 병렬 실행·재시도·종료
+### 4.9 batch 실행·재시도·종료
 
-- Student 5명은 같은 world snapshot을 기준으로 병렬 실행한다.
-- Professor는 실행 조건을 만족할 때 같은 병렬 batch에 포함한다.
+- 모든 실행 대상은 같은 world snapshot을 기준으로 판단한다.
+- Slice 1은 입력 순서대로 순차 실행하고 결과 순서를 보존한다.
+- 확장 단계는 동시 실행 수를 제한한 병렬 batch를 사용한다.
 - **Agent 간 실행 순서가 판단에 영향을 주지 않도록 실행 중 DB 변경을 금지한다.**
-- 결과는 `agent_id` 기준으로 정렬해 Conflict Resolver에 전달한다.
-- idempotency key는 `run_id:tick_number:agent_id` 형식.
+- RuntimeOrchestrator는 실행 대상을 다시 선정하거나 결과를 재정렬하지 않는다.
+- 모든 결과 생성 후 `save_batch()`를 한 번만 호출한다.
+- idempotency key는 실행·Tick·Agent를 결합한 canonical 형식을 사용한다.
 - LLM 호출 또는 JSON 파싱 실패 시 같은 입력으로 1회 재시도한다.
 - 재시도까지 실패하면 `WAIT` Intent와 `FALLBACK` 상태를 반환한다.
 - 한 Agent의 실패는 다른 Agent 실행을 취소하지 않는다.
@@ -380,8 +394,11 @@ Agent Runtime 자체는 stateless. 다음 호출에 필요한 정보는 모두 D
 | AgentContextAssembler | 수신 | Agent별 상태·관계·Memory·관찰 범위 |
 | Policy Engine | 송신 | 정성적 Reaction signal |
 | Conflict Resolver | 송신 | 검증된 Intent와 후보 Memory |
+| Commit Service | 송신 | Agent·Tick별 RuntimeResult와 Memory 후보 |
 
 Agent Runtime은 Event Master나 Magic Layer를 직접 호출하지 않는다.
+
+AgentRuntimeResult는 Agent·Tick별 append-only 기록으로 시뮬레이션 생애 동안 보존한다. Commit Service는 이를 승인된 Tick 결과와 같은 transaction에 저장하며 원본 prompt, 원본 LLM 응답, 내부 추론 과정은 저장하지 않는다.
 
 ---
 
@@ -434,14 +451,16 @@ Agent Runtime은 Event Master나 Magic Layer를 직접 호출하지 않는다.
 3. 전공은 1개이며 Student 5명과 Professor 1명이 모두 소속된다.
 4. Student 5명은 ISTJ·ESTP·INFP·ENTJ·ESFJ 슬롯을 각각 하나씩 사용한다.
 5. 대표 캠페인의 User Persona는 INFP이며, 일반 시뮬레이션의 지정 방식은 Student Agent 설계에서 확정한다.
-6. Student 5명은 매 tick 실행하고 Professor는 관련 Event가 있을 때만 실행한다.
+6. TickOrchestrator가 현재 Slice와 schedule·Event를 기준으로 실행 대상을 최종 편성한다.
 7. Agent당 tick 하나의 Intent만 생성한다.
 8. LLM은 정성적 행동·반응을 결정하고 숫자 delta는 Policy Engine이 계산한다.
 9. 모든 관계 척도는 방향성 edge로 관리한다.
 10. Runtime은 DB를 직접 수정하지 않고 Memory 후보만 반환한다.
-11. 비활성 Agent 실행 제외는 Orchestrator가 소유하고 Runtime이 재검증한다.
+11. 실행 조건을 만족한 비활성 Agent도 preselected batch에 포함하고 Runtime이 SKIPPED 결과를 반환한다.
 12. 초기 관계와 일반 Student 프로필은 simulation seed로 재현 가능하게 생성한다.
 13. 고백·배신·화해는 지속 관계 Label이 아니라 Event·Memory로 기록한다.
+14. Slice 1은 순차 실행하며 확장 단계에서 제한된 병렬 실행으로 전환한다. Runtime phase와 batch 저장은 Tick당 각 한 번이다.
+15. RuntimeResult는 Agent·Tick별 append-only로 보존하되 원본 prompt·응답과 내부 추론 과정은 저장하지 않는다.
 
 다른 설계 문서에서 확정이 필요한 사항: signal별 실제 delta (Policy Engine), 관계 Label 판정 임계값 (Relationship Policy), 학기 일정 (Tick Engine), 마법 특수 사건 기본 효과값 (Magic Layer / Policy Engine).
 

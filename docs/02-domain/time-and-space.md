@@ -1,9 +1,11 @@
 ---
 title: 시간과 공간
-status: approved
-updated: 2026-08-08
+status: draft
+updated: 2026-08-25
 visibility: public
-source: local/CLAUDE.md + 2차 회의록
+source: confluence/02_PRODUCT/space-configuration
+canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/12550211
+source_updated: 2026-08-02
 ---
 
 # 시간과 공간 (배경)
@@ -61,7 +63,7 @@ source: local/CLAUDE.md + 2차 회의록
 | 식당 | 식사 (배고픔 감소), 자유 관계 상호작용 |
 | 도서관 | 자습, 스터디, 시험 준비 |
 | 연구실 | 교수-학생 상호작용, 특수 사건 |
-| 기숙사 | 저녁·주말, 기숙사 소속 Agent 친밀도 ↑ |
+| 기숙사 | 생활·휴식. MVP에서는 공식 조직이 아닌 공간 |
 
 ---
 
@@ -70,6 +72,21 @@ source: local/CLAUDE.md + 2차 회의록
 - 랜덤 날씨 발생
 - 주요 사건(이벤트) 전 징조 역할: 날씨 변화 → 분위기 힌트 제공
 - 날씨 자체가 관계를 바꾸지는 않으나, 사건 발생 확률·분위기에 영향
+
+## 공간 기반 만남
+
+```text
+일정·상태 확인 → 목표 공간 결정 → 이동 → 동일 공간 Agent 확인
+→ 상호작용 가능성 판정 → Event·관계·상태 후보 생성
+```
+
+같은 공간에 있다는 사실만으로 상호작용이나 관계 변화가 자동 발생하지 않는다. Agent의 일정·상태·관계·성격과 Event 맥락을 함께 평가한다.
+
+### 단계별 확장
+
+- 1단계: 강의실·기숙사·도서관·식당·연구실
+- 2단계: 동아리 조직과 동아리실 추가
+- 3단계: 기숙사 조직·총학생회와 학생회실 추가
 
 ---
 

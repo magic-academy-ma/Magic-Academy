@@ -4,8 +4,8 @@ source: confluence/05_TECH/tick-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/12910622/Tick+Engine
 status: approved
 visibility: public
-updated: 2026-08-06
-source_updated: 2026-08-05
+updated: 2026-08-25
+source_updated: 2026-08-13
 ---
 
 **출처:** 시스템 아키텍처 (#8290305) · Tick 기반 시뮬레이션 실행 환경 (#5996546) · WebSocket 실시간 통신 (#6717441)
@@ -20,15 +20,15 @@ source_updated: 2026-08-05
 | 하루 구조 | 3블록 (아침 / 오후 / 저녁), 밤 스킵 |
 | Agent 수 | 생활 Agent 6명 (학생 5명 + 교수 1명), 시스템 컴포넌트: Event Master 1 + Magic Layer 1 |
 | 스케줄러 | APScheduler (in-process) |
-| Agent 병렬화 | asyncio.gather() + Semaphore(10) |
+| Agent 실행 | Slice 1은 순차 실행, 확장 단계는 제한된 병렬 실행 |
 
 ### 컴포넌트 책임 분리
 
 | 컴포넌트 | 책임 |
 | --- | --- |
-| TickScheduler | APScheduler 등록, 블록 전환 트리거, 야간 대기·전환 |
-| SimulationTickService | 현재 world state 스냅샷 생성 (DB 조회), Tick 시작·종료 기록 |
-| TickOrchestrator | Event Master → Magic Layer → Agent Runtime → Policy Engine → Conflict Resolver → DB Commit 순서 조율 |
+| TickScheduler | APScheduler 등록과 Trigger·대기 관리 |
+| SimulationTickService | TickContext·world state·schedule·실행 후보 준비 및 유효성 검증 |
+| TickOrchestrator | 활동/야간 분기, 최종 실행 대상 편성, 파이프라인·실패·Commit 후 발행 조율 |
 
 ---
 
@@ -43,13 +43,11 @@ source_updated: 2026-08-05
 
 TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick lease를 획득한다.
 
-`simulation_ticks`에는 `run_id`, `logical_tick_key`, `status`, `attempt`, `fence_token`, `lease_expires_at`, `heartbeat_at`, `snapshot_version`, `resolution_id`, `failure_code`를 기록한다.
+실행 이력에는 실행 식별자, 논리 Tick, 상태, 시도 횟수, fencing 정보, lease·heartbeat, snapshot version과 실패 정보를 기록한다. 구체 스키마는 비공개 데이터 모델에서 관리한다.
 
-`status='running'`인 행은 Simulation별 최대 1개만 허용하는 partial unique index로 중첩 실행을 차단한다.
-
-* 자동 Scheduler Trigger가 기존 실행과 경합하면 새 Tick을 적재하지 않고 skip한다. 수동 Tick·밤 스킵 요청은 `409 TICK_ALREADY_RUNNING`을 반환한다.
-* 실행 중 TickOrchestrator가 lease heartbeat를 갱신한다. lease가 만료되면 기존 실행을 `stale`로 종료하고 새 `fence_token`을 발급할 수 있다.
-* Commit Service는 현재 `run_id`와 `fence_token`을 다시 검증해 만료된 이전 실행의 지연 Commit을 거부한다.
+* 자동 Scheduler Trigger가 기존 실행과 경합하면 새 Tick을 적재하지 않고 skip한다. 수동 실행도 중복 Tick을 시작하지 않는다.
+* 실행 중 TickOrchestrator가 lease heartbeat를 갱신한다. lease가 만료되면 기존 실행을 stale 상태로 종료하고 새 fencing token을 발급할 수 있다.
+* Commit Service는 현재 실행 식별자와 fencing token을 다시 검증해 만료된 이전 실행의 지연 Commit을 거부한다.
 * lease TTL과 heartbeat 주기는 설정값으로 관리하며 `lease TTL > heartbeat 주기 × 2`를 만족해야 한다.
 * 서로 다른 Simulation은 독립적인 lease를 사용해 병렬 실행할 수 있다.
 
@@ -77,8 +75,10 @@ TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick 
     - DB에 직접 쓰지 않으며, 최종 Event 저장은 Tick 단위 batch commit에서 수행
 
 
-[4] 활성 Student 5명 + 실행 조건을 충족한 Professor 병렬
-    asyncio.gather() + Semaphore(max=10) 동시 LLM 호출 제한
+[4] Tick 실행 대상 편성 후 Agent Runtime batch 실행
+    Slice 1: 지정 Student 1명 + 조건부 Professor를 순차 실행
+    확장 단계: Student 5명 + 조건부 Professor를 제한된 병렬 방식으로 실행
+    미활성 사전 선택 Agent도 batch에는 포함하며 Runtime이 SKIPPED 결과를 반환
     Agent Runtime 실행 흐름:
       ValidateInput
       → Observe
@@ -92,7 +92,7 @@ TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick 
 
 
 [5] Intent Collector
-    - 활성 Student 5명과 실행 조건을 충족한 Professor의 Intent 수집
+    - Runtime batch 결과의 Intent 수집
     - Professor가 관련 수업·시험·사건이 없는 Tick에는 Professor Intent를 요구하지 않음
 
 
@@ -112,11 +112,8 @@ TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick 
 
 
 [8] DB Commit  (PostgreSQL batch write, 블록당 1회, READ COMMITTED)
-    - run_id·fence_token·state_version 검증 (만료된 이전 실행의 지연 Commit 거부)
-    - 관계 변화 (relationships 테이블)
-    - Agent 내부 상태 변화 (agent_states 테이블)
-    - memory 저장 (agent_memories 테이블)
-    - event log (events + event_participants 테이블)
+    - 실행 식별자·fencing token·state version 검증
+    - 관계·Agent 상태·Memory·Event와 Outbox Event를 하나의 transaction으로 저장
 
 
 [9] WebSocket broadcast
@@ -125,19 +122,13 @@ TickOrchestrator는 Snapshot 생성 전에 PostgreSQL 기반 Simulation별 Tick 
 
 ---
 
-## 4. Agent 병렬 실행
+## 4. Agent batch 실행
 
-* `asyncio.gather()` + `Semaphore(10)` — 동시 LLM 호출 최대 10개
-* Semaphore 상한은 설정 파일(`AGENT_SEMAPHORE_MAX`)로 조정 가능
-
-```python
-async def run_agents(agents, context):
-    semaphore = asyncio.Semaphore(settings.AGENT_SEMAPHORE_MAX)
-    async def run_one(agent):
-        async with semaphore:
-            return await agent.run(context)
-    return await asyncio.gather(*[run_one(a) for a in agents])
-```
+* TickOrchestrator가 schedule과 Event 참여 정보를 바탕으로 최종 실행 대상을 한 번 편성한다.
+* Agent Runtime phase는 Tick당 정확히 한 번 호출하며, phase 내부 저장도 `save_batch()` 한 번으로 제한한다.
+* Slice 1은 재현성과 디버깅 용이성을 위해 순차 실행한다.
+* 확장 단계에서는 `asyncio.gather()`와 Semaphore를 사용해 동시 LLM 호출 수를 제한한다.
+* 사전 선택됐지만 비활성인 Agent를 호출 전 제거하지 않는다. Runtime이 명시적 SKIPPED 결과를 반환해 결과 개수와 입력 순서를 보존한다.
 
 ---
 
@@ -170,19 +161,13 @@ Tick 전체 재시도를 허용하지 않는 이유: LLM 호출 결과가 비결
 
 ---
 
-## 8. WebSocket 브로드캐스트
+## 8. 실시간 변경 알림
 
-* 경로: `wss://{server}/v1/ws/simulations/{simulation_id}`
 * 방향: 서버 → 클라이언트 단방향 push
 * 발행 시점: Tick 단위 batch commit 성공 후
 * commit이 실패한 Tick의 메시지는 발행하지 않는다.
 
-메시지 Schema는 [API 명세 §14](https://jehye.atlassian.net/wiki/spaces/MA/pages/12451842)를 단일 기준으로 사용한다.
-
-* `TICK_UPDATED`
-* `AGENT_ACTION_UPDATED`
-* `EVENT_CREATED`
-* `RELATIONSHIP_UPDATED`
+구체 경로와 메시지 Schema는 비공개 API 명세에서 관리한다.
 
 ---
 
@@ -192,7 +177,8 @@ Tick 전체 재시도를 허용하지 않는 이유: LLM 호출 결과가 비결
 | --- | --- | --- | --- |
 | D1 | Reflection 트리거 조건 | 확정 — 큰 사건 참여자만 | importance >= threshold 인 이벤트 참여 Agent만 Reflection 실행. threshold는 설정 파일(`REFLECTION_THRESHOLD`, 기본 0.7)로 관리. |
 | D2 | Memory 초과(10개) 처리 | 확정 — importance 기반 압축 | 10개 초과 시 importance 낮은 항목 제거 |
-| D3 | 관계 수치 변화량 공식 | 확정 — 단순 delta 가산 | 이벤트 유형별 delta 테이블로 관리. |
+| D3 | 관계 수치 변화량 공식 | 확정 — 단순 delta 가산 | 이벤트 유형별 delta 정책으로 관리. |
+| D4 | Agent 실행 방식 | 확정 — 단계별 확장 | Slice 1 순차 실행, 확장 단계 제한 병렬 실행. Runtime phase와 batch 저장은 Tick당 각 1회. |
 
 ---
 
@@ -203,7 +189,7 @@ backend/app/simulation/
 ├── tick_scheduler.py      # APScheduler 등록, 블록 전환, 야간 대기
 ├── tick_orchestrator.py   # 컴포넌트 조율 순서 실행
 ├── tick_service.py        # world state 스냅샷 생성, Tick 시작·종료 기록
-├── agent_runtime.py       # 생활 Agent 6명 병렬 실행 (확장 가능)
+├── agent_runtime.py       # 단계별 Agent batch 실행
 ├── event_master.py        # Event Master Agent 호출
 └── magic_layer.py         # Magic Layer 호출
 ```
@@ -214,14 +200,14 @@ backend/app/simulation/
 
 ```
 Frontend (React)
-    ↕ WebSocket /v1/ws/simulations/{simulation_id}
+    ↕ WebSocket / REST
 API Layer (FastAPI)
     ↓
 TickScheduler (APScheduler)  ← 이 스펙
     ↓
 TickOrchestrator
     ↓
-Event Master Agent → Magic Layer → Agent Runtime × 6 (MVP, 확장 가능)
+Event Master Agent → Magic Layer → Agent Runtime batch
     ↓
 Domain Services (Intent Collector → Policy Engine → Conflict Resolver → DB Commit)
     ↓
@@ -244,4 +230,5 @@ PostgreSQL + pgvector
 | v1.5 | 2026-07-29 | step [6] Conflict Resolver를 [6] Policy Engine + [7] Conflict Resolver로 분리. 각 단계 책임 명확화. §9 의존성 다이어그램에 Policy Engine 추가. |
 | v2.0 | 2026-08-05 | TickScheduler·SimulationTickService·TickOrchestrator 책임 분리. 모듈 위치 갱신. |
 | v2.1 | 2026-08-05 | §2.1 실행 인수 잠금(PostgreSQL lease·fencing token) 추가. §6 격리 수준(Snapshot REPEATABLE READ, Commit READ COMMITTED) 확정. §7 재시도 정책(Agent 1회, Commit 2회, Tick 전체 0회) 확정. |
-| v2.2 | 2026-08-08 | §2.1 lease 설계 범위 보완 — simulation_ticks 테이블·전체 필드 목록, partial unique index, heartbeat 갱신·stale 처리, Commit Service run_id·fence_token 검증, 409 TICK_ALREADY_RUNNING, lease TTL 제약 추가. §3 [8] DB Commit에 run_id·fence_token·state_version 검증 항목 추가. |
+| v2.2 | 2026-08-08 | §2.1 lease·heartbeat·stale 처리와 fencing 검증 범위를 보완. §3 [8] DB Commit의 실행 인수 검증 항목 추가. |
+| v2.3 | 2026-08-13 | Slice 1 순차 실행과 확장 단계 제한 병렬 실행을 구분. TickOrchestrator의 최종 대상 편성, Runtime phase·batch 저장 1회, 비활성 Agent의 SKIPPED 결과 계약을 추가. |

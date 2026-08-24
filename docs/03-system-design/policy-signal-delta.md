@@ -4,8 +4,8 @@ source: confluence/05_TECH/[Policy] Signal → Delta 규칙
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/19628033
 status: draft
 visibility: public
-updated: 2026-08-06
-source_updated: 2026-08-05
+updated: 2026-08-25
+source_updated: 2026-08-13
 ---
 
 # [Policy] Signal → Delta 규칙
@@ -13,9 +13,9 @@ source_updated: 2026-08-05
 > **상태:** Draft
 > **작성자:** @김가윤
 > **담당자:** @김가윤
-> **작성일 / 최종 수정일:** 2026-07-29 / 2026-08-05
+> **작성일 / 최종 수정일:** 2026-07-29 / 2026-08-13
 > **기준 문서:** [Policy Engine 설계](https://jehye.atlassian.net/wiki/spaces/MA/pages/14090319) · [Agent Runtime 설계](https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790) · [Magic Layer Agent 설계](https://jehye.atlassian.net/wiki/spaces/MA/pages/9371768) · [Tick Engine 스펙](https://jehye.atlassian.net/wiki/spaces/MA/pages/12910622)
-> **버전:** v0.5
+> **버전:** v0.6
 > **대상 Policy 버전:** `policy-mvp-0.4`
 
 ## 0. 개요 및 목적
@@ -47,25 +47,26 @@ source_updated: 2026-08-05
 
 | 입력 | 출처 | 사용 방식 |
 | --- | --- | --- |
-| `signal` | Agent Runtime 또는 검증된 Event effect | 변경할 metric과 증감 방향 결정 |
-| `intensity` | Agent Runtime 또는 Event Policy Registry | LOW / MEDIUM / HIGH 기본 delta 선택 |
+| `signal_type` | Agent Runtime의 typed RelationshipSignal·StateSignal 또는 검증된 Event effect | 변경할 metric과 증감 방향 결정 |
+| `intensity` | 각 Runtime signal 또는 Event Policy Registry | LOW / MEDIUM / HIGH 기본 delta 선택 |
 | `action_type` | Agent Runtime Intent | 행동 자체의 생리적 기본 효과 조회 |
 | `event_type`, `event_subtype` | Event Master / Magic Layer 후보 | 등록된 Event 효과와 상태 전이 조회 |
 | 현재 수치 | Tick 시작 world snapshot | `before`, `after_preview`, 최종 clamp 계산에 사용 |
-| `source_agent_id`, `target_agent_id` | Runtime 결과 또는 Event 대상 | 관계 edge 방향과 상태 대상 결정 |
+| `target_agent_id` | RelationshipSignal 또는 Event 관계 대상 | 관계 edge의 target 결정. StateSignal에는 사용하지 않음 |
+| `source_agent_id` | Runtime 결과 또는 Event source | 관계 edge의 source 결정. StateSignal은 결과 Agent 본인에게 적용 |
 | `run_id`, `tick_number`, `policy_version` | TickOrchestrator (`run_tick()`) | 재현성, 중복 제거, 규칙 버전 검증 |
 
 현재 수치는 기본 delta의 크기를 감쇠하거나 증폭하는 데 사용하지 않는다. 모든 후보를 합산한 뒤 허용 범위에서 최종 clamp할 때만 사용한다.
 
 ### 2.2 허용 intensity
 
-`LOW`, `MEDIUM`, `HIGH`만 허용한다. 누락되거나 알 수 없는 값이면 해당 effect만 거부한다. Runtime 또는 Magic Layer가 숫자 delta를 직접 반환하면 숫자는 무시하고 warning을 남긴다.
+`LOW`, `MEDIUM`, `HIGH`만 허용한다. 강도는 Reaction 전체가 아니라 각 signal에 존재해야 한다. 누락되거나 알 수 없는 값이면 해당 effect를 거부한다. Runtime 결과에 숫자 delta가 포함되면 Runtime 출력을 Schema 오류로 거부하고, Magic Layer의 숫자 제안은 사용하지 않고 warning을 남긴다.
 
 ## 3. 고정 변환 순서
 
 1. `policy_version`, schema, Agent·Event 참조를 검증한다.
 2. `action_type`의 기본 효과 후보를 만든다.
-3. Agent Reaction의 `signal × intensity`를 delta 후보로 변환한다.
+3. Agent Reaction의 각 typed signal에 대해 `signal_type × intensity`를 delta 후보로 변환한다.
 4. `event_type + event_subtype`으로 Event Policy Registry를 조회한다.
 5. Magic Layer 효과 방향을 Registry의 허용 signal·intensity와 대조한다.
 6. 같은 Policy 입력 안의 완전 동일 후보를 `effect_source_key`로 제거한다.
@@ -313,4 +314,3 @@ Tick 결과에는 실제로 평가에 사용한 배포 Registry의 `policy_versi
 | `CURSED` 상태의 duration 및 해제 조건 | 미확정. 지속 상태 등록 전 상태 전이 거부 | 팀 리뷰 |
 
 미결정 값을 Magic Layer, LLM 또는 구현자 임의 상수로 대체하지 않는다.
-

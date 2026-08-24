@@ -3,8 +3,8 @@ title: Git 브랜치·커밋 컨벤션
 source: confluence/09_CONVENTIONS/1.브랜치컨벤션
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4161548/1.
 status: approved
-updated: 2026-07-21
-source_updated: 2026-07-18
+updated: 2026-08-25
+source_updated: 2026-08-12
 ---
 
 # Git 브랜치·커밋 컨벤션
@@ -44,6 +44,30 @@ chore/issue-02-project-setting
 - 한 브랜치에서는 하나의 주요 작업만 진행한다.
 - 작업이 끝나면 Pull Request를 생성한다.
 - `main` 브랜치에는 직접 push하지 않는다.
+
+---
+
+## Git worktree 운영
+
+- 동시에 진행하는 브랜치는 작업 디렉터리를 격리해 미커밋 변경이 섞이지 않도록 한다.
+- 격리가 필요한 작업은 저장소 내부 `.worktrees/<브랜치명>` 경로에 worktree를 만든다.
+- `.worktrees/`는 Git 추적 대상에서 제외한다.
+- 기능 개발과 버그 수정은 각각 별도 브랜치에서 진행하고 `main`에서는 직접 개발하지 않는다.
+- 작업 완료 후 제거 여부를 확인하고 더 이상 필요 없는 worktree만 정리한다.
+
+---
+
+## 브랜치 보호 원칙
+
+`main`과 `develop`은 저장소 Ruleset으로 보호한다.
+
+- Pull Request 없는 직접 push, force push와 브랜치 삭제를 차단한다.
+- 병합 전 최소 1명의 승인을 요구한다.
+- 승인 이후 새 커밋이 추가되면 기존 승인을 무효화하고 다시 검토한다.
+- 관리자도 기본 보호 규칙을 우회하지 않는다.
+- 기능 브랜치는 별도 Ruleset 대신 브랜치·PR 컨벤션으로 관리한다.
+
+Ruleset 활성 상태, 대상 브랜치, 승인 수, stale review 무효화와 bypass 설정을 주기적으로 확인한다.
 
 ---
 

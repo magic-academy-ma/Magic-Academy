@@ -4,8 +4,8 @@ source: confluence/03_REQUIREMENTS/inspector.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/12582917
 status: draft
 visibility: public
-updated: 2026-08-06
-source_updated: 2026-08-04
+updated: 2026-08-25
+source_updated: 2026-08-25
 ---
 
 **기준 문서:** Agent Runtime 설계 (#11894790) · [Policy] MBTI → Big Five 초기값 및 허용 범위 (#21791106) · [기능 명세서] 1단계 Magic Academy MVP (#16777778)
@@ -18,6 +18,14 @@ source_updated: 2026-08-04
 
 * **목적**: 사용자에게 Agent가 왜 행동했는지 설명하고 개발자가 Runtime 입력·판단·최종 결과를 검증할 수 있게 한다.
 * **범위**: 프로필·MBTI·Big Five·상태·Decision Explanation·행동 로그·Memory·관계 표시를 다룬다.
+
+### 화면 노출 범위
+
+| 화면 위치 | 진입 방법 | 표시 내용 |
+| --- | --- | --- |
+| 오른쪽 Agent 상세 패널 | Agent 클릭 | 프로필 요약과 상태 게이지 |
+| Inspector 화면 | 상세 패널에서 Inspector 보기 | 프로필·상태·Decision Explanation·행동 로그·Memory·관계 전체 |
+| 개발자 확장 탭 | Inspector 화면 내 탭 선택 | LLM 실행 시간·토큰·비용 등 기술 메트릭 |
 
 ## 1. 목적 및 대상
 
@@ -53,7 +61,7 @@ source_updated: 2026-08-04
 * Big Five 5개 값
   * 개방성 · 성실성 · 외향성 · 우호성 · 정서 안정성
   * `Low / Neutral / High` 라벨과 게이지로 표시
-  * API 원본 값 `-50~+50`을 함께 확인 가능
+  * 정규화된 원본 값 `-50~+50`을 함께 확인 가능
 
 데이터 출처는 Agent profile, 고정 fixture와 성격 규칙 버전이다. 시작 이후 Inspector에서 이 값을 수정하지 않는다.
 
@@ -117,6 +125,8 @@ Tick 완료 후 전달되는 committed snapshot 또는 delta를 반영해 갱신
 
 Inspector는 이 섹션을 verbose debug trace처럼 보이게 만들지 않는다. 설명은 짧고 구조적으로 유지한다.
 
+저장 대상은 허용된 구조화 필드로 제한한다. 모델의 내부 chain-of-thought, raw reasoning, hidden prompt는 저장하거나 노출하지 않는다.
+
 ### 3.4 행동 로그 (Behavior Log)
 
 표시 대상은 최근 N Tick의 행동 타임라인이다.
@@ -168,6 +178,10 @@ Inspector는 이 섹션을 verbose debug trace처럼 보이게 만들지 않는�
 
 라벨과 사건 기록은 같은 개념이 아니다. 현재 관계 라벨은 상태를, 사건 기록은 변화를 설명한다.
 
+### 3.7 기술 메트릭 (개발자 확장 뷰)
+
+Tick별 LLM 실행 시간, Tick 전체 처리 시간, 사용 모델, prompt·completion·total token, 입력 섹션별 token 분포와 예상 비용을 표시한다. 이 탭은 비용·성능을 관찰하기 위한 읽기 전용 뷰이며 내부 추론 내용은 표시하지 않는다.
+
 ## 4. Read vs. Write 경계
 
 ### 4.1 조회 전용 기본 모드
@@ -182,22 +196,9 @@ User Persona의 초기 성향 설정은 시뮬레이션 시작 전에만 별도 
 * 시작 후에는 Inspector에서 수정 불가
 * 일반 Student Agent와 동일한 Runtime 규칙을 따른다
 
-## 5. 필요한 API 엔드포인트
+## 5. 데이터 제공 원칙
 
-| Method | Path | 용도 |
-| --- | --- | --- |
-| GET | `/agents/{id}` | 프로필 + 현재 상태 + 성격 |
-| GET | `/agents/{id}/memory` | Memory 목록과 retrieval trace |
-| GET | `/agents/{id}/relationships` | 방향성 관계 전체 |
-| GET | `/agents/{id}/behavior-log?limit=N` | 최근 N Tick 행동 히스토리 |
-| GET | `/agents/{id}/decision-explanation?tick={tick}` | 특정 Tick의 의사결정 설명 |
-| POST 또는 PATCH | `/simulations/setup/user-persona` | 시뮬레이션 시작 전 User Persona 초기 성향 설정 |
-
-권장 사항:
-
-* behavior log는 committed history를 기준으로 제공한다.
-* decision explanation은 tick 단위로 조회 가능해야 한다.
-* memory 조회는 `latest 2 + RAG top 3`가 왜 선택됐는지 추적 가능한 형태가 좋다.
+구체 엔드포인트와 요청·응답 계약은 비공개 API 명세에서 관리한다. 공개 기능 명세에서는 committed history 기준 행동 로그, Tick별 구조화 Decision Explanation, Memory retrieval trace를 조회할 수 있어야 한다는 제품 요구만 정의한다.
 
 ## 6. Out of Scope
 
@@ -208,25 +209,24 @@ User Persona의 초기 성향 설정은 시뮬레이션 시작 전에만 별도 
 * 관계, 상태, 성격 수치 직접 수정
 * 시작 이후 User Persona 초기값 재설정
 
-## 7. 남은 결정 사항
+## 7. 행동 로그 노출 정책
 
-| # | 항목 | 협의 대상 | 영향 |
-| --- | --- | --- | --- |
-| 1 | 행동 로그에 proposed vs. final diff를 기본 노출할지 여부 | FE / BE | UI 복잡도, 디버깅 편의성 |
+기본 화면에는 final 행동만 표시한다. proposed와 final이 다를 때만 변경 사유와 함께 접힌 diff 영역을 제공하고, 두 값이 같으면 diff 진입점을 표시하지 않는다.
 
 ## 8. 검증 기준
 
 * Agent 클릭 시 Inspector 패널이 열린다.
 * 프로필에 이름, 학년, 전공, 소속 단계, User Persona 여부, MBTI 슬롯이 표시된다.
-* 프로필에 MBTI 유형과 Big Five 5개의 Low / Neutral / High 라벨·게이지가 표시되고 API 원본 값(-50~+50)을 확인할 수 있다.
+* 프로필에 MBTI 유형과 Big Five 5개의 Low / Neutral / High 라벨·게이지가 표시되고 정규화된 원본 값(-50~+50)을 확인할 수 있다.
 * 상태값은 hunger, fatigue, stress, satisfaction, mood로 표시되며 mood만 -100 ~ 100이다.
 * Decision Explanation에는 선택된 행동 1개와 대안 최대 3개, 영향 요소가 표시된다.
 * 대안은 HIGH / MEDIUM / LOW, 영향 요소는 source / direction enum을 사용한다.
-* 행동 로그는 committed 결과와 Runtime 제안값을 구분할 수 있다.
+* 행동 로그는 final 결과를 기본 표시하고 proposed와 다를 때만 접힌 diff를 제공한다.
 * Memory 하이라이트는 latest 2 + RAG top 3 기준으로 표시된다.
 * 관계는 방향성으로 표시되고, 현재 라벨과 사건 기록이 분리된다.
 * 조회 전용 모드에서 어떤 상태도 변경되지 않는다.
 * 시뮬레이션 시작 후 Inspector에서 User Persona 초기값을 수정할 수 없다.
+* 개발자 확장 탭에서 실행 시간·모델·token 분포·예상 비용을 확인할 수 있다.
 
 ---
 
@@ -234,6 +234,7 @@ User Persona의 초기 성향 설정은 시뮬레이션 시작 전에만 별도 
 
 | 버전 | 날짜 | 변경 내용 |
 | --- | --- | --- |
+| v0.12 | 2026-08-25 | 화면 위치 3단계, 기술 메트릭, final 우선 행동 로그와 구조화 Decision Explanation 저장 경계를 반영. API 상세는 비공개 명세로 분리. |
 | v0.6 | 2026-08-04 | 개발용 writable Inspector 제외 결정에 따라 §7 별도 Spec 분리 여부 항목 삭제. 조회 전용 Inspector 범위 유지. |
 | v0.5 | 2026-07-31 | Big Five 표시를 -50~+50 원본 값과 Low / Neutral / High 라벨·게이지로 정합화. |
 | v0.4 | 2026-07-30 | 성격 입력 방식 확정 반영 — MBTI 유형 선택 + Big Five 5개 토글. |

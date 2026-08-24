@@ -4,8 +4,8 @@ source: confluence/09_CONVENTIONS/8.AI사용컨벤션
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/4521997/8.+AI
 status: approved
 visibility: public
-updated: 2026-08-06
-source_updated: 2026-07-31
+updated: 2026-08-25
+source_updated: 2026-08-05
 ---
 
 # 8. AI 사용 컨벤션
@@ -73,3 +73,10 @@ docs/
 
 > **8.6 AI 사용 기록 양식 · 8.7 PR 표기 예시**는 사람이 직접 기록할 때 참조하는 양식이다.  
 > AI 작업 중 로드할 필요 없음 — Confluence 원본 참조: https://jehye.atlassian.net/wiki/spaces/MA/pages/4521997/8.+AI
+
+## 8.8 문서 리뷰 원칙
+
+- Draft는 작성 중, Review는 검토 요청, Approved는 현재 기준, Historical은 더 이상 갱신하지 않는 기록이다.
+- 최초 생성 시 전체 팀 대상 문서는 3명, 그 외 문서는 최소 1명의 리뷰 후 Approved로 전환한다.
+- 수정 요청을 남긴 사람이 반영 여부를 확인한다.
+- API·데이터 모델·아키텍처처럼 구현 계약을 정의하는 문서만 별도 버전을 관리한다.

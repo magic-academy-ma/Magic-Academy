@@ -3,8 +3,8 @@ title: User Flow
 source: confluence/05_TECH/user-flow.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/17367076/User+Flow
 status: draft
-updated: 2026-07-28
-source_updated: 2026-07-27
+updated: 2026-08-25
+source_updated: 2026-07-31
 ---
 
 ```
@@ -23,7 +23,10 @@ source_updated: 2026-07-27
 │      │      ▼
 │      │   User Persona 설정 화면
 │      │      │
-│      │      ├─ 성격 설정
+│      │      ├─ MBTI 선택
+│      │      ├─ Big Five 기본값·허용 범위 적용
+│      │      ├─ 허용 범위 안에서 5단위 조절
+│      │      ├─ 입력 검증
 │      │      └─ [설정 완료]
 │      │             │
 │      │             ▼
@@ -70,3 +73,14 @@ source_updated: 2026-07-27
              ↓
         메인 화면
 ```
+
+## User Persona 설정 상세 흐름
+
+1. 기존 Student 중 User Persona로 사용할 Agent를 선택한다.
+2. MBTI를 선택하면 해당 유형의 Big Five 기본값과 허용 범위를 적용한다.
+3. 사용자는 허용 범위 안에서 5단위로 값을 조절한다.
+4. 클라이언트와 서버가 필수값·단위·허용 범위를 각각 검증한다.
+5. 검증이 성공하면 기존 Student의 성격 설정을 갱신하고 User Persona로 지정한다. 새 Agent는 생성하지 않는다.
+6. 시뮬레이션 시작이 성공한 시점에 설정을 잠근다. 이후에는 Inspector를 포함한 관찰 화면에서 수정할 수 없다.
+
+검증 실패 시 설정 화면을 유지하고 잘못된 항목을 표시한다. 구체 요청·응답 계약은 비공개 API 명세에서 관리한다.
