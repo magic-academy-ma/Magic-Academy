@@ -1,8 +1,8 @@
 import unittest
 
-from sqlalchemy import CheckConstraint
-from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
 from app.domain import models  # noqa: F401
@@ -160,6 +160,33 @@ class SchemaModelTests(unittest.TestCase):
         self.assertEqual(options["using"], "hnsw")
         self.assertEqual(options["ops"], {"embedding": "vector_cosine_ops"})
         self.assertEqual(options["with"], {"m": 16, "ef_construction": 64})
+
+    def test_memory_matches_erd_simulation_and_embedding_metadata_contract(self) -> None:
+        memories = Base.metadata.tables["agent_memories"]
+        self.assertFalse(memories.c.simulation_id.nullable)
+        self.assertTrue(
+            {"embedding_model", "embedding_version", "embedded_at"}
+            <= set(memories.c.keys())
+        )
+        foreign_keys = {
+            (tuple(constraint.column_keys), tuple(element.target_fullname for element in constraint.elements))
+            for constraint in memories.constraints
+            if isinstance(constraint, ForeignKeyConstraint)
+        }
+        self.assertIn(
+            (("simulation_id", "agent_id"), ("agents.simulation_id", "agents.id")),
+            foreign_keys,
+        )
+        self.assertIn(
+            (("simulation_id", "event_id"), ("events.simulation_id", "events.id")),
+            foreign_keys,
+        )
+        constraints = {
+            constraint.name: str(constraint.sqltext)
+            for constraint in memories.constraints
+            if isinstance(constraint, CheckConstraint)
+        }
+        self.assertIn("embedding_model IS NOT NULL", constraints["ck_agent_memories_embedding_metadata"])
 
 
 if __name__ == "__main__":

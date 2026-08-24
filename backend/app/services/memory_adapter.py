@@ -32,10 +32,14 @@ class MemoryAdapter:
         *,
         repository: MemoryRepository | None = None,
         embedding_client: EmbeddingClient,
+        embedding_model: str = "text-embedding-3-small",
+        embedding_version: str = "v1",
     ) -> None:
         self._session = session
         self._repository = repository or MemoryRepository()
         self._embedding_client = embedding_client
+        self._embedding_model = embedding_model
+        self._embedding_version = embedding_version
 
     async def retrieve(self, agent_id: str, current_tick: int, query_text: str) -> list[MemoryItem]:
         embedding = await self._embedding_client.embed(query_text)
@@ -62,6 +66,7 @@ class MemoryAdapter:
         tick: int,
     ) -> str:
         embedding = await self._embedding_client.embed(candidate.content)
+        embedded_at = datetime.now(UTC)
         row = self._repository.create(
             self._session,
             MemoryCreateInput(
@@ -71,8 +76,11 @@ class MemoryAdapter:
                 memory_type=candidate.memory_type,
                 importance=candidate.importance,
                 created_tick=tick,
-                occurred_at=datetime.now(UTC),
+                occurred_at=embedded_at,
                 embedding=embedding,
+                embedding_model=self._embedding_model,
+                embedding_version=self._embedding_version,
+                embedded_at=embedded_at,
             ),
         )
         self._repository.enforce_cap(self._session, UUID(agent_id))

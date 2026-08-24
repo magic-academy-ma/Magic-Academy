@@ -77,7 +77,7 @@ def test_memory_relationship_and_decision_explanation(client):
     source_id, target_id = UUID(agents[0]["id"]), UUID(agents[1]["id"])
     with session_factory() as db:
         db.add(AgentMemory(
-            id=uuid7(), agent_id=source_id, event_id=None, content="기억",
+            id=uuid7(), simulation_id=UUID(simulation["id"]), agent_id=source_id, event_id=None, content="기억",
             memory_type="observation", importance=50, created_tick=1,
             occurred_at=datetime.now(UTC), embedding=None,
         ))

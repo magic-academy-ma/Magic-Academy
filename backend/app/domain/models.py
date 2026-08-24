@@ -212,6 +212,7 @@ class OrganizationMembership(TimestampMixin, Base):
 class Event(TimestampMixin, Base):
     __tablename__ = "events"
     __table_args__ = (
+        UniqueConstraint("simulation_id", "id", name="uq_events_simulation_id_id"),
         ForeignKeyConstraint(["simulation_id", "location_id"], ["locations.simulation_id", "locations.id"], ondelete="SET NULL (location_id)", onupdate="RESTRICT", name="fk_events_location"),
         CheckConstraint("event_type IN ('class', 'group_project', 'exam', 'meeting', 'mt', 'festival', 'student_council', 'random_incident')", name="ck_events_type"),
         CheckConstraint("status IN ('scheduled', 'ongoing', 'completed', 'cancelled')", name="ck_events_status"),
@@ -321,11 +322,14 @@ class Relationship(TimestampMixin, Base):
 class AgentMemory(TimestampMixin, Base):
     __tablename__ = "agent_memories"
     __table_args__ = (
+        ForeignKeyConstraint(["simulation_id", "agent_id"], ["agents.simulation_id", "agents.id"], ondelete="RESTRICT", onupdate="RESTRICT", name="fk_agent_memories_agent"),
+        ForeignKeyConstraint(["simulation_id", "event_id"], ["events.simulation_id", "events.id"], ondelete="SET NULL (event_id)", onupdate="RESTRICT", name="fk_agent_memories_event"),
         CheckConstraint("memory_type IN ('observation', 'conversation', 'reflection', 'plan')", name="ck_agent_memories_type"),
         CheckConstraint("importance BETWEEN 0 AND 100", name="ck_agent_memories_importance"),
         CheckConstraint("created_tick >= 0", name="ck_agent_memories_created_tick"),
+        CheckConstraint("(embedding IS NULL AND embedding_model IS NULL AND embedding_version IS NULL AND embedded_at IS NULL) OR (embedding IS NOT NULL AND embedding_model IS NOT NULL AND embedding_version IS NOT NULL AND embedded_at IS NOT NULL)", name="ck_agent_memories_embedding_metadata"),
         Index("idx_agent_memories_agent_occurred", "agent_id", text("occurred_at DESC"), text("id DESC")),
-        Index("idx_agent_memories_cleanup", "agent_id", "importance", "created_tick"),
+        Index("idx_agent_memories_cleanup", "agent_id", "importance", "created_tick", "id"),
         Index(
             "idx_agent_memories_embedding_hnsw",
             "embedding",
@@ -336,8 +340,9 @@ class AgentMemory(TimestampMixin, Base):
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    agent_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False)
-    event_id: Mapped[PythonUUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL", onupdate="RESTRICT"))
+    simulation_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False)
+    agent_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    event_id: Mapped[PythonUUID | None] = mapped_column(UUID(as_uuid=True))
     content: Mapped[str] = mapped_column(Text, nullable=False)
     memory_type: Mapped[str] = mapped_column(String(20), nullable=False, server_default="observation")
     importance: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
@@ -345,3 +350,6 @@ class AgentMemory(TimestampMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))
+    embedding_model: Mapped[str | None] = mapped_column(String(100))
+    embedding_version: Mapped[str | None] = mapped_column(String(50))
+    embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

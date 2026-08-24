@@ -43,6 +43,9 @@ async def test_memory_adapter_retrieves_and_stores_with_embedding():
 
     assert memories[0].content == "기억"
     assert repository.created.embedding == [0.1] * 1536
+    assert repository.created.embedding_model == "text-embedding-3-small"
+    assert repository.created.embedding_version == "v1"
+    assert repository.created.embedded_at.tzinfo is UTC
     assert repository.created.occurred_at.tzinfo is UTC
     assert repository.cap_agent_id == agent_id
     assert stored_id

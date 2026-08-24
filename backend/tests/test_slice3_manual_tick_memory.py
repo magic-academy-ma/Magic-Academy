@@ -79,6 +79,7 @@ def test_manual_tick_stores_then_retrieves_memory_for_next_runtime_input(session
             [
                 AgentMemory(
                     id=uuid7(),
+                    simulation_id=simulation.id,
                     agent_id=student.id,
                     event_id=event.id,
                     content=f"기존 기억 {index}",
@@ -87,6 +88,9 @@ def test_manual_tick_stores_then_retrieves_memory_for_next_runtime_input(session
                     created_tick=0,
                     occurred_at=now - timedelta(minutes=index),
                     embedding=[0.1] * 1536,
+                    embedding_model="test-model",
+                    embedding_version="v1",
+                    embedded_at=now,
                 )
                 for index in range(10)
             ]

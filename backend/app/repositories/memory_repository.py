@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.domain.models import AgentMemory
+from app.domain.models import Agent, AgentMemory
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,9 @@ class MemoryCreateInput:
     created_tick: int
     occurred_at: datetime
     embedding: Sequence[float] | None = None
+    embedding_model: str | None = None
+    embedding_version: str | None = None
+    embedded_at: datetime | None = None
     event_id: UUID | None = None
 
 
@@ -26,6 +29,7 @@ class MemoryCreateInput:
 class MemoryRow:
     id: UUID
     agent_id: UUID
+    simulation_id: UUID
     event_id: UUID | None
     content: str
     memory_type: str
@@ -42,6 +46,7 @@ class MemoryRepository:
         return MemoryRow(
             id=memory.id,
             agent_id=memory.agent_id,
+            simulation_id=memory.simulation_id,
             event_id=memory.event_id,
             content=memory.content,
             memory_type=memory.memory_type,
@@ -52,8 +57,14 @@ class MemoryRepository:
         )
 
     def create(self, session: Session, item: MemoryCreateInput) -> MemoryRow:
+        simulation_id = session.scalar(
+            select(Agent.simulation_id).where(Agent.id == item.agent_id)
+        )
+        if simulation_id is None:
+            raise ValueError("agent does not exist")
         memory = AgentMemory(
             id=uuid7(),
+            simulation_id=simulation_id,
             agent_id=item.agent_id,
             event_id=item.event_id,
             content=item.content,
@@ -62,6 +73,9 @@ class MemoryRepository:
             created_tick=item.created_tick,
             occurred_at=item.occurred_at,
             embedding=None if item.embedding is None else list(item.embedding),
+            embedding_model=item.embedding_model,
+            embedding_version=item.embedding_version,
+            embedded_at=item.embedded_at,
         )
         session.add(memory)
         session.flush()
@@ -119,6 +133,12 @@ class MemoryRepository:
         if max_active < 0:
             raise ValueError("max_active must be non-negative")
 
+        locked_agent_id = session.scalar(
+            select(Agent.id).where(Agent.id == agent_id).with_for_update()
+        )
+        if locked_agent_id is None:
+            raise ValueError("agent does not exist")
+
         memory_count = session.scalar(
             select(func.count())
             .select_from(AgentMemory)
@@ -128,24 +148,10 @@ class MemoryRepository:
         if excess_count == 0:
             return 0
 
-        latest_ids = session.scalars(
+        ids_to_delete = session.scalars(
             select(AgentMemory.id)
             .where(AgentMemory.agent_id == agent_id)
             .order_by(
-                AgentMemory.created_tick.desc(),
-                AgentMemory.occurred_at.desc(),
-                AgentMemory.id.desc(),
-            )
-            .limit(min(2, max_active))
-        ).all()
-        deletion_filters = [AgentMemory.agent_id == agent_id]
-        if latest_ids:
-            deletion_filters.append(AgentMemory.id.not_in(latest_ids))
-        ids_to_delete = session.scalars(
-            select(AgentMemory.id)
-            .where(*deletion_filters)
-            .order_by(
-                case((AgentMemory.memory_type == "reflection", 1), else_=0),
                 AgentMemory.importance.asc(),
                 AgentMemory.created_tick.asc(),
                 AgentMemory.id.asc(),
