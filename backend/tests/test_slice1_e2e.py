@@ -152,9 +152,17 @@ def test_slice_one_full_vertical_flow(client):
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
+            assert set(result.intent["decision_explanation"]) == {
+                "alternatives",
+                "influencing_factors",
+            }
+            serialized_intent = str(result.intent)
+            for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
+                assert forbidden not in serialized_intent
             api_result = api_by_id[str(result.agent_id)]
             assert api_result["runtime_status"] == result.status
             assert api_result["action_type"] == result.action_type
+        inspected_agent_id = stored[0].agent_id
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
@@ -163,6 +171,20 @@ def test_slice_one_full_vertical_flow(client):
         )
         assert {state.fatigue for state in states} == {17}
         assert db.scalar(select(func.count()).select_from(Relationship)) == 0
+
+    explanation = test_client.get(
+        f"/v1/agents/{inspected_agent_id}/decision-explanation?tick=1",
+        headers=headers,
+    )
+    assert explanation.status_code == 200
+    assert set(explanation.json()) == {
+        "agent_id",
+        "tick",
+        "alternatives",
+        "influencing_factors",
+    }
+    for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
+        assert forbidden not in explanation.text
 
 
 def test_slice_two_policy_applies_directional_relationship_delta(client, monkeypatch):
