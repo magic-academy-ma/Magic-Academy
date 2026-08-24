@@ -4,11 +4,11 @@ source: confluence/05_TECH/policy-engine.md
 canonical: https://jehye.atlassian.net/wiki/spaces/MA/pages/14090319/Policy+Engine
 status: approved
 visibility: public
-updated: 2026-08-06
-source_updated: 2026-08-05
+updated: 2026-08-25
+source_updated: 2026-08-14
 ---
 
-**기준 문서:** Agent Runtime 설계 (#11894790) · Tick Engine 스펙 (#12910622) · ERD 초안 (#12189697)
+**기준 문서:** Agent Runtime 설계 (#11894790) · Tick Engine 스펙 (#12910622) · Signal → Delta 규칙 (#19628033)
 
 ---
 
@@ -23,9 +23,9 @@ Policy Engine은 LLM을 호출하지 않으며 DB도 직접 수정하지 않는�
 | 항목 | MVP 기준 |
 | --- | --- |
 | 처리 대상 | 생활 Agent 6명: Student 5명(User Persona 1명 포함) + Professor 1명 |
-| 실행 시점 | Agent Runtime 병렬 실행 이후, Conflict Resolver 이전 |
+| 실행 시점 | Agent Runtime batch 실행 이후, Conflict Resolver 이전 |
 | 계산 방식 | 단순 delta 가산 후 최종 clamp |
-| 입력 반응 | valence, intensity, relationship_signals, state_signals |
+| 입력 반응 | valence, typed relationship_signals·state_signals와 signal별 intensity |
 | 관계 척도 | affection, closeness, trust, tension, rivalry, dependency |
 | 상태값 | hunger, fatigue, stress, satisfaction, mood |
 | Event | 일반 Event 기본 효과 + Magic Layer의 검증된 제안 효과 |
@@ -76,7 +76,7 @@ Policy Engine은 다음을 보장한다.
 ```
 Event Master
   → Magic Layer
-  → Agent Runtime × 활성 Agent 병렬 실행
+  → Agent Runtime batch 실행
   → Policy Engine     ← 이 컴포넌트
   → Conflict Resolver
   → Tick 단위 Commit
@@ -162,10 +162,9 @@ Policy Engine의 출력은 아직 확정된 변경이 아니다. Conflict Resolv
 7. Magic Layer의 expected_effects를 검증해 허용된 후보만 생성한다.
 8. 같은 source와 rule에서 나온 완전 동일한 effect를 제거한다.
 9. Agent별·관계별 현재값을 기준으로 before와 after_preview를 계산한다.
-10. 상태·관계 범위를 벗어나지 않도록 clamp한다.
-11. effect_id 기준으로 정렬해 반환한다.
+10. effect_id 기준으로 정렬해 반환한다.
 
-Conflict Resolver는 서로 다른 source에서 나온 후보를 합산하며, MVP에서는 단순 delta 가산을 사용한다.
+Policy Engine의 `after_preview`는 설명용이며 최종 clamp가 아니다. Conflict Resolver가 서로 다른 source의 후보를 합산한 뒤 metric별 허용 범위에서 한 번만 clamp한다.
 
 ---
 
@@ -285,6 +284,18 @@ v0.2 정책의 실제 계산 입력: `signal + intensity + action_type + event_t
 Registry 값과 expected_effects가 다르면 Registry를 우선하고 warning을 남긴다.
 
 ---
+
+### 9.1 지속 관계 라벨 판정
+
+방향성 관계에는 지속 관계 라벨을 최대 하나만 둔다. 고백·배신·화해는 라벨이 아니라 Event·Memory 이력으로 관리한다.
+
+| 라벨 | 진입 조건 | 이탈 조건 |
+| --- | --- | --- |
+| FRIEND | closeness ≥ 30, trust ≥ 20, tension < 40 | closeness < 20 또는 trust < 10 또는 tension ≥ 50 |
+| RIVAL | rivalry ≥ 30, tension ≥ 20 | rivalry < 20 또는 tension < 10 |
+| SENIOR_JUNIOR | 같은 전공, 학년 차이 ≥ 1 | 전공이 다르거나 학년 차이 < 1 |
+
+현재 라벨이 이탈 조건을 만족하지 않으면 유지한다. 새 진입 조건이 여러 개면 `RIVAL > FRIEND > SENIOR_JUNIOR > 없음` 순으로 선택한다. 진입·이탈 임계값 차이는 경계 부근의 반복 전환을 막는 히스테리시스다. LLM은 라벨을 직접 결정하지 않는다.
 
 ## 10. 중복 제거와 Conflict Resolver 경계
 

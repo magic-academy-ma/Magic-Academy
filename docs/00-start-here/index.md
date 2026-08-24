@@ -1,7 +1,7 @@
 ---
 title: 시작하기
 status: approved
-updated: 2026-07-13
+updated: 2026-08-25
 visibility: public
 ---
 
@@ -39,7 +39,8 @@ visibility: public
 | `organizations.md` | 조직 목록·소속 규칙 |
 | `events.md` | 사건 목록·트리거·효과 |
 | `time-and-space.md` | Time Tick·공간·날씨 |
-| `glossary.md` | 전체 용어 정의 |
+
+제품 루프와 대표 캠페인 종료 기준은 `docs/01-product/game-mechanics.md`, 성격 수치 계약은 `docs/03-system-design/mbti-big-five-policy.md`를 참조한다.
 
 ---
 
@@ -48,7 +49,8 @@ visibility: public
 1. `docs/00-start-here/what-is-decided.md` — 확정된 수치와 결정 사항
 2. `docs/00-start-here/what-is-pending.md` — **임의로 확정하면 안 되는 미정 항목**
 3. `docs/02-domain/` — 도메인 모델 상세 (구현 전 필수)
-4. `docs/04-feature-specs/<기능명>.md` — 해당 기능 스펙 (구현 직전)
+4. `docs/03-system-design/` — 관련 실행 계약과 공개 보안 원칙
+5. `docs/04-feature-specs/<기능명>.md` — 해당 기능 스펙 (구현 직전)
 
 ---
 

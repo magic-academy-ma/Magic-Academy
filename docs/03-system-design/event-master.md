@@ -169,7 +169,7 @@ Event Master가 이벤트 타입을 결정하려면 호출 시점에 학사 일�
 | 동작 | 되돌릴 수 있는가 | 사전 승인 필요 |
 | --- | --- | --- |
 | LLM API 호출 (Sonnet 4.6) | N/A | 없음 (자동) |
-| events 테이블 쓰기 | 가능 (tick 단위 롤백) | 없음 — Orchestrator Commit 단계에서 처리 |
+| Event 후보 저장 | 가능 (tick 단위 롤백) | 없음 — Orchestrator Commit 단계에서 처리 |
 
 _Event Master 자체는 DB를 직접 쓰지 않는다. Commit은 Orchestrator 담당._
 
@@ -394,4 +394,3 @@ Magic Layer는 테마 레이어로, Event Master 이후·Agent Runtime 이전에
 | 4 | agent_summaries 실제 필드 목록 및 L1 스키마 | Agent Runtime 설계와 함께 확정 필요 | Agent Runtime 설계 완료 후 | §3.1, §6.3 |
 
 ---
-

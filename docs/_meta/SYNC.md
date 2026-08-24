@@ -92,8 +92,8 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 |------|----------------|------------|--------|
 | ✅ | 05. Tech / 시스템 아키텍처 (#8290305, v2.3) | `03-system-design/architecture.md` | 2026-07-13 |
 | ✅ | 05. Tech / 기술 스택 | `03-system-design/tech-stack.md` | 2026-07-13 |
-| ✅ | 05. Tech / ERD·데이터 모델 | `03-system-design/data-model.md` | 2026-07-13 |
-| ✅ | 05. Tech / API 명세 (#12451842, v1.1, 구 #10911849 trashed) | `03-system-design/api-spec.md` | 2026-07-13 |
+| — | 05. Tech / ERD·데이터 모델 | 미이관 — 비공개 데이터 모델 | 2026-08-25 |
+| — | 05. Tech / API 명세 (#12451842) | 미이관 — 비공개 API 계약 | 2026-08-25 |
 | ✅ | 05. Tech / 배포·인프라 | `03-system-design/infra.md` | 2026-07-13 |
 | ✅ | 05. Tech / Tick Engine 스펙 (#12910622) | `03-system-design/tick-engine.md` | 2026-07-28 |
 | ✅ | 05. Tech / Agent Runtime 설계 (#11894790) | `03-system-design/agent-runtime.md` | 2026-07-28 |
@@ -101,7 +101,7 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | ✅ | 05. Tech / Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-07-28 |
 | ✅ | 05. Tech / User Flow (#17367076) | `03-system-design/user-flow.md` | 2026-07-28 |
 | ✅ | 05. Tech / Event Master Agent 설계 (#10878982) | `03-system-design/event-master.md` | 2026-08-06 |
-| ✅ | 05. Tech / 인증·접근 제어 설계 (#23888013) | `03-system-design/auth.md` | 2026-08-06 |
+| — | 05. Tech / 인증·접근 제어 설계 (#23888013) | 미이관 — 비공개 인증·접근 제어 | 2026-08-25 |
 | ✅ | 05. Tech / [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | 2026-08-06 |
 | ✅ | Tick Engine 스펙 (#12910622) — drift | `03-system-design/tick-engine.md` 재동기화 | 2026-08-05 |
 | ✅ | Policy Engine 설계 (#14090319) — drift | `03-system-design/policy-engine.md` 재동기화 | 2026-08-05 |
@@ -164,34 +164,34 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 
 | 상태 | Confluence 문서 | docs/ 파일 | 확인 근거 |
 |------|----------------|------------|----------|
-| ⬜ | 시스템 아키텍처 (#8290305) | `03-system-design/architecture.md` | Tick 동시성·transaction isolation·재시도·Outbox 반영 |
-| ⬜ | Tick Engine 스펙 (#12910622) | `03-system-design/tick-engine.md` | Runtime batch·실행 대상 편성 계약 변경 |
-| ⬜ | Agent Runtime 설계 (#11894790) | `03-system-design/agent-runtime.md` | RuntimeResult Commit·보존 경계 변경 |
-| ⬜ | Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 관계 라벨 임계값·히스테리시스 반영 |
-| ⬜ | [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | signal intensity·관계 target 계약 변경 |
-| ⬜ | Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-08-13 본문 갱신 |
-| ⬜ | [Spec] Inspector 기능 정의 (#12582917) | `04-feature-specs/inspector.md` | 화면 노출 범위·표시 위치 변경 |
-| ⬜ | [전제 조건] Magic Academy 세계관 설정 (#10911745) | `02-domain/world-setting.md` | 전공명·관계 라벨 정책 변경 |
-| ⬜ | User Flow (#17367076) | `03-system-design/user-flow.md` | User Persona 설정·검증·잠금 흐름 변경 |
-| ⬜ | 기술 스택 확정 — 선행조사 통합 결론 (#10911784) | `03-system-design/tech-stack.md` | TickScheduler·TickOrchestrator 책임 분리 |
-| ⬜ | 브랜치 컨벤션 (#4161548) | `05-team-rules/git-workflow-commit.md` | 2026-08-12 본문 갱신 |
+| ✅ | 시스템 아키텍처 (#8290305) | `03-system-design/architecture.md` | Tick 동시성·transaction isolation·재시도·Outbox 반영 |
+| ✅ | Tick Engine 스펙 (#12910622) | `03-system-design/tick-engine.md` | Runtime batch·실행 대상 편성 계약 변경 |
+| ✅ | Agent Runtime 설계 (#11894790) | `03-system-design/agent-runtime.md` | RuntimeResult Commit·보존 경계 변경 |
+| ✅ | Policy Engine 설계 (#14090319) | `03-system-design/policy-engine.md` | 관계 라벨 임계값·히스테리시스 반영 |
+| ✅ | [Policy] Signal → Delta 규칙 (#19628033) | `03-system-design/policy-signal-delta.md` | signal intensity·관계 target 계약 변경 |
+| ✅ | Magic Layer Agent 설계 (#9371768) | `03-system-design/magic-layer.md` | 2026-08-13 본문 갱신 |
+| ✅ | [Spec] Inspector 기능 정의 (#12582917) | `04-feature-specs/inspector.md` | 화면 노출 범위·표시 위치 변경 |
+| ✅ | [전제 조건] Magic Academy 세계관 설정 (#10911745) | `02-domain/world-setting.md` | 전공명·관계 라벨 정책 변경 |
+| ✅ | User Flow (#17367076) | `03-system-design/user-flow.md` | User Persona 설정·검증·잠금 흐름 변경 |
+| ✅ | 기술 스택 확정 — 선행조사 통합 결론 (#10911784) | `03-system-design/tech-stack.md` | TickScheduler·TickOrchestrator 책임 분리 |
+| ✅ | 브랜치 컨벤션 (#4161548) | `05-team-rules/git-workflow-commit.md` | 2026-08-12 본문 갱신 |
 
 ### 신규 이관 또는 기존 문서 병합
 
 | 상태 | Confluence 문서 | 권장 대상 | 처리 방향 |
 |------|----------------|-----------|----------|
-| ⬜ | [Spec] MVP 핵심 설계 기준 (#6356994) | `00-start-here/what-is-decided.md` + `02-domain/` | 확정 사항을 관련 source of truth에 병합 |
-| ⬜ | 게임 메카닉 (#12583007) | `01-product/` | 공개 제품 문서로 신규 이관 |
-| ⬜ | 공간 구성 (확정) (#12550211) | `02-domain/time-and-space.md` | 공간·이동 기준 병합 |
-| ⬜ | Student Agent 설계 (#14188639) | `02-domain/agents.md` + `03-system-design/agent-runtime.md` | 도메인 정의와 Runtime 계약 분리 병합 |
-| ⬜ | Professor Agent 설계 (#14778369) | `02-domain/agents.md` + `03-system-design/agent-runtime.md` | 도메인 정의와 Runtime 계약 분리 병합 |
-| ⬜ | [Spec] Student Agent 초기값 (#19496962) | `04-feature-specs/` | 공개 기능 스펙으로 신규 이관 |
-| ⬜ | [Spec] Professor Agent 초기값 (#22348159) | `04-feature-specs/` | 공개 기능 스펙으로 신규 이관 |
-| ⬜ | [Policy] MBTI → Big Five 초기값 및 허용 범위 (#21791106) | `03-system-design/` 또는 `04-feature-specs/` | 실행 계약의 단일 source of truth로 이관 |
-| ⬜ | API 응답 형식 컨벤션 (#4718596) | `05-team-rules/conventions.md` | 공개 가능한 공통 응답 원칙만 병합 |
-| ⬜ | GitHub Branch Protection Rulesets (#22118401) | `05-team-rules/git-workflow-commit.md` | 브랜치 보호 원칙 병합 |
-| ⬜ | 문서 메타데이터·기본 구조 컨벤션 (#21954625) | `_meta/SYNC.md` + `05-team-rules/ai-usage.md` | 동기화 규칙과 AI 문서 규칙으로 분리 병합 |
-| ⬜ | 보안 설계 (#27459688) | `03-system-design/security-principles.md` | API·인증·데이터 모델 상세를 제거한 공개 보안 원칙만 신규 작성 |
+| ✅ | [Spec] MVP 핵심 설계 기준 (#6356994) | `00-start-here/what-is-decided.md` + `02-domain/` | 확정 사항을 관련 source of truth에 병합 |
+| ✅ | 게임 메카닉 (#12583007) | `01-product/game-mechanics.md` | 공개 제품 문서로 신규 이관 |
+| ✅ | 공간 구성 (확정) (#12550211) | `02-domain/time-and-space.md` | 공간·이동 기준 병합 |
+| ✅ | Student Agent 설계 (#14188639) | `02-domain/agents.md` + `03-system-design/agent-runtime.md` | 도메인 정의와 Runtime 계약 분리 병합 |
+| ✅ | Professor Agent 설계 (#14778369) | `02-domain/agents.md` + `03-system-design/agent-runtime.md` | 도메인 정의와 Runtime 계약 분리 병합 |
+| ✅ | [Spec] Student Agent 초기값 (#19496962) | `04-feature-specs/student-agent-initial-values.md` | 공개 기능 스펙으로 신규 이관 |
+| ✅ | [Spec] Professor Agent 초기값 (#22348159) | `04-feature-specs/professor-agent-initial-values.md` | 공개 기능 스펙으로 신규 이관 |
+| ✅ | [Policy] MBTI → Big Five 초기값 및 허용 범위 (#21791106) | `03-system-design/mbti-big-five-policy.md` | 실행 계약의 단일 source of truth로 이관 |
+| ✅ | API 응답 형식 컨벤션 (#4718596) | `05-team-rules/conventions.md` | 공개 가능한 공통 응답 원칙만 병합 |
+| ✅ | GitHub Branch Protection Rulesets (#22118401) | `05-team-rules/git-workflow-commit.md` | 브랜치 보호 원칙 병합 |
+| ✅ | 문서 메타데이터·기본 구조 컨벤션 (#21954625) | `_meta/SYNC.md` + `05-team-rules/ai-usage.md` | 동기화 규칙과 AI 문서 규칙으로 분리 병합 |
+| ✅ | 보안 설계 (#27459688) | `03-system-design/security-principles.md` | API·인증·데이터 모델 상세를 제거한 공개 보안 원칙만 신규 작성 |
 
 ### 비공개 유지
 
@@ -206,4 +206,4 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 
 | 상태 | Confluence 문서 | docs/ 파일 | 확인 사항 |
 |------|----------------|------------|----------|
-| ⬜ 확인 | [기능 명세서] 1단계 Magic Academy MVP (#16777778) | `04-feature-specs/mvp-feature-spec.md` | 최신 버전이 `Autosaved`이고 문서상 최종 수정일은 2026-08-05이므로 본문 diff 후 재동기화 여부 결정 |
+| ✅ 확인 | [기능 명세서] 1단계 Magic Academy MVP (#16777778) | `04-feature-specs/mvp-feature-spec.md` | Autosaved 버전에 의미 있는 변경 이력 없음 확인. 공개 문서의 API·인증 상세 제거 |

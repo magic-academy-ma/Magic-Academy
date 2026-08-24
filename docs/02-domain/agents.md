@@ -1,7 +1,7 @@
 ---
 title: Agent 정의
-status: approved
-updated: 2026-07-28
+status: draft
+updated: 2026-08-25
 visibility: public
 source:
   - "[Spec] MVP 핵심 설계 기준 (Confluence #6356994)"
@@ -14,7 +14,7 @@ canonical:
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/6619141
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/8290305
   - https://jehye.atlassian.net/wiki/spaces/MA/pages/11894790
-source_updated: 2026-07-28
+source_updated: 2026-08-14
 ---
 
 # Agent 정의
@@ -35,7 +35,7 @@ source_updated: 2026-07-28
 | 컴포넌트 | 수량 | 역할 | 출처 |
 |---------|------|------|------|
 | Event Master Agent | 1 | 매 Tick 사건 생성 오케스트레이터 | Spec §FR-05, FR-09 |
-| Magic Layer | 1 | 마법 세계관 변환 + 30% 특수 사건 생성 | Magic Layer 설계 (Confluence #6619141) |
+| Magic Layer | 1 | 마법 세계관 변환 + 조건 기반 특수 사건 후보 서술 | Magic Layer 설계 |
 
 > **User Persona**: 별도 Agent 아님. Student 5명 중 1명을 사용자가 지정하며, 해당 Agent의 성격·성향(Big Five)을 수정할 수 있다. 직접 조종 불가.
 
@@ -58,14 +58,24 @@ source_updated: 2026-07-28
 ## Student Agent
 
 - **memory 보유 상한**: 최대 10개 — Spec §FR-02
-- **조직 소속**: 전공 1개 + 기숙사 1개 + 동아리 0~1개 + 총학생회(선택)
-- **학년**: 1~4학년 중 전공별 랜덤 배정
-- **Big Five 성격**: openness, conscientiousness, extraversion, agreeableness, emotional_stability (각 0~100 SMALLINT)
-- **User Persona 지정**: 5명 중 1명을 사용자가 지정. Big Five 성향만 수정 가능. 직접 조종 불가.
+- **MVP 소속**: 단일 전공. 기숙사는 생활 공간이며 공식 조직이 아니다.
+- **초기 성격 슬롯**: ISTJ·ESTP·INFP·ENTJ·ESFJ 각 1명
+- **Big Five 성격**: 5개 축을 -50~+50 범위에서 사용하며 MBTI별 허용 범위 안에서 5단위로 설정
+- **User Persona 지정**: 기존 Student 5명 중 1명을 선택한다. 시작 전에 MBTI와 Big Five를 설정하고 시작 후 잠근다.
+
+### Student Runtime 기준
+
+- Slice 1은 지정 Student 1명, 확장 단계는 Student 5명을 실행 대상으로 편성한다.
+- preselected Student가 비활성이면 Runtime은 LLM 호출 없이 SKIPPED 결과를 반환한다.
+- Agent는 Intent·Decision Explanation·Memory 후보·정성적 Reaction만 반환하고 수치 효과나 저장을 담당하지 않는다.
+- 상태·일정·위치·관계·Memory·관찰 가능한 Event를 종합해 Tick당 대표 행동 하나를 선택한다.
 
 ## Professor Agent
 
-- 학생 Agent와 관계(신뢰도·의존도 등)를 형성할 수 있음
+- MVP 전공 교수 1명이며 Student와 같은 Runtime·상태·관계·Memory 계약을 사용한다.
+- 현재 schedule에 교수 역할이 있거나 최종 Event 참여자로 지정된 Tick에만 실행 대상에 포함한다.
+- 조건을 만족한 비활성 Professor는 SKIPPED 결과를 반환하고, 조건이 없는 Tick에는 Runtime 결과를 만들지 않는다.
+- 수업·시험 감독·상담·연구·학생 관찰을 우선 행동 맥락으로 사용한다.
 
 ## Event Master Agent (시스템 컴포넌트)
 
