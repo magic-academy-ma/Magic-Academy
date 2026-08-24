@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -58,6 +59,44 @@ class SimulationResponse(BaseModel):
     current_day: int
     current_tick: int
     magic_enabled: bool
+    created_at: datetime
+
+
+class EventCreateRequest(BaseModel):
+    event_type: Literal[
+        "class",
+        "group_project",
+        "exam",
+        "meeting",
+        "mt",
+        "festival",
+        "student_council",
+        "random_incident",
+    ]
+    title: str = Field(min_length=1, max_length=100)
+    description: str | None = None
+    simulation_day: int = Field(ge=1)
+    location_id: UUID | None = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("title must not be blank")
+        return value
+
+
+class EventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    simulation_id: UUID
+    location_id: UUID | None
+    event_type: str
+    title: str
+    description: str | None
+    status: str
+    simulation_day: int
     created_at: datetime
 
 
