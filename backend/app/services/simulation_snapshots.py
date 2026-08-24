@@ -39,6 +39,10 @@ class SnapshotNotFoundError(LookupError):
     pass
 
 
+class UnsupportedSnapshotSchemaError(ValueError):
+    pass
+
+
 ALLOWED_LEVELS = {"low", "medium", "high"}
 CONFIGURABLE_STATUSES = {"ready", "running", "paused"}
 
@@ -125,13 +129,13 @@ class SimulationSnapshotService:
 
         payload = snapshot.payload
         if payload.get("schema_version") != "slice6-snapshot-v1":
-            raise SnapshotNotFoundError("unsupported snapshot schema")
+            raise UnsupportedSnapshotSchemaError("unsupported snapshot schema")
         simulation_data = payload["simulation"]
         restored = Simulation(
             id=uuid7(),
             owner_id=owner_id,
             name=name.strip(),
-            status=simulation_data["status"],
+            status="paused",
             current_day=simulation_data["current_day"],
             current_tick=simulation_data["current_tick"],
             magic_enabled=simulation_data["magic_enabled"],

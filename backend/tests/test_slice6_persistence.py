@@ -18,9 +18,9 @@ from app.services.fixtures import seed_slice_zero
 from app.services.simulation_snapshots import (
     InvalidSimulationConfigError,
     SnapshotAccessDeniedError,
-    SnapshotNotFoundError,
     SimulationConfigInput,
     SimulationSnapshotService,
+    UnsupportedSnapshotSchemaError,
 )
 from uuid6 import uuid7
 
@@ -148,6 +148,12 @@ def test_restore_creates_new_branch_with_remapped_state(persistence_context) -> 
             .where(Agent.fixture_key == "student-01")
         )
         source_state.stress = 77
+        service.save_config(
+            session,
+            source,
+            SimulationConfigInput("medium", "medium", True, {}),
+        )
+        source.status = "completed"
         snapshot = service.create_snapshot(session, source)
         snapshot_id = snapshot.id
 
@@ -159,6 +165,7 @@ def test_restore_creates_new_branch_with_remapped_state(persistence_context) -> 
         assert restored.id != simulation_id
         assert restored.origin_simulation_id == simulation_id
         assert restored.origin_snapshot_id == snapshot_id
+        assert restored.status == "paused"
 
     with session_factory() as session:
         restored_agents = list(
@@ -257,7 +264,10 @@ def test_restore_rejects_unsupported_snapshot_schema(persistence_context) -> Non
         snapshot_id = snapshot.id
 
     with session_factory() as session:
-        with pytest.raises(SnapshotNotFoundError, match="unsupported snapshot schema"):
+        with pytest.raises(
+            UnsupportedSnapshotSchemaError,
+            match="unsupported snapshot schema",
+        ):
             service.restore_as_branch(
                 session,
                 snapshot_id,
