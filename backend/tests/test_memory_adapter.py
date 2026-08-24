@@ -1,5 +1,6 @@
 """Slice 3 Task 5: MemoryRepository + EmbeddingClient를 TickEngine 콜백으로 감싸는 어댑터 테스트"""
 import os
+import threading
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -108,6 +109,27 @@ async def test_memory_store_handles_none_event_id():
 
     create_call_item = repo.create.call_args.args[1]
     assert create_call_item.event_id is None
+
+
+async def test_memory_store_uses_session_on_caller_thread():
+    caller_thread_id = threading.get_ident()
+    repository_thread_ids = []
+    embedding_client = MagicMock()
+    embedding_client.embed = AsyncMock(return_value=[0.1] * 1536)
+    repo = MagicMock()
+    repo.create.side_effect = lambda _session, _item: (
+        repository_thread_ids.append(threading.get_ident()) or make_row()
+    )
+    repo.enforce_cap.side_effect = lambda _session, _agent_id: repository_thread_ids.append(
+        threading.get_ident()
+    )
+    session = MagicMock()
+
+    store = build_memory_store(session=session, repo=repo, embedding_client=embedding_client)
+    candidate = MemoryCandidateItem(content="동일 스레드 기억", memory_type="observation", importance=40)
+    await store(str(AGENT_ID), None, candidate, 2)
+
+    assert repository_thread_ids == [caller_thread_id, caller_thread_id]
 
 
 @pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required")

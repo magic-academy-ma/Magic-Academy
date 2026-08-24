@@ -5,7 +5,6 @@ TickEngine은 (agent_id: str, tick: int, query_text: str) -> list[MemoryItem]과
 (agent_id: str, event_id: str | None, candidate: MemoryCandidateItem, tick: int) -> str
 형태의 async 콜백만 알면 되고, DB/embedding 구현 세부사항은 이 모듈에 캡슐화한다.
 """
-import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -28,9 +27,7 @@ def build_memory_retriever(
 ) -> MemoryRetrieverFn:
     async def retrieve(agent_id: str, current_tick: int, query_text: str) -> list[MemoryItem]:
         query_embedding = await embedding_client.embed(query_text)
-        rows = await asyncio.to_thread(
-            repo.retrieve_for_runtime, session, UUID(agent_id), current_tick, query_embedding
-        )
+        rows = repo.retrieve_for_runtime(session, UUID(agent_id), current_tick, query_embedding)
         return [
             MemoryItem(
                 id=str(row.id),
@@ -68,8 +65,8 @@ def build_memory_store(
             occurred_at=datetime.now(UTC),
             embedding=embedding,
         )
-        row = await asyncio.to_thread(repo.create, session, item)
-        await asyncio.to_thread(repo.enforce_cap, session, UUID(agent_id))
+        row = repo.create(session, item)
+        repo.enforce_cap(session, UUID(agent_id))
         return str(row.id)
 
     return store
