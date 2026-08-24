@@ -25,9 +25,8 @@ export async function apiRequest(path, { token, ...options } = {}) {
   } catch {
     body = undefined;
   }
-
   if (!response.ok) {
-    // 두 가지 에러 포맷을 모두 지원한다.
+    // 세 가지 에러 포맷을 모두 지원한다.
     const code = body?.code ?? body?.error?.code;
     const serverMessage = body?.message ?? body?.error?.message;
 
@@ -46,7 +45,7 @@ export async function apiRequest(path, { token, ...options } = {}) {
   }
 
   return body;
-
+}
 // --- User Persona (Slice 4 Task 4) ---
 export async function getUserPersonaConfig(simulationId, { token } = {}) {
   const response = await apiRequest(

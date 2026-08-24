@@ -149,9 +149,10 @@ export default function App() {
       setLoading(false);
     }
   }
-  
+
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
   // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
-  const students = agents.filter((agent) => agent.agent_type === "STUDENT");
+  const students = agents.filter((agent) => agent.agent_type === "student");
 
   // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
   const students = agents.filter((agent) => agent.agent_type === "student");

@@ -74,9 +74,7 @@ export default function UserPersonaSetup({
             }, {})
           );
 
-          setLocked(Boolean(persona.locked));
-
-          // 이미 설정된(또는 잠긴) Persona를 마운트 시점에 발견한 경우에도 상위에 알린다.
+          setLocked(Boolean(persona.locked));          // 이미 설정된(또는 잠긴) Persona를 마운트 시점에 발견한 경우에도 상위에 알린다.
           // App.jsx가 이 값을 받아야 새로고침 후에도 Inspector·Agent 목록의 Persona 표시가 정확해진다.
           onSavedRef.current?.(persona);
         } catch (personaError) {
@@ -101,7 +99,7 @@ export default function UserPersonaSetup({
     return () => {
       cancelled = true;
     };
-  }, [simulationId, token, refreshKey]);
+  }, [simulationId, token]);
 
   function selectMbti(nextMbti) {
     setMbtiType(nextMbti);
