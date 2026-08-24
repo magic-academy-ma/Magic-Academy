@@ -16,7 +16,7 @@ class ExecutionMetadataInput:
     seed: int
     model: str
     prompt_version: str
-    policy_version: str
+    policy_version: str | None
 
 
 class ExecutionMetadataConflictError(ValueError):

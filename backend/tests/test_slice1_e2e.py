@@ -156,7 +156,7 @@ def test_slice_one_full_vertical_flow(client):
         assert execution.seed >= 0
         assert execution.model == "test-runtime-override"
         assert execution.prompt_version == "agent-runtime-10.1"
-        assert execution.policy_version == "policy-mvp-0.1"
+        assert execution.policy_version is None
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
@@ -409,7 +409,7 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
 
 
 def test_manual_tick_preserves_tick_engine_policy_extension(client):
-    from app.domain.models import Simulation
+    from app.domain.models import RuntimeExecution, Simulation
     from app.services.manual_tick import advance_manual_tick
     from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
@@ -430,11 +430,52 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
                     MockLLMClient(), model="test-direct-runtime"
                 ),
                 policy=policy,
+                policy_version="policy-test-2.0",
             )
         )
         db.commit()
 
+        execution = db.scalar(
+            select(RuntimeExecution).where(
+                RuntimeExecution.simulation_id == UUID(simulation_id)
+            )
+        )
+
     assert len(received_policy_inputs) == len(result.runtime_results) == 2
+    assert execution.policy_version == "policy-test-2.0"
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results
     }
+
+
+def test_manual_tick_rejects_policy_version_mismatch(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+
+    async def policy(_inputs):
+        return None
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        with pytest.raises(ValueError, match="policy and policy_version"):
+            asyncio.run(
+                advance_manual_tick(
+                    db,
+                    simulation,
+                    runtime=AgentRuntime(MockLLMClient()),
+                    policy=policy,
+                )
+            )
+        with pytest.raises(ValueError, match="policy and policy_version"):
+            asyncio.run(
+                advance_manual_tick(
+                    db,
+                    simulation,
+                    runtime=AgentRuntime(MockLLMClient()),
+                    policy_version="policy-test-2.0",
+                )
+            )

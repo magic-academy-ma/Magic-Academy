@@ -63,8 +63,11 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    policy_version: str | None = None,
     seed: int | None = None,
 ) -> ManualTickResult:
+    if (policy is None) != (policy_version is None):
+        raise ValueError("policy and policy_version must be provided together")
     locked = db.scalar(
         select(
             text(
@@ -201,7 +204,7 @@ async def advance_manual_tick(
             seed=execution_seed,
             model=first_result.model,
             prompt_version=first_result.prompt_version,
-            policy_version="policy-mvp-0.1",
+            policy_version=policy_version,
         ),
     )
     simulation.current_tick = current_tick
