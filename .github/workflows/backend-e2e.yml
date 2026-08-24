@@ -63,3 +63,7 @@ jobs:
           tests/test_agent_runtime.py
           tests/test_agent_runtime_graph.py
           tests/test_runtime_orchestrator.py
+          tests/test_memory_adapter.py
+          tests/test_memory_repository.py
+          tests/test_database_runtime_result_sink.py
+          tests/test_simulation_tick_runtime.py

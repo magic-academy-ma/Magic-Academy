@@ -77,7 +77,6 @@ async def test_retrieval_trace_matches_passed_ids():
     assert result.retrieval_traces["s-1"] == ["m-a", "m-b"]
 
 
-# TODO: Task 1 (지유님) 완료 후 추가
-# async def test_enforce_cap_via_repository(repo, db_session, seed_agents):
-#     """Memory 11개 → enforce_cap(10) → 1개 삭제, importance 최저값 제거"""
-#     ...
+# enforce_cap 자체 단위 테스트는 test_memory_repository.py에 구현돼 있음
+# (Memory 11개 → enforce_cap(10) → 최저 importance 2개 삭제 검증).
+# adapter를 경유한 end-to-end enforce_cap 검증은 test_memory_adapter.py 참고.
