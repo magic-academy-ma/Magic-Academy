@@ -180,7 +180,9 @@ def test_unhandled_runtime_exception_prevents_sink_call_and_propagates() -> None
     sink = SpySink()
     with pytest.raises(RuntimeError, match="unexpected runtime failure"):
         RuntimeOrchestrator(runtime, sink).run_batch(inputs)
-    assert len(runtime.calls) == 2
+    assert {item.agent.agent_id for item in runtime.calls} == {
+        item.agent.agent_id for item in inputs
+    }
     assert sink.calls == []
     assert sink.delegate.list_results() == []
 
