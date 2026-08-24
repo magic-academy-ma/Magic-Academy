@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import secrets
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -7,6 +8,10 @@ from uuid6 import uuid7
 
 from app.domain.models import Agent, Event, EventParticipant, Simulation
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
+from app.services.execution_metadata import (
+    ExecutionMetadataInput,
+    record_execution_metadata,
+)
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
 from app.services.simulation_tick import SimulationTickService
@@ -58,7 +63,11 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    policy_version: str | None = None,
+    seed: int | None = None,
 ) -> ManualTickResult:
+    if (policy is None) != (policy_version is None):
+        raise ValueError("policy and policy_version must be provided together")
     locked = db.scalar(
         select(
             text(
@@ -74,6 +83,7 @@ async def advance_manual_tick(
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
     run_id = uuid7()
+    execution_seed = seed if seed is not None else secrets.randbits(63)
 
     event = db.scalar(
         select(Event)
@@ -143,6 +153,7 @@ async def advance_manual_tick(
             simulation_id=simulation.id,
             run_id=run_id,
             tick_number=current_tick,
+            seed=execution_seed,
             block=block,
             preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
             schedule=schedule,
@@ -167,6 +178,7 @@ async def advance_manual_tick(
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
         current_tick=previous_tick,
+        data={"execution_seed": execution_seed},
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
@@ -182,6 +194,19 @@ async def advance_manual_tick(
     )
     if tick_result.status != "completed" or batch is None:
         raise RuntimeError("TickEngine completed without a Runtime batch")
+    first_result = batch.results[0]
+    record_execution_metadata(
+        db,
+        ExecutionMetadataInput(
+            simulation_id=simulation.id,
+            run_id=str(run_id),
+            tick_number=current_tick,
+            seed=execution_seed,
+            model=first_result.model,
+            prompt_version=first_result.prompt_version,
+            policy_version=policy_version,
+        ),
+    )
     simulation.current_tick = current_tick
     simulation.current_day = current_day
     db.flush()
