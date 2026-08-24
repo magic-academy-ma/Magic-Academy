@@ -15,9 +15,7 @@ class RealtimeEvent(BaseModel):
     type: Literal[
         "TICK_UPDATED",
         "AGENT_ACTION_UPDATED",
-        "EVENT_CREATED",
         "RELATIONSHIP_UPDATED",
-        "SIMULATION_STATUS_UPDATED",
     ]
     data: dict[str, Any]
 
@@ -107,6 +105,9 @@ def build_tick_events(
                         "source_agent_id": pair[0],
                         "target_agent_id": pair[1],
                         "changes": changes,
+                        "values": {
+                            metric: getattr(relationship, metric) for metric in changes
+                        },
                     },
                 )
             )

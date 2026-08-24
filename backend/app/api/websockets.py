@@ -41,8 +41,10 @@ async def simulation_events(
         return
 
     connection_manager.connect(simulation_id, websocket)
-    await websocket.send_json({"type": "AUTHENTICATED", "data": {"simulation_id": str(simulation_id)}})
     try:
+        await websocket.send_json(
+            {"type": "AUTHENTICATED", "data": {"simulation_id": str(simulation_id)}}
+        )
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:

@@ -81,9 +81,32 @@ def test_websocket_accepts_owner_and_rejects_other_user(client: TestClient) -> N
     assert UUID(simulation_id)
 
 
-def test_tick_broadcasts_only_after_successful_commit(client: TestClient) -> None:
+def test_tick_broadcasts_committed_relationship_matching_rest(
+    client: TestClient, monkeypatch
+) -> None:
+    from app.simulation.agent_runtime import MockLLMClient
+
     token, simulation_id = register_login_and_create(client, "ws-tick-owner")
     headers = {"Authorization": f"Bearer {token}"}
+    original_generate = MockLLMClient.generate
+
+    def generate_relationship_signal(self, runtime_input):
+        response = original_generate(self, runtime_input)
+        target_agent_id = next(
+            agent_id
+            for agent_id in runtime_input.events[0].participant_agent_ids
+            if agent_id != runtime_input.agent.agent_id
+        )
+        response["reaction"]["relationship_signals"] = [
+            {
+                "signal_type": "TRUST_UP",
+                "intensity": "MEDIUM",
+                "target_agent_id": str(target_agent_id),
+            }
+        ]
+        return response
+
+    monkeypatch.setattr(MockLLMClient, "generate", generate_relationship_signal)
 
     with client.websocket_connect(f"/v1/ws/simulations/{simulation_id}") as websocket:
         websocket.send_json({"type": "AUTH", "token": token})
@@ -107,3 +130,50 @@ def test_tick_broadcasts_only_after_successful_commit(client: TestClient) -> Non
         assert {event["type"] for event in action_events} == {
             "AGENT_ACTION_UPDATED"
         }
+        relationship_events = [websocket.receive_json(), websocket.receive_json()]
+
+        for event in relationship_events:
+            assert event["type"] == "RELATIONSHIP_UPDATED"
+            relationships = client.get(
+                f"/v1/agents/{event['data']['source_agent_id']}/relationships",
+                headers=headers,
+            )
+            assert relationships.status_code == 200, relationships.text
+            relationship = next(
+                item
+                for item in relationships.json()
+                if item["target_agent_id"] == event["data"]["target_agent_id"]
+            )
+            assert relationship["trust"] == event["data"]["values"]["trust"]
+
+
+def test_commit_failure_does_not_broadcast(client: TestClient, monkeypatch) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.services.realtime_events import connection_manager
+
+    token, simulation_id = register_login_and_create(client, "ws-rollback-owner")
+    broadcasts = []
+
+    async def record_broadcast(*args):
+        broadcasts.append(args)
+
+    def fail_commit(self):
+        raise RuntimeError("forced commit failure")
+
+    monkeypatch.setattr(connection_manager, "broadcast", record_broadcast)
+    monkeypatch.setattr(Session, "commit", fail_commit)
+
+    response = client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 500
+    assert broadcasts == []
+    simulation = client.get(
+        f"/v1/simulations/{simulation_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert simulation.status_code == 200, simulation.text
+    assert simulation.json()["current_tick"] == 0
