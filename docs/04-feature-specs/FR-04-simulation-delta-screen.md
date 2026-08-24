@@ -1,4 +1,4 @@
-> **상태**: Implemented (S5 E2E pending) / **작성자**: Codex / **작성일**: 2026-08-25
+> **상태**: Implemented / **작성자**: Codex / **작성일**: 2026-08-25
 
 ## 0. 개요 및 목적
 
@@ -88,7 +88,7 @@ delta는 `effect_id`, source/target Agent ID, target type, metric, delta, before
 - [x] 실패한 Tick의 delta를 표시하지 않는다.
 - [x] 키보드 조작과 스크린리더 설명을 지원한다.
 - [x] API mock·컴포넌트 테스트를 통과한다.
-- [ ] S5 E2E를 통과한다.
+- [x] S5 E2E를 통과한다.
 
 ## 변경 이력
 
@@ -96,3 +96,4 @@ delta는 `effect_id`, source/target Agent ID, target type, metric, delta, before
 |---|---|---|---|
 | 1.0.0 | 2026-08-25 | 최초 작성 | Codex |
 | 1.1.0 | 2026-08-25 | `after` 계약·Agent 이름·접근성·필수 UI 검증 반영 | Codex |
+| 1.1.1 | 2026-08-25 | S5 Playwright E2E 검증 완료 | Codex |
