@@ -284,6 +284,16 @@ def test_execution_metadata_is_persisted() -> None:
     """run_id·seed·model·prompt_version·policy_version이 실행 기록에 저장된다."""
 
 
+@pytest.mark.skip(reason="6-Agent roster 편성(Task 1, #110) 병합 후 활성화")
+def test_roster_contains_five_students_and_one_professor() -> None:
+    """roster가 Student 5명(User Persona 포함)·Professor 1명으로 구성되고 중복이 없다. (AUP-01)"""
+
+
+@pytest.mark.skip(reason="User Persona 잠금·API 경계(Task 3, #112) 병합 후 활성화")
+def test_direct_command_to_user_persona_after_start_is_rejected() -> None:
+    """Simulation 시작 후 User Persona 직접 명령·성격 변경 요청은 HTTP 409로 거부된다. (AUP-07)"""
+
+
 async def test_same_seed_produces_identical_results() -> None:
     """동일 seed로 실행한 두 Tick의 Agent 결과가 A/B 비교에서 동일하다.
 
