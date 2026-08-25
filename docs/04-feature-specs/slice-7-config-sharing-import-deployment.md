@@ -97,10 +97,114 @@ Slice 7의 핵심 불변 조건은 다음과 같다.
 - 생활 Agent roster와 fixture 식별자
 - Student·Professor Profile과 User Persona 대상의 fixture 식별자
 - 가져오기 직후 상태를 구성하는 Location, Agent State, 방향성 Relationship,
-  Organization membership Snapshot
+  Organization과 Organization membership Snapshot
+
+Organization Snapshot은 원본 DB ID 대신 비어 있지 않은 `fixture_key`를 안정적인
+식별자로 사용한다. `fixture_key`는 한 Simulation 안에서 유일해야 하며 Snapshot에는
+최소 `fixture_key`, `organization_type`, `name`, `description`, `is_active`를 포함한다.
+membership은 `organization_fixture_key`와 `agent_fixture_key`로 양쪽을 참조한다.
+가져오기는 Organization을 먼저 새 ID로 생성하고
+`organization_fixture_key -> 새 organization_id` 매핑으로 membership FK를 구성한다.
 
 버전 필드는 실제 비밀 값이나 Prompt 본문이 아니라 재현 조건을 식별하는 값만
 포함한다.
+
+#### 4.2.1 `slice7-share-v1` payload 구조
+
+아래 필드는 모두 서버가 공유 생성 시 DB에서 조립한다. 배열 안의 참조는 원본 DB
+ID가 아니라 fixture 식별자를 사용한다.
+
+```json
+{
+  "schema_version": "slice7-share-v1",
+  "share": {
+    "title": "공유 설정 제목",
+    "description": "공유 설정 설명",
+    "visibility": "public"
+  },
+  "simulation": {
+    "name": "새 Simulation 기본 이름",
+    "magic_enabled": true,
+    "settings_version": "string",
+    "execution_seed": 12345,
+    "model_version": "string",
+    "prompt_version": "string",
+    "policy_version": "string",
+    "resolver_version": "string",
+    "user_persona_fixture_key": "student-03"
+  },
+  "locations": [
+    {"code": "dormitory", "name": "기숙사", "is_active": true}
+  ],
+  "organizations": [
+    {
+      "fixture_key": "major-magic-theory",
+      "organization_type": "major",
+      "name": "마법이론학과",
+      "description": null,
+      "is_active": true
+    }
+  ],
+  "agents": [
+    {
+      "fixture_key": "student-03",
+      "fixture_version": "student-fixture-v0.2",
+      "agent_type": "user_persona",
+      "name": "리아",
+      "gender": "female",
+      "personality_type": "INFP",
+      "mbti_type": "INFP",
+      "traits": {
+        "openness": 20,
+        "conscientiousness": -10,
+        "extraversion": -20,
+        "agreeableness": 30,
+        "emotional_stability": -10
+      },
+      "role_profile": {
+        "profile_type": "student",
+        "grade": 1,
+        "interest_field": "마법약학"
+      },
+      "state": {
+        "location_code": "dormitory",
+        "hunger": 50,
+        "fatigue": 0,
+        "stress": 0,
+        "satisfaction": 50,
+        "mood": 0,
+        "current_action": null
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "source_agent_fixture_key": "student-01",
+      "target_agent_fixture_key": "student-02",
+      "metrics": {
+        "affection": 0,
+        "closeness": 0,
+        "trust": 0,
+        "tension": 0,
+        "rivalry": 0,
+        "dependency": 0
+      }
+    }
+  ],
+  "organization_memberships": [
+    {
+      "organization_fixture_key": "major-magic-theory",
+      "agent_fixture_key": "student-03",
+      "membership_role": "member"
+    }
+  ]
+}
+```
+
+Professor의 `role_profile`은 `profile_type=professor`, `academic_rank`, `specialty`를
+사용한다. 각 배열은 자신의 fixture 식별자 또는 방향성 pair 기준으로 중복될 수 없다.
+payload 전체는 strict schema로 검증하며 필수 필드 누락과 알 수 없는 필드는
+`INVALID_SHARE_PAYLOAD`다.
 
 ### 4.3 제외 범위
 
@@ -112,6 +216,12 @@ Slice 7의 핵심 불변 조건은 다음과 같다.
 
 ### 4.4 가져오기 결과와 소유권
 
+- 공유 생성은 `status=ready`, `started_at=null`, `current_tick=0`인 시작 전
+  Simulation에만 허용한다. 실행된 Simulation은 공유할 수 없으며 409
+  `SIMULATION_SHARE_NOT_READY`를 반환한다.
+- 따라서 공유 Snapshot의 Agent State와 Relationship은 시작 전 초기값이며, 가져온
+  Simulation의 Tick 0 초기 상태로 그대로 사용한다. 실행 중 상태의 공유·복원은
+  Slice 6 Replay/Restore 계약의 범위다.
 - 가져오기는 기존 Simulation을 대상으로 하지 않고 항상 새 Simulation을 만든다.
 - 새 Simulation ID와 하위 엔티티 ID를 발급하며 원본 ID를 재사용하지 않는다.
 - 새 Simulation의 `owner_id`는 요청 JWT의 `sub`다.
@@ -127,10 +237,18 @@ Slice 7의 핵심 불변 조건은 다음과 같다.
 
 ### 4.5 중복 요청
 
-- 가져오기 요청은 `Idempotency-Key`를 필수로 받는다.
-- 중복 기준은 `(request_user_id, share_id, idempotency_key)`다.
-- 같은 key와 같은 요청은 최초 생성 결과를 반환하며 새 Simulation을 만들지 않는다.
-- 같은 key의 payload가 다르면 409 `IMPORT_IDEMPOTENCY_CONFLICT`를 반환한다.
+- 가져오기 API는 `POST /v1/shares/{share_id}/imports`이며 요청 body를 받지 않는다.
+  클라이언트는 `Idempotency-Key` header만 필수로 전달한다.
+- 서버는 DB에 저장된 공유 Snapshot만 읽으며 클라이언트가 `schema_version` 또는
+  export payload를 제출하거나 덮어쓰는 인터페이스를 제공하지 않는다.
+- 중복 기준은 `(request_user_id, idempotency_key)`다.
+- 요청 fingerprint는 canonical JSON으로 직렬화한 `{ "share_id": "<UUID>" }`의
+  SHA-256이다. 같은 key와 같은 fingerprint면 최초 생성 결과를 반환하며 새
+  Simulation을 만들지 않는다.
+- 같은 사용자가 동일 key로 다른 `share_id`를 요청해 fingerprint가 다르면 409
+  `IMPORT_IDEMPOTENCY_CONFLICT`를 반환한다.
+- 서버 저장 Snapshot의 schema version·필수 필드·참조 무결성이 유효하지 않으면
+  422로 처리하며, 검증 중에도 클라이언트 입력을 Snapshot에 병합하지 않는다.
 
 ## 5. 오류 계약
 
@@ -139,6 +257,7 @@ Slice 7의 핵심 불변 조건은 다음과 같다.
 | 인증 정보 없음·유효하지 않음 | 401 | `AUTHENTICATION_REQUIRED` |
 | 공유 생성·취소 권한 없음 | 403 | `SHARE_ACCESS_DENIED` |
 | 공유 없음·접근 불가·취소됨 | 404 | `SHARE_NOT_FOUND` |
+| 시작 전 상태가 아닌 Simulation 공유 요청 | 409 | `SIMULATION_SHARE_NOT_READY` |
 | 동일 idempotency key의 요청 불일치 | 409 | `IMPORT_IDEMPOTENCY_CONFLICT` |
 | 지원하지 않는 `schema_version` | 422 | `UNSUPPORTED_SHARE_SCHEMA_VERSION` |
 | 공유 payload 검증 실패 | 422 | `INVALID_SHARE_PAYLOAD` |
@@ -198,7 +317,7 @@ Slice 7의 핵심 불변 조건은 다음과 같다.
 - `unlisted`가 공개 목록·검색에 나타나지 않음
 - 취소된 공유 조회·가져오기 404
 - 지원하지 않는 schema version 422
-- 변조된 payload와 Persona 대상 불일치 422
+- 서버 저장 Snapshot의 schema·참조 무결성 오류와 Persona 대상 불일치 422
 - 가져오기 중 강제 실패 시 전체 rollback
 - 가져오기 과정의 Runtime·LLM·Tick 호출 0회
 - 로그에 민감정보가 남지 않음
@@ -236,14 +355,18 @@ Parent #142에 링크한다. Task 6은 전체 증빙을 취합한다.
 
 1. **공개 범위**: `private`, `unlisted`, `public` 세 단계와 3장의 접근표를 적용한다.
 2. **공유 데이터**: 실행 기록이 아니라 4.2의 불변 설정·상태 Snapshot을 공유한다.
-3. **가져오기 방식**: 요청자 소유의 새 Simulation을 한 transaction으로 생성한다.
-4. **Persona 매핑**: fixture 식별자로 매핑하며 불일치 시 가져오기를 거부한다.
-5. **스키마 버전**: 최초 버전은 `slice7-share-v1`이며 비호환 payload는 422다.
-6. **중복 방지**: `Idempotency-Key`를 필수로 사용한다.
-7. **공유 취소**: soft delete 후 외부 조회·가져오기는 404다.
-8. **배포**: migration 선행, DB·migration readiness healthcheck, Railway Variables를 사용한다.
-9. **로그**: 구조화 로그의 허용 필드와 민감정보 제외 목록은 6.2를 적용한다.
-10. **최종 승인**: Railway Golden Path, 음수 시나리오, 외부 사용자 피드백과 누적 회귀가
+3. **공유 시점**: 시작 전 `ready`·Tick 0 Simulation만 공유하며 실행 중 상태 복원은
+   Slice 6 범위로 분리한다.
+4. **가져오기 방식**: 서버 저장 Snapshot으로 요청자 소유의 새 Simulation을 한
+   transaction으로 생성한다.
+5. **Persona·Organization 매핑**: fixture 식별자로 매핑하며 불일치 시 가져오기를
+   거부한다.
+6. **스키마 버전**: 최초 버전은 `slice7-share-v1`이며 비호환 payload는 422다.
+7. **중복 방지**: 사용자 단위 `Idempotency-Key`와 `share_id` fingerprint를 사용한다.
+8. **공유 취소**: soft delete 후 외부 조회·가져오기는 404다.
+9. **배포**: migration 선행, DB·migration readiness healthcheck, Railway Variables를 사용한다.
+10. **로그**: 구조화 로그의 허용 필드와 민감정보 제외 목록은 6.2를 적용한다.
+11. **최종 승인**: Railway Golden Path, 음수 시나리오, 외부 사용자 피드백과 누적 회귀가
     모두 통과해야 Slice 7 PASS다.
 
 ## 10. Task 0 완료 기준
