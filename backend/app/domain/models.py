@@ -71,6 +71,31 @@ class Simulation(TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SimulationShare(TimestampMixin, Base):
+    __tablename__ = "simulation_shares"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('private', 'unlisted', 'public')", name="ck_simulation_shares_visibility"),
+        UniqueConstraint("simulation_id", name="uq_simulation_shares_simulation_id"),
+        Index("idx_simulation_shares_visibility", "visibility", "created_at"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, server_default="private")
+    export_schema_version: Mapped[str] = mapped_column(String(20), nullable=False, server_default="1")
+    export_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Location(TimestampMixin, Base):
     __tablename__ = "locations"
     __table_args__ = (

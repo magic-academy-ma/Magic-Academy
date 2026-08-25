@@ -15,6 +15,7 @@ class SchemaModelTests(unittest.TestCase):
             {
                 "users",
                 "simulations",
+                "simulation_shares",
                 "locations",
                 "agents",
                 "student_profiles",
