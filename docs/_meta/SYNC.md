@@ -219,9 +219,9 @@ source_updated: YYYY-MM-DD             # 원본 마지막 반영일 (drift 판�
 | 상태 | Confluence 문서 | 원본 상태 | 재검사 조건 |
 |------|----------------|-----------|-------------|
 | ⏸ | [Spec] 2단계 프롬프트 캐싱 구현 계약 (#31522898) | In Review | Approved 전환 후 `03-system-design/` 이관 검토 |
-| ⏸ | [FE] AI-Native 개발 워크플로우 설계 (#30277660) | Draft | Approved 전환 후 팀 규칙·기능 스펙으로 분리 검토 |
-| ⏸ | [AI 협업] docs/ 문서 구조 가이드 (#30048346) | Draft | Approved 전환 후 `docs/README.md`·`_meta/SYNC.md`와 정합성 검토 |
-| ⏸ | [AI 협업] Claude 세션 협업 가이드 (#30048328) | Draft | Approved 전환 후 현재 저장소 규칙과 정합성 검토 |
+| ✅ | [FE] AI-Native 개발 워크플로우 설계 (#30277660) | 이관 완료 | `05-team-rules/ai-fe-workflow.md` (2026-08-25) |
+| ✅ | [AI 협업] docs/ 문서 구조 가이드 (#30048346) | 이관 완료 | `05-team-rules/docs-structure.md` (2026-08-25) |
+| ✅ | [AI 협업] Claude 세션 협업 가이드 (#30048328) | 이관 완료 | `05-team-rules/claude-session-guide.md` (2026-08-25) |
 | ⏸ | 프론트 화면 구조 초안 (#7503873) | Draft | 화면별 스펙 Approved 전환 후 `04-feature-specs/` 이관 |
 | ⏸ | Magic Academy 배경 디자인 시안 (#35651585) | Draft | 디자인 확정 및 저장소 이미지 자산 경로 확보 후 이관 검토 |
 
