@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import Relationship
+from app.domain.models import Event, Relationship
 from app.services.manual_tick import ManualTickResult
 
 
@@ -15,6 +15,7 @@ class RealtimeEvent(BaseModel):
     type: Literal[
         "TICK_UPDATED",
         "AGENT_ACTION_UPDATED",
+        "EVENT_CREATED",
         "RELATIONSHIP_UPDATED",
     ]
     data: dict[str, Any]
@@ -48,6 +49,21 @@ class SimulationConnectionManager:
 
 
 connection_manager = SimulationConnectionManager()
+
+
+def build_event_created_event(event: Event) -> RealtimeEvent:
+    return RealtimeEvent(
+        type="EVENT_CREATED",
+        data={
+            "event_id": event.id,
+            "simulation_id": event.simulation_id,
+            "event_type": event.event_type,
+            "title": event.title,
+            "status": event.status,
+            "simulation_day": event.simulation_day,
+            "location_id": event.location_id,
+        },
+    )
 
 
 def build_tick_events(

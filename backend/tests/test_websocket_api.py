@@ -177,3 +177,122 @@ def test_commit_failure_does_not_broadcast(client: TestClient, monkeypatch) -> N
     )
     assert simulation.status_code == 200, simulation.text
     assert simulation.json()["current_tick"] == 0
+
+
+def test_created_event_broadcast_matches_rest(client: TestClient) -> None:
+    token, simulation_id = register_login_and_create(client, "ws-event-owner")
+    headers = {"Authorization": f"Bearer {token}"}
+    agents = client.get(
+        f"/v1/simulations/{simulation_id}/agents", headers=headers
+    ).json()
+    location_id = agents[0]["location"]["id"]
+
+    with client.websocket_connect(f"/v1/ws/simulations/{simulation_id}") as websocket:
+        websocket.send_json({"type": "AUTH", "token": token})
+        assert websocket.receive_json()["type"] == "AUTHENTICATED"
+
+        created = client.post(
+            f"/v1/simulations/{simulation_id}/events",
+            headers=headers,
+            json={
+                "event_type": "random_incident",
+                "title": "마법 폭주",
+                "description": "복도에서 마법이 폭주했다.",
+                "simulation_day": 1,
+                "location_id": location_id,
+            },
+        )
+        assert created.status_code == 201, created.text
+        event = websocket.receive_json()
+
+    listed = client.get(
+        f"/v1/simulations/{simulation_id}/events", headers=headers
+    )
+    assert listed.status_code == 200, listed.text
+    stored = next(item for item in listed.json() if item["id"] == created.json()["id"])
+    assert event == {
+        "type": "EVENT_CREATED",
+        "data": {
+            "event_id": stored["id"],
+            "simulation_id": simulation_id,
+            "event_type": stored["event_type"],
+            "title": stored["title"],
+            "status": stored["status"],
+            "simulation_day": stored["simulation_day"],
+            "location_id": stored["location_id"],
+        },
+    }
+
+
+def test_event_api_rejects_other_owner_and_foreign_location(client: TestClient) -> None:
+    owner_token, simulation_id = register_login_and_create(client, "event-owner")
+    other_token, other_simulation_id = register_login_and_create(client, "event-other")
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    foreign_agents = client.get(
+        f"/v1/simulations/{other_simulation_id}/agents", headers=other_headers
+    ).json()
+    payload = {
+        "event_type": "meeting",
+        "title": "회의",
+        "simulation_day": 1,
+        "location_id": foreign_agents[0]["location"]["id"],
+    }
+
+    forbidden_create = client.post(
+        f"/v1/simulations/{simulation_id}/events",
+        headers=other_headers,
+        json=payload,
+    )
+    forbidden_list = client.get(
+        f"/v1/simulations/{simulation_id}/events", headers=other_headers
+    )
+    invalid_location = client.post(
+        f"/v1/simulations/{simulation_id}/events",
+        headers=owner_headers,
+        json=payload,
+    )
+
+    assert forbidden_create.status_code == 403
+    assert forbidden_list.status_code == 403
+    assert invalid_location.status_code == 422
+    assert invalid_location.json()["detail"] == "Location does not belong to simulation"
+
+
+def test_event_commit_failure_rolls_back_without_broadcast(
+    client: TestClient, monkeypatch
+) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.services.realtime_events import connection_manager
+
+    token, simulation_id = register_login_and_create(client, "event-rollback-owner")
+    headers = {"Authorization": f"Bearer {token}"}
+    broadcasts = []
+
+    async def record_broadcast(*args):
+        broadcasts.append(args)
+
+    def fail_commit(self):
+        raise RuntimeError("forced commit failure")
+
+    monkeypatch.setattr(connection_manager, "broadcast", record_broadcast)
+    monkeypatch.setattr(Session, "commit", fail_commit)
+
+    response = client.post(
+        f"/v1/simulations/{simulation_id}/events",
+        headers=headers,
+        json={
+            "event_type": "exam",
+            "title": "마법 시험",
+            "simulation_day": 1,
+        },
+    )
+
+    assert response.status_code == 500
+    assert broadcasts == []
+    listed = client.get(
+        f"/v1/simulations/{simulation_id}/events", headers=headers
+    )
+    assert listed.status_code == 200, listed.text
+    assert all(item["title"] != "마법 시험" for item in listed.json())

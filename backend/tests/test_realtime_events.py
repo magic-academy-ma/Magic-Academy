@@ -22,6 +22,7 @@ class FakeWebSocket:
     [
         "TICK_UPDATED",
         "AGENT_ACTION_UPDATED",
+        "EVENT_CREATED",
         "RELATIONSHIP_UPDATED",
     ],
 )
