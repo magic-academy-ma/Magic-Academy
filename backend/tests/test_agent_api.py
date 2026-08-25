@@ -88,7 +88,23 @@ def test_memory_relationship_and_decision_explanation(client):
         db.add(RuntimeResult(
             id=uuid7(), run_id="api-test", tick_number=1, agent_id=source_id,
             status="PROPOSED", action_type="STUDY",
-            intent={"decision_explanation": {"alternatives": [{"selected": True}], "influencing_factors": []}},
+            intent={
+                "decision_explanation": {
+                    "alternatives": [
+                        {
+                            "action_type": "STUDY",
+                            "description": "공부한다.",
+                            "relative_priority": "HIGH",
+                            "selected": True,
+                            "reasoning": "must not be exposed",
+                        }
+                    ],
+                    "influencing_factors": [],
+                    "chain_of_thought": "must not be exposed",
+                },
+                "hidden_prompt": "must not be exposed",
+                "reasoning": "must not be exposed",
+            },
             retry_count=0, failure_reason=None, model="mock", prompt_version="test",
             idempotency_key=f"api-test:1:{source_id}", result_fingerprint="0" * 64,
         ))
@@ -100,7 +116,17 @@ def test_memory_relationship_and_decision_explanation(client):
     assert memories.status_code == 200 and memories.json()[0]["content"] == "기억"
     assert relationships.status_code == 200 and relationships.json()[0]["trust"] == 3
     assert explanation.status_code == 200
-    assert explanation.json()["alternatives"] == [{"selected": True}]
+    assert explanation.json()["alternatives"] == [
+        {
+            "action_type": "STUDY",
+            "description": "공부한다.",
+            "relative_priority": "HIGH",
+            "selected": True,
+        }
+    ]
+    serialized = explanation.text
+    for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
+        assert forbidden not in serialized
 
 
 def test_other_owner_cannot_access_agent(client):
@@ -111,5 +137,43 @@ def test_other_owner_cannot_access_agent(client):
     agent_id = test_client.get(
         f"/v1/simulations/{simulation['id']}/agents", headers=owner_headers
     ).json()[0]["id"]
-    assert test_client.get(f"/v1/agents/{agent_id}", headers=other_headers).status_code == 403
-    assert test_client.get(f"/v1/agents/{uuid7()}", headers=owner_headers).status_code == 404
+    paths = (
+        f"/v1/agents/{agent_id}",
+        f"/v1/agents/{agent_id}/state",
+        f"/v1/agents/{agent_id}/relationships",
+        f"/v1/agents/{agent_id}/memories",
+        f"/v1/agents/{agent_id}/decision-explanation?tick=1",
+    )
+    for path in paths:
+        assert test_client.get(path, headers=other_headers).status_code == 403
+
+    missing_id = uuid7()
+    missing_paths = (
+        f"/v1/agents/{missing_id}",
+        f"/v1/agents/{missing_id}/state",
+        f"/v1/agents/{missing_id}/relationships",
+        f"/v1/agents/{missing_id}/memories",
+        f"/v1/agents/{missing_id}/decision-explanation?tick=1",
+    )
+    for path in missing_paths:
+        assert test_client.get(path, headers=owner_headers).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/memories?limit=0",
+        "/memories?limit=11",
+        "/decision-explanation?tick=-1",
+        "/decision-explanation",
+    ),
+)
+def test_agent_query_validation(client, path):
+    test_client, _ = client
+    headers = register_and_login(test_client, f"query-{abs(hash(path))}")
+    simulation = create_simulation(test_client, headers)
+    agent_id = test_client.get(
+        f"/v1/simulations/{simulation['id']}/agents", headers=headers
+    ).json()[0]["id"]
+
+    assert test_client.get(f"/v1/agents/{agent_id}{path}", headers=headers).status_code == 422

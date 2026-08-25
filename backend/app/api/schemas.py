@@ -147,8 +147,21 @@ class RelationshipResponse(BaseModel):
     updated_at: datetime
 
 
+class DecisionAlternativeResponse(BaseModel):
+    action_type: str
+    description: str
+    relative_priority: str
+    selected: bool
+
+
+class InfluencingFactorResponse(BaseModel):
+    source: str
+    description: str
+    direction: str
+
+
 class DecisionExplanationDetailResponse(BaseModel):
     agent_id: UUID
     tick: int
-    alternatives: list[dict]
-    influencing_factors: list[dict]
+    alternatives: list[DecisionAlternativeResponse]
+    influencing_factors: list[InfluencingFactorResponse]

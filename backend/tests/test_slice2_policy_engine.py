@@ -26,6 +26,35 @@ AGENT_B = UUID("00000000-0000-0000-0000-00000000000b")
 AGENT_X = UUID("00000000-0000-0000-0000-00000000000f")
 
 
+RELATIONSHIP_SIGNAL_METRICS = {
+    RelationshipSignalType.TRUST_UP: "trust",
+    RelationshipSignalType.TRUST_DOWN: "trust",
+    RelationshipSignalType.TENSION_UP: "tension",
+    RelationshipSignalType.TENSION_DOWN: "tension",
+    RelationshipSignalType.AFFECTION_UP: "affection",
+    RelationshipSignalType.AFFECTION_DOWN: "affection",
+    RelationshipSignalType.CLOSENESS_UP: "closeness",
+    RelationshipSignalType.CLOSENESS_DOWN: "closeness",
+    RelationshipSignalType.RIVALRY_UP: "rivalry",
+    RelationshipSignalType.RIVALRY_DOWN: "rivalry",
+    RelationshipSignalType.DEPENDENCY_UP: "dependency",
+    RelationshipSignalType.DEPENDENCY_DOWN: "dependency",
+}
+
+STATE_SIGNAL_METRICS = {
+    StateSignalType.HUNGER_UP: "hunger",
+    StateSignalType.HUNGER_DOWN: "hunger",
+    StateSignalType.FATIGUE_UP: "fatigue",
+    StateSignalType.FATIGUE_DOWN: "fatigue",
+    StateSignalType.STRESS_UP: "stress",
+    StateSignalType.STRESS_DOWN: "stress",
+    StateSignalType.SATISFACTION_UP: "satisfaction",
+    StateSignalType.SATISFACTION_DOWN: "satisfaction",
+    StateSignalType.MOOD_UP: "mood",
+    StateSignalType.MOOD_DOWN: "mood",
+}
+
+
 # ── signal_policy ──────────────────────────────────────────────────────────────
 
 
@@ -53,6 +82,98 @@ def test_all_state_signal_intensity_combinations(signal_type, intensity, magnitu
 
     direction = 1 if signal_type.value.endswith("_UP") else -1
     assert get_state_delta(signal_type, intensity) == direction * magnitude
+
+
+@pytest.mark.parametrize("signal_type", list(RelationshipSignalType))
+@pytest.mark.parametrize("intensity,base", [(SignalIntensity.LOW, 1), (SignalIntensity.MEDIUM, 3), (SignalIntensity.HIGH, 5)])
+def test_every_relationship_signal_and_intensity_has_signed_delta(signal_type, intensity, base):
+    from app.simulation.policy.registries.signal_policy import get_relationship_delta
+
+    delta = get_relationship_delta(signal_type, intensity)
+    expected_sign = 1 if signal_type.value.endswith("_UP") else -1
+    assert delta == expected_sign * base
+
+
+@pytest.mark.parametrize("signal_type", list(StateSignalType))
+@pytest.mark.parametrize("intensity,base", [(SignalIntensity.LOW, 2), (SignalIntensity.MEDIUM, 5), (SignalIntensity.HIGH, 8)])
+def test_every_state_signal_and_intensity_has_signed_delta(signal_type, intensity, base):
+    from app.simulation.policy.registries.signal_policy import get_state_delta
+
+    delta = get_state_delta(signal_type, intensity)
+    expected_sign = 1 if signal_type.value.endswith("_UP") else -1
+    assert delta == expected_sign * base
+
+
+@pytest.mark.parametrize("signal_type,metric", list(RELATIONSHIP_SIGNAL_METRICS.items()))
+def test_every_relationship_signal_reaches_policy_effect(signal_type, metric):
+    from app.simulation.policy.engine import evaluate_policy
+
+    result = evaluate_policy(
+        _make_eval_input(
+            [
+                _make_runtime_result(
+                    AGENT_A,
+                    AGENT_B,
+                    rel_signals=[_make_rel_signal(signal_type, SignalIntensity.MEDIUM, AGENT_B)],
+                )
+            ]
+        )
+    )
+    effects = [effect for effect in result.effect_candidates if effect.metric == metric]
+    assert len(effects) == 1
+    assert effects[0].target_agent_id == str(AGENT_B)
+
+
+@pytest.mark.parametrize("signal_type,metric", list(STATE_SIGNAL_METRICS.items()))
+def test_every_state_signal_reaches_policy_effect(signal_type, metric):
+    from app.simulation.policy.engine import evaluate_policy
+
+    result = evaluate_policy(
+        _make_eval_input(
+            [
+                _make_runtime_result(
+                    AGENT_A,
+                    None,
+                    state_signals=[StateSignal(signal_type=signal_type, intensity=SignalIntensity.MEDIUM)],
+                )
+            ]
+        )
+    )
+    effects = [effect for effect in result.effect_candidates if effect.metric == metric]
+    assert len(effects) == 1
+    assert effects[0].target_agent_id is None
+
+
+def test_relationship_and_state_signals_are_combined_in_one_policy_evaluation():
+    from app.simulation.policy.engine import evaluate_policy
+
+    result = evaluate_policy(
+        _make_eval_input(
+            [
+                _make_runtime_result(
+                    AGENT_A,
+                    AGENT_B,
+                    rel_signals=[
+                        _make_rel_signal(
+                            RelationshipSignalType.TRUST_UP,
+                            SignalIntensity.MEDIUM,
+                            AGENT_B,
+                        )
+                    ],
+                    state_signals=[
+                        StateSignal(
+                            signal_type=StateSignalType.FATIGUE_DOWN,
+                            intensity=SignalIntensity.HIGH,
+                        )
+                    ],
+                )
+            ]
+        )
+    )
+    assert {(effect.target_agent_id, effect.metric) for effect in result.effect_candidates} == {
+        (str(AGENT_B), "trust"),
+        (None, "fatigue"),
+    }
 
 
 def _make_rel_signal(signal_type, intensity, target_id):
@@ -110,7 +231,6 @@ def _make_eval_input(runtime_results, rel_snapshots=None, agent_snapshots=None):
         PolicyEvaluationInput,
         RelationshipSnapshot,
     )
-
     return PolicyEvaluationInput(
         run_id="sim-test-1",
         tick_number=1,
