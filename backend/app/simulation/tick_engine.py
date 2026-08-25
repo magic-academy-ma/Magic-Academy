@@ -12,6 +12,8 @@ from app.simulation.agent_runtime import (
     StateSignal,
     StateSignalType,
 )
+from app.simulation.replay_guard import assert_not_replay
+from app.simulation.instrumentation import increment_tick, increment_runtime
 
 
 class AgentType(str, Enum):
@@ -154,8 +156,16 @@ class TickEngine:
                     retrieval_traces[agent.id] = [m.id for m in memories]
                 snapshot.data["memories"] = all_memories
 
+            # Prevent runtime invocation and tick creation during replay, and instrument when allowed
+            from app.simulation.replay_guard import assert_not_replay
+
             runtime_outputs: dict[str, AgentRuntimeResult] = {}
             if participants:
+                # If replay mode is active, abort before creating or running ticks
+                assert_not_replay("Runtime invocation attempted during replay")
+                # instrument tick and runtime only when not in replay
+                increment_tick()
+                increment_runtime()
                 runtime_outputs = await self._runtime(participants, event, snapshot)
 
             if self._policy and runtime_outputs:
