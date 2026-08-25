@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     jwt_audience: str = "magic-academy-web"
     jwt_access_token_minutes: int = 60
     anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
     agent_runtime_model: str = "claude-haiku-4-5-20251001"
     agent_runtime_max_tokens: int = Field(default=4096, gt=0)
 

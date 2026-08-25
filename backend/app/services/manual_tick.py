@@ -5,8 +5,10 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
+from app.core.config import get_settings
 from app.domain.models import Agent, Event, EventParticipant, Simulation
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
+from app.services.memory_adapter import MemoryAdapter, OpenAIEmbeddingClient
 from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_policy
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
@@ -61,6 +63,7 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    memory_adapter: MemoryAdapter | None = None,
 ) -> ManualTickResult:
     locked = db.scalar(
         select(
@@ -77,6 +80,13 @@ async def advance_manual_tick(
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
     run_id = uuid7()
+    if memory_adapter is None:
+        openai_api_key = get_settings().openai_api_key
+        if openai_api_key:
+            memory_adapter = MemoryAdapter(
+                db,
+                embedding_client=OpenAIEmbeddingClient(openai_api_key),
+            )
 
     event = db.scalar(
         select(Event)
@@ -152,6 +162,20 @@ async def advance_manual_tick(
             schedule=schedule,
             events=[event],
             event_participants={event.id: participants},
+            memories_by_agent={
+                UUID(agent_id): [
+                    {
+                        "id": memory.id,
+                        "content": memory.content,
+                        "memory_type": memory.memory_type,
+                        "importance": memory.importance,
+                        "created_tick": memory.created_tick,
+                        "event_id": memory.event_id,
+                    }
+                    for memory in memories
+                ]
+                for agent_id, memories in _snapshot.data.get("memories", {}).items()
+            },
         )
         return {str(result.agent_id): result for result in batch.results}
 
@@ -182,11 +206,13 @@ async def advance_manual_tick(
     ]
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
-        current_tick=previous_tick,
+        current_tick=current_tick,
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=evaluate_policy_batch,
+        memory_retriever=None if memory_adapter is None else memory_adapter.retrieve,
+        memory_store=None if memory_adapter is None else memory_adapter.store,
     ).run_tick(
         tick_candidates,
         TickEvent(

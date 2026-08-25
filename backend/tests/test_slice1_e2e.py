@@ -26,9 +26,7 @@ def client():
     from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
     engine = create_engine(TEST_DATABASE_URL)
-    session_factory = sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -84,9 +82,10 @@ def test_slice_one_full_vertical_flow(client):
     test_client, session_factory = client
     simulation_id, headers = register_login_create(test_client)
 
-    assert test_client.post(
-        f"/v1/simulations/{simulation_id}/ticks/advance"
-    ).status_code == 401
+    assert (
+        test_client.post(f"/v1/simulations/{simulation_id}/ticks/advance").status_code
+        == 401
+    )
 
     response = test_client.post(
         f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
@@ -133,7 +132,9 @@ def test_slice_one_full_vertical_flow(client):
             "student-01",
             "professor-01",
         }
-        stored = list(db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id)))
+        stored = list(
+            db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id))
+        )
         assert {fixtures_by_id[result.agent_id] for result in stored} == {
             "student-01",
             "professor-01",
@@ -166,8 +167,15 @@ def test_slice_one_full_vertical_flow(client):
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
+        assert len(body["state_deltas"]) == 2
+        assert {
+            (delta["metric"], delta["delta"], delta["after"])
+            for delta in body["state_deltas"]
+        } == {("fatigue", 2, 17)}
         states = list(
-            db.scalars(select(AgentState).where(AgentState.agent_id.in_(participant_ids)))
+            db.scalars(
+                select(AgentState).where(AgentState.agent_id.in_(participant_ids))
+            )
         )
         assert {state.fatigue for state in states} == {17}
         assert db.scalar(select(func.count()).select_from(Relationship)) == 0
@@ -219,21 +227,25 @@ def test_slice_two_policy_applies_directional_relationship_delta(client, monkeyp
     assert response.status_code == 200, response.text
     deltas = response.json()["relationship_deltas"]
     assert len(deltas) == 2
-    assert {(delta["metric"], delta["delta"]) for delta in deltas} == {
-        ("trust", 3)
-    }
+    assert {(delta["metric"], delta["delta"]) for delta in deltas} == {("trust", 3)}
 
     with session_factory() as db:
         agents = list(
             db.scalars(select(Agent).where(Agent.simulation_id == UUID(simulation_id)))
         )
         participants = {
-            agent.id for agent in agents if agent.fixture_key in {"student-01", "professor-01"}
+            agent.id
+            for agent in agents
+            if agent.fixture_key in {"student-01", "professor-01"}
         }
         relationships = list(db.scalars(select(Relationship)))
         assert len(relationships) == 2
         assert {
-            (relationship.source_agent_id, relationship.target_agent_id, relationship.trust)
+            (
+                relationship.source_agent_id,
+                relationship.target_agent_id,
+                relationship.trust,
+            )
             for relationship in relationships
         } == {
             (source, target, 3)
@@ -329,7 +341,9 @@ def test_policy_changes_and_runtime_results_roll_back_together(client, monkeypat
             )
         )
         states = list(
-            db.scalars(select(AgentState).where(AgentState.agent_id.in_(participant_ids)))
+            db.scalars(
+                select(AgentState).where(AgentState.agent_id.in_(participant_ids))
+            )
         )
         assert simulation.current_tick == 0
         assert {state.fatigue for state in states} == {15}
@@ -367,9 +381,7 @@ def test_consecutive_ticks_use_distinct_batch_run_ids(client):
     assert set(run_ids_by_tick) == {1, 2}
     assert all(len(run_ids) == 1 for run_ids in run_ids_by_tick.values())
     assert run_ids_by_tick[1] != run_ids_by_tick[2]
-    assert all(
-        simulation_id not in run_ids for run_ids in run_ids_by_tick.values()
-    )
+    assert all(simulation_id not in run_ids for run_ids in run_ids_by_tick.values())
 
 
 def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):
@@ -434,9 +446,7 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
         return original_save_batch(self, *args, **kwargs)
 
     monkeypatch.setattr(TickEngine, "run_tick", count_engine)
-    monkeypatch.setattr(
-        SimulationTickService, "run_runtime_phase", count_runtime_phase
-    )
+    monkeypatch.setattr(SimulationTickService, "run_runtime_phase", count_runtime_phase)
     monkeypatch.setattr(DatabaseRuntimeResultSink, "save_batch", count_save_batch)
 
     response = test_client.post(
@@ -469,9 +479,7 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
             advance_manual_tick(
                 db,
                 simulation,
-                runtime=AgentRuntime(
-                    MockLLMClient(), model="test-direct-runtime"
-                ),
+                runtime=AgentRuntime(MockLLMClient(), model="test-direct-runtime"),
                 policy=policy,
             )
         )

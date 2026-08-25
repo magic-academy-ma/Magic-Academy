@@ -1,6 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from app.services.runtime_results import (
@@ -53,11 +53,13 @@ class RuntimeOrchestrator:
         events: Sequence[EventSummary],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         selected_agents = self._target_selector.select(
             agent_candidates,
             preselected_agent_ids=preselected_agent_ids,
         )
+        memories_by_agent = memories_by_agent or {}
         runtime_inputs = tuple(
             self._context_assembler.assemble(
                 run_id=run_id,
@@ -76,6 +78,7 @@ class RuntimeOrchestrator:
                 schedule=schedule,
                 valid_agent_ids=valid_agent_ids,
                 valid_location_ids=valid_location_ids,
+                memories=memories_by_agent.get(agent.agent_id, ()),
             )
             for agent in selected_agents
         )

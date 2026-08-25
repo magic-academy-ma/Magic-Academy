@@ -101,7 +101,9 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 )
 
         conflicting_relationship_keys = {
-            key for key, directions in relationship_directions.items() if len(directions) > 1
+            key
+            for key, directions in relationship_directions.items()
+            if len(directions) > 1
         }
         for metric, target_agent_id in sorted(conflicting_relationship_keys):
             warnings.append(
@@ -117,7 +119,9 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                     1 if state_signal.signal_type.value.endswith("_UP") else -1
                 )
         conflicting_state_metrics = {
-            metric for metric, directions in state_directions.items() if len(directions) > 1
+            metric
+            for metric, directions in state_directions.items()
+            if len(directions) > 1
         }
         for metric in sorted(conflicting_state_metrics):
             warnings.append(f"conflicting state signals: {source_agent_id} {metric}")
@@ -128,26 +132,33 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
             if metric is None:
                 warnings.append(f"unknown relationship signal: {signal.signal_type}")
                 continue
-            if signal.target_agent_id == runtime_result.agent_id or target_agent_id not in inp.valid_agent_ids:
-                rejected.append({
-                    "agent_id": source_agent_id,
-                    "target_agent_id": target_agent_id,
-                    "signal_type": signal.signal_type,
-                    "reason": "INVALID_RELATIONSHIP_TARGET",
-                })
+            if (
+                signal.target_agent_id == runtime_result.agent_id
+                or target_agent_id not in inp.valid_agent_ids
+            ):
+                rejected.append(
+                    {
+                        "agent_id": source_agent_id,
+                        "target_agent_id": target_agent_id,
+                        "signal_type": signal.signal_type,
+                        "reason": "INVALID_RELATIONSHIP_TARGET",
+                    }
+                )
                 has_rejection = True
                 continue
             if (metric, target_agent_id) in conflicting_relationship_keys:
-                rejected.append({
-                    "agent_id": source_agent_id,
-                    "target_agent_id": target_agent_id,
-                    "signal_type": signal.signal_type,
-                    "reason": "CONFLICTING_DUPLICATE_EFFECT",
-                })
+                rejected.append(
+                    {
+                        "agent_id": source_agent_id,
+                        "target_agent_id": target_agent_id,
+                        "signal_type": signal.signal_type,
+                        "reason": "CONFLICTING_DUPLICATE_EFFECT",
+                    }
+                )
                 has_rejection = True
                 continue
             rule_id = f"REL_{signal.signal_type}_{signal.intensity}"
-            effect_source_key = (
+            relationship_effect_source_key = (
                 runtime_result.idempotency_key,
                 "RELATIONSHIP",
                 source_agent_id,
@@ -155,26 +166,28 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 metric,
                 rule_id,
             )
-            if effect_source_key in seen_effect_source_keys:
+            if relationship_effect_source_key in seen_effect_source_keys:
                 continue
-            seen_effect_source_keys.add(effect_source_key)
+            seen_effect_source_keys.add(relationship_effect_source_key)
             pair_key = (source_agent_id, target_agent_id)
             rel_snapshot = rel_index.get(pair_key)  # None이면 첫 만남 → 초기값 0
             current = rel_snapshot.get(metric, 0) if rel_snapshot is not None else 0
             delta = get_relationship_delta(signal.signal_type, signal.intensity)
             after_preview = _clamp_preview(current, delta, metric)
-            effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:rel:{signal.signal_type}:{target_agent_id}",
-                target_type=EffectTargetType.RELATIONSHIP,
-                source_agent_id=source_agent_id,
-                target_agent_id=target_agent_id,
-                metric=metric,
-                delta=delta,
-                before=current,
-                after_preview=after_preview,
-                rule_id=rule_id,
-                reason=f"{action_type}의 {signal.intensity} {signal.signal_type} 반응",
-            ))
+            effect_candidates.append(
+                EffectCandidate(
+                    effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:rel:{signal.signal_type}:{target_agent_id}",
+                    target_type=EffectTargetType.RELATIONSHIP,
+                    source_agent_id=source_agent_id,
+                    target_agent_id=target_agent_id,
+                    metric=metric,
+                    delta=delta,
+                    before=current,
+                    after_preview=after_preview,
+                    rule_id=rule_id,
+                    reason=f"{action_type}의 {signal.intensity} {signal.signal_type} 반응",
+                )
+            )
 
         for state_signal in reaction.state_signals:
             metric = STATE_SIGNAL_TO_METRIC.get(state_signal.signal_type)
@@ -182,11 +195,13 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 warnings.append(f"unknown state signal: {state_signal.signal_type}")
                 continue
             if metric in conflicting_state_metrics:
-                rejected.append({
-                    "agent_id": source_agent_id,
-                    "signal_type": state_signal.signal_type,
-                    "reason": "CONFLICTING_DUPLICATE_EFFECT",
-                })
+                rejected.append(
+                    {
+                        "agent_id": source_agent_id,
+                        "signal_type": state_signal.signal_type,
+                        "reason": "CONFLICTING_DUPLICATE_EFFECT",
+                    }
+                )
                 has_rejection = True
                 continue
             rule_id = f"STATE_{state_signal.signal_type}_{state_signal.intensity}"
@@ -206,18 +221,20 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
                 state_signal.intensity,
             )
             after_preview = _clamp_preview(current, delta, metric)
-            effect_candidates.append(EffectCandidate(
-                effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:state:{state_signal.signal_type}",
-                target_type=EffectTargetType.AGENT_STATE,
-                source_agent_id=source_agent_id,
-                target_agent_id=None,
-                metric=metric,
-                delta=delta,
-                before=current,
-                after_preview=after_preview,
-                rule_id=rule_id,
-                reason=f"{state_signal.intensity} {state_signal.signal_type} 반응",
-            ))
+            effect_candidates.append(
+                EffectCandidate(
+                    effect_id=f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:state:{state_signal.signal_type}",
+                    target_type=EffectTargetType.AGENT_STATE,
+                    source_agent_id=source_agent_id,
+                    target_agent_id=None,
+                    metric=metric,
+                    delta=delta,
+                    before=current,
+                    after_preview=after_preview,
+                    rule_id=rule_id,
+                    reason=f"{state_signal.intensity} {state_signal.signal_type} 반응",
+                )
+            )
 
     status = PolicyStatus.PARTIAL if has_rejection else PolicyStatus.EVALUATED
     return PolicyEvaluationResult(

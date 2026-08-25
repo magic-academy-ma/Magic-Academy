@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from typing import TypeAlias
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
+from uuid6 import uuid7
 
 from app.domain.models import Agent, Relationship
 from app.domain.relationship_metrics import (
@@ -77,7 +78,11 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
             )
         if not delta.effect_ids:
             raise InvalidRelationshipDeltaError("effect_ids must not be empty")
-        if not delta.policy_version or not delta.resolver_version or not delta.resolution_id:
+        if (
+            not delta.policy_version
+            or not delta.resolver_version
+            or not delta.resolution_id
+        ):
             raise InvalidRelationshipDeltaError(
                 "policy_version, resolver_version, and resolution_id are required"
             )
@@ -85,7 +90,10 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
             raise InvalidRelationshipDeltaError(
                 "applied_delta cannot exceed requested_total magnitude"
             )
-        if delta.requested_total != 0 and delta.applied_delta * delta.requested_total < 0:
+        if (
+            delta.requested_total != 0
+            and delta.applied_delta * delta.requested_total < 0
+        ):
             raise InvalidRelationshipDeltaError(
                 "applied_delta direction must match requested_total"
             )
@@ -121,7 +129,7 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
         session.execute(
             insert(Relationship)
             .values(
-                id=uuid4(),
+                id=uuid7(),
                 simulation_id=source_simulation_id,
                 source_agent_id=delta.source_agent_id,
                 target_agent_id=delta.target_agent_id,

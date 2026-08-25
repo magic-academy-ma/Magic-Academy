@@ -118,7 +118,7 @@ def evaluate_and_apply_policy(
                 requested_total=effect.delta,
                 applied_delta=effect.after_preview - effect.before,
                 after=effect.after_preview,
-                effect_ids=(effect.effect_id,),
+                effect_ids=effect.effect_ids or (effect.effect_id,),
                 policy_version=POLICY_VERSION,
                 resolver_version=RESOLVER_VERSION,
                 resolution_id=resolution_id,

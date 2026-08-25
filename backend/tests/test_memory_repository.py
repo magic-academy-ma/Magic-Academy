@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.models import Agent, AgentMemory, Simulation, User
@@ -142,6 +142,41 @@ def test_retrieve_deduplicates_latest_and_similarity(memory_context) -> None:
     assert len({row.id for row in rows}) == len(rows)
 
 
+def test_retrieve_fills_three_distinct_similarity_slots_when_latest_overlap(
+    memory_context,
+) -> None:
+    session_factory, agent_id, _ = memory_context
+    repository = MemoryRepository()
+    with session_factory.begin() as session:
+        older = [
+            create_memory(
+                repository,
+                session,
+                agent_id,
+                tick=tick,
+                embedding=vector(1.0, tick / 100),
+            )
+            for tick in range(1, 4)
+        ]
+        latest = [
+            create_memory(
+                repository,
+                session,
+                agent_id,
+                tick=tick,
+                embedding=vector(1.0),
+            )
+            for tick in (9, 10)
+        ]
+
+    with session_factory() as session:
+        rows = repository.retrieve_for_runtime(session, agent_id, 10, vector(1.0))
+
+    assert [row.id for row in rows[:2]] == [latest[1].id, latest[0].id]
+    assert {row.id for row in rows[2:]} == {row.id for row in older}
+    assert len(rows) == 5
+
+
 def test_enforce_cap_deletes_lowest_importance_then_oldest_tick(memory_context) -> None:
     session_factory, agent_id, _ = memory_context
     repository = MemoryRepository()
@@ -171,8 +206,64 @@ def test_enforce_cap_deletes_lowest_importance_then_oldest_tick(memory_context) 
         ) == 12
 
 
+def test_enforce_cap_preserves_latest_two_and_reflection(memory_context) -> None:
+    session_factory, agent_id, _ = memory_context
+    repository = MemoryRepository()
+    with session_factory.begin() as session:
+        old_reflection = repository.create(
+            session,
+            MemoryCreateInput(
+                agent_id=agent_id,
+                content="important reflection",
+                memory_type="reflection",
+                importance=0,
+                created_tick=1,
+                occurred_at=datetime(2026, 8, 14, tzinfo=UTC),
+            ),
+        )
+        old_observations = [
+            create_memory(repository, session, agent_id, tick=tick, importance=tick)
+            for tick in range(2, 13)
+        ]
+        latest = [
+            create_memory(repository, session, agent_id, tick=tick, importance=0)
+            for tick in (13, 14)
+        ]
+
+    with session_factory.begin() as session:
+        assert repository.enforce_cap(session, agent_id) == 4
+
+    with session_factory() as session:
+        remaining_ids = set(
+            session.scalars(
+                select(AgentMemory.id).where(AgentMemory.agent_id == agent_id)
+            )
+        )
+
+    assert old_reflection.id in remaining_ids
+    assert {memory.id for memory in latest} <= remaining_ids
+    assert {memory.id for memory in old_observations[:4]}.isdisjoint(remaining_ids)
+
+
 def test_enforce_cap_rejects_negative_limit(memory_context) -> None:
     session_factory, agent_id, _ = memory_context
+    with session_factory() as session, pytest.raises(ValueError, match="non-negative"):
+        MemoryRepository().enforce_cap(session, agent_id, max_active=-1)
+
+
+def test_enforce_cap_zero_removes_all_memories(memory_context) -> None:
+    session_factory, agent_id, _ = memory_context
+    repository = MemoryRepository()
+    with session_factory.begin() as session:
+        create_memory(repository, session, agent_id, tick=1)
+        create_memory(repository, session, agent_id, tick=2)
+
+    with session_factory.begin() as session:
+        assert repository.enforce_cap(session, agent_id, max_active=0) == 2
+
     with session_factory() as session:
-        with pytest.raises(ValueError, match="non-negative"):
-            MemoryRepository().enforce_cap(session, agent_id, max_active=-1)
+        assert session.scalar(
+            select(func.count())
+            .select_from(AgentMemory)
+            .where(AgentMemory.agent_id == agent_id)
+        ) == 0

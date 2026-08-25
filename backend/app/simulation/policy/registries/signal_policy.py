@@ -45,7 +45,9 @@ _STATE_SIGN: dict[StateSignalType, int] = {
 }
 
 
-def get_relationship_delta(signal_type: RelationshipSignalType, intensity: SignalIntensity) -> int:
+def get_relationship_delta(
+    signal_type: RelationshipSignalType, intensity: SignalIntensity
+) -> int:
     return _RELATIONSHIP_SIGN[signal_type] * INTENSITY_TO_RELATIONSHIP_BASE[intensity]
 
 
