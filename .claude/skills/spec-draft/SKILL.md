@@ -96,7 +96,7 @@ updated: {오늘 날짜}
 
 ## 모드 B — FE 화면 스펙
 
-Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우.
+Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우. `docs/04-feature-specs/`에 스펙을 생성하고 Mock Data를 내장하여 즉시 화면 구현을 지원한다.
 
 ### 입력
 
@@ -124,7 +124,16 @@ Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우.
 ### 스펙 초안 형식
 
 ```markdown
-> **상태**: Draft / **작성자**: {작성자} / **작성일**: YYYY-MM-DD
+---
+title: "[화면명] FE 스펙"
+status: draft
+visibility: public
+updated: YYYY-MM-DD
+---
+
+# FR-XX [화면명] FE 스펙
+
+> **상태**: Draft / **작성자**: @작성자 / **작성일**: YYYY-MM-DD
 
 ## 0. 개요 및 목적
 ## 1. 컴포넌트 트리
@@ -133,13 +142,13 @@ Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우.
 ## 3. API 연동
 | Method | Endpoint | 호출 시점 | 응답 |
 ## 4. 빈 상태 / 로딩 / 에러 처리
-## 5. Mock Data Fixture
+## 5. Mock Data Fixture (백엔드 미완성 시 프론트 독립 실행용)
 - API 응답 스키마와 `docs/02-domain/` 규칙에 맞는 샘플 JSON
 - `VITE_USE_MOCK=true`에서 사용할 fixture 경로 또는 Props 주입 지점
 - API 명세에서 확정되지 않은 값은 `[미정]`으로 표시
 ## 6. 테스트 포인트
 - 컴포넌트 단위 테스트 (vitest/jest)
-- API mock 또는 통합 테스트
+- Mock Data 기반 독립 렌더링 확인
 - E2E (핵심 경로)
 - 401·403 접근 권한
 - 지원 해상도 동작 확인
@@ -148,7 +157,7 @@ Figma URL, 화면 ID, HTML 목업 경로 중 하나가 입력된 경우.
 - 로딩·빈 데이터·서버 오류·재시도 케이스
 ## 변경 이력
 | 버전 | 날짜 | 변경 내용 | 작성자 |
-| 1.0.0 | YYYY-MM-DD | 최초 작성 | {작성자} |
+| 1.0.0 | YYYY-MM-DD | 최초 작성 | @작성자 |
 ```
 
 ---
