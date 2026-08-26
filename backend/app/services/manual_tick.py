@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -32,6 +33,8 @@ from app.simulation.agent_runtime import (
 from app.simulation.event_master import (
     AgentSummary as EventMasterAgentSummary,
     RelationshipSummary as EventMasterRelationshipSummary,
+    SCHEDULED_EVENT_TYPES,
+    ScheduledEventInput,
 )
 from app.simulation.magic_layer import STUDENT_MISSING_STREAK_TICKS, AgentSnapshot as MagicAgentSnapshot
 from app.simulation.policy.models import (
@@ -156,6 +159,26 @@ def _reconstruct_recent_stress(
     return history
 
 
+def _to_scheduled_event_input(event: Event, participants: list[EventParticipant]) -> ScheduledEventInput | None:
+    """DB의 현재 Event/EventParticipant를 Event Master의 ScheduledEventInput 계약으로 변환한다.
+
+    새 Event 모델이나 새 규칙을 만들지 않는다 — 기존 DB 값의 event_type만
+    Event Master 계약(대문자)에 맞게 정규화한다. event_type이 Event Master의
+    예정 Event 타입(SCHEDULED_EVENT_TYPES)이 아니면 변환하지 않는다.
+    """
+    event_type = event.event_type.upper()
+    if event_type not in SCHEDULED_EVENT_TYPES or event.location_id is None:
+        return None
+    return ScheduledEventInput(
+        event_id=str(event.id),
+        event_type=event_type,
+        location_id=str(event.location_id),
+        participant_agent_ids=tuple(str(p.agent_id) for p in participants),
+        title=event.title,
+        description=event.description or "",
+    )
+
+
 def _run_event_and_magic_phase(
     db: Session,
     *,
@@ -163,6 +186,7 @@ def _run_event_and_magic_phase(
     run_id: UUID,
     tick: int,
     agents: list[Agent],
+    scheduled_events: Sequence[ScheduledEventInput] = (),
 ) -> EventAndMagicResult:
     """Event Master -> Magic Layer -> Policy/Resolver 최소 wiring (Issue #101).
 
@@ -276,6 +300,7 @@ def _run_event_and_magic_phase(
         agent_summaries=agent_summaries,
         agent_state_snapshots=agent_state_snapshots,
         magic_agent_snapshots=magic_snapshots,
+        scheduled_events=scheduled_events,
         event_master_relationship_summaries=event_master_relationship_summaries,
         magic_relationship_snapshots=magic_relationship_snapshots,
     )
@@ -333,12 +358,16 @@ async def advance_manual_tick(
             .order_by(Agent.fixture_key)
         )
     )
+    scheduled_event_input = _to_scheduled_event_input(event, participants)
     event_and_magic_result = _run_event_and_magic_phase(
         db,
         simulation_id=simulation.id,
         run_id=run_id,
         tick=current_tick,
         agents=agents,
+        scheduled_events=(
+            (scheduled_event_input,) if scheduled_event_input is not None else ()
+        ),
     )
     participant_ids = {participant.agent_id for participant in participants}
     preselected_ids = [

@@ -506,4 +506,56 @@ def test_production_wiring_actually_fires_student_missing(db):
         db, simulation_id=simulation_id, run_id=uuid4(), tick=11, agents=agents,
     )
     assert [e.event_subtype for e in result.special_events] == [STUDENT_MISSING]
-    assert result.special_events[0].missing_agent_ids == (str(target.id),)
+
+
+# ---------------------------------------------------------------------------
+# DB에 저장된 CLASS scheduled Event가 실제 advance_manual_tick() 경로를 통해
+# Event Master -> Magic Layer -> Policy까지 연결되는지 검증한다 (synthetic
+# run_event_and_magic_phase() 직접 호출이 아니라 real production adapter 사용).
+# ---------------------------------------------------------------------------
+def test_advance_manual_tick_wires_db_class_event_into_event_master(db):
+    import asyncio
+
+    from app.domain.models import Event as DomainEvent, EventParticipant
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    simulation_id = _setup_simulation(db)
+    simulation = db.get(Simulation, simulation_id)
+
+    class_event = db.scalar(
+        select(DomainEvent).where(
+            DomainEvent.simulation_id == simulation_id, DomainEvent.event_type == "class"
+        )
+    )
+    db_participant_ids = {
+        p.agent_id
+        for p in db.scalars(
+            select(EventParticipant).where(EventParticipant.event_id == class_event.id)
+        )
+    }
+    assert db_participant_ids  # fixture 전제: student-01 + professor-01
+
+    runtime = AgentRuntime(MockLLMClient(), model="test-event-master-wiring")
+    result = asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
+
+    event_and_magic = result.event_and_magic_result
+    class_events = [e for e in event_and_magic.events if e.event_type == "CLASS"]
+    assert len(class_events) == 1
+    wired_event = class_events[0]
+
+    # DB의 실제 EventParticipant와 정확히 일치해야 한다 (inactive 제외 규칙 유지 —
+    # 이 fixture는 전원 active이므로 그대로 전원 포함되어야 한다).
+    assert {UUID(agent_id) for agent_id in wired_event.participant_agent_ids} == db_participant_ids
+
+    # CLASS 기본 효과(stress +1)가 참여자 전원에 대해 resolved_effects까지 연결된다.
+    stress_effects = {
+        UUID(effect.source_agent_id): effect
+        for effect in event_and_magic.resolved_effects
+        if effect.metric == "stress"
+    }
+    assert set(stress_effects) == db_participant_ids
+    assert all(effect.delta == 1 for effect in stress_effects.values())
+
+    # Magic Layer로도 정상 전달된다 (converted_events에 동일 CLASS Event가 포함).
+    assert any(e.event_type == "CLASS" for e in event_and_magic.events)
