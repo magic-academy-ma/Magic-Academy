@@ -537,6 +537,12 @@ class AgentRuntime:
     def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
         attempt_count = state["attempt_count"] + 1
         try:
+            # Block LLM invocation during replay mode and instrument the call
+            from app.simulation.replay_guard import assert_not_replay
+            from app.simulation.instrumentation import increment_llm
+
+            assert_not_replay("LLM generation attempted during replay")
+            increment_llm()
             response = self._llm_client.generate(state["runtime_input"])
         except LLMInvocationError as exc:
             return {

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App.jsx'
 
 const user = { id: '01900000-0000-7000-8000-000000000001', username: 'owner-a', display_name: 'Owner A', roles: ['USER'] }
-const simulation = { id: '01900000-0000-7000-8000-000000000002', owner_id: user.id, name: 'Slice 0', status: 'ready', current_day: 1, current_tick: 0, magic_enabled: true, created_at: '2026-08-05T00:00:00Z' }
+const simulation = { id: '01900000-0000-7000-8000-000000000002', owner_id: user.id, name: 'Magic Academy Simulation', status: 'ready', current_day: 1, current_tick: 0, magic_enabled: true, created_at: '2026-08-05T00:00:00Z' }
 const names = ['에단', '아델', '레오', '리아', '카이', '세라']
 const agents = ['professor-01', 'student-01', 'student-02', 'student-03', 'student-04', 'student-05'].map((key, index) => ({
   id: `01900000-0000-7000-8000-00000000001${index}`,
@@ -344,5 +344,84 @@ describe('Slice 0 UI', () => {
 
     const tickCall = fetchMock.mock.calls.find(([url]) => url.includes('/ticks/advance'))
     expect(tickCall[1]).not.toHaveProperty('body')
+  })
+})
+
+describe('Slice 6 설정·Replay·Snapshot 진입점', () => {
+  it('인증 상태 + 선택된 Simulation이 있을 때 설정/Replay/Snapshot 진입점을 보여준다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Replay' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Snapshot' })).toBeInTheDocument()
+  })
+
+  it('SettingsPanel에 실제 Simulation status(ready)가 전달되어 저장 버튼이 활성화된다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock) // simulation.status === 'ready'
+
+    await userEvent.click(screen.getByRole('button', { name: '설정' }))
+
+    expect(screen.getByRole('button', { name: '설정 저장' })).toBeEnabled()
+  })
+
+  it('ReplayPanel에서 API 오류가 발생하면 사용자에게 표시되고 Tick UI는 그대로 유지된다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    fetchMock.mockImplementationOnce(() =>
+      response({ error: { code: 'RESOURCE_NOT_FOUND', message: 'Simulation을 찾을 수 없습니다.' } }, 404)
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Replay' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('찾을 수 없습니다')
+    expect(screen.getByRole('button', { name: 'Tick 실행' })).toBeInTheDocument()
+  })
+
+  it('SnapshotPanel에서 API 오류가 발생하면 사용자에게 표시된다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Snapshot' }))
+    await userEvent.type(screen.getByLabelText('Tick 번호'), '5')
+    fetchMock.mockImplementationOnce(() =>
+      response({ error: { code: 'RESOURCE_NOT_FOUND', message: 'Snapshot을 찾을 수 없습니다.' } }, 404)
+    )
+    await userEvent.click(screen.getByRole('button', { name: '조회' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('찾을 수 없습니다')
+  })
+
+  it('Replay/Snapshot 진입·조회만으로는 Tick 실행 API가 호출되지 않는다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    fetchMock.mockImplementationOnce(() => response({ data: [], meta: { has_more: false } }))
+    await userEvent.click(screen.getByRole('button', { name: 'Replay' }))
+    await screen.findByText('재생 가능한 실행 기록이 없습니다.')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Snapshot' }))
+    await userEvent.type(screen.getByLabelText('Tick 번호'), '3')
+    fetchMock.mockImplementationOnce(() =>
+      response({ data: { tick_number: 3, simulation_day: 1, agents: [], relationships: [], events: [] } })
+    )
+    await userEvent.click(screen.getByRole('button', { name: '조회' }))
+    await screen.findByText(/새로운 Tick 실행을 유발하지 않습니다/)
+
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/ticks/advance'))).toBe(false)
+  })
+
+  it('설정 탭으로 전환해도 기존 Tick UI가 깨지지 않는다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    await userEvent.click(screen.getByRole('button', { name: '설정' }))
+    expect(screen.getByRole('heading', { name: '설정 저장·변경' })).toBeInTheDocument()
+
+    fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('이번 Tick에서 표시할 Agent 행동 결과가 없습니다.')).toBeInTheDocument()
   })
 })

@@ -66,6 +66,27 @@ class SimulationResponse(BaseModel):
     created_at: datetime
 
 
+class SimulationConfigPutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_frequency: str
+    event_impact: str
+    magic_enabled: bool
+
+
+class SimulationConfigPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_frequency: str
+    event_impact: str
+
+
+class RestoreSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
+
+
 class EventCreateRequest(BaseModel):
     event_type: Literal[
         "class",

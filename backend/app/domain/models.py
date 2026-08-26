@@ -69,6 +69,58 @@ class Simulation(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+class SimulationConfig(TimestampMixin, Base):
+    __tablename__ = "simulation_configs"
+    __table_args__ = (
+        UniqueConstraint("simulation_id", "version", name="uq_simulation_configs_version"),
+        CheckConstraint("version >= 1", name="ck_simulation_configs_version"),
+        CheckConstraint(
+            "event_frequency IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_event_frequency",
+        ),
+        CheckConstraint(
+            "event_impact IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_event_impact",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_frequency: Mapped[str] = mapped_column(String(10), nullable=False)
+    event_impact: Mapped[str] = mapped_column(String(10), nullable=False)
+    magic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    policy_version: Mapped[str | None] = mapped_column(String(100))
+    resolver_version: Mapped[str | None] = mapped_column(String(100))
+    user_persona_settings: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
+
+class SimulationSnapshot(TimestampMixin, Base):
+    __tablename__ = "simulation_snapshots"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["simulation_id", "config_version"],
+            ["simulation_configs.simulation_id", "simulation_configs.version"],
+            name="fk_simulation_snapshots_config",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("simulation_id", "tick_number", name="uq_simulation_snapshots_tick"),
+        CheckConstraint("tick_number >= 0", name="ck_simulation_snapshots_tick"),
+        CheckConstraint("config_version >= 1", name="ck_simulation_snapshots_config_version"),
+        Index("idx_simulation_snapshots_timeline", "simulation_id", "tick_number"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), nullable=False
+    )
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    config_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
 class Location(TimestampMixin, Base):

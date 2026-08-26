@@ -15,6 +15,7 @@ from app.api.schemas import (
 from app.domain.models import Simulation, User
 from app.repositories.simulations import get_simulation, list_agents_with_state
 from app.services.fixtures import seed_slice_zero
+from app.services.simulation_snapshots import SimulationSnapshotService
 
 
 class InvalidSimulationStatusTransitionError(Exception):
@@ -36,6 +37,7 @@ def create_simulation(db: Session, owner: User, name: str) -> Simulation:
     try:
         db.flush()
         seed_slice_zero(db, simulation.id)
+        SimulationSnapshotService().create_snapshot(db, simulation)
         db.commit()
     except Exception:
         db.rollback()
