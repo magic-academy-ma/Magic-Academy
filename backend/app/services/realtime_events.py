@@ -17,6 +17,7 @@ class RealtimeEvent(BaseModel):
         "AGENT_ACTION_UPDATED",
         "EVENT_CREATED",
         "RELATIONSHIP_UPDATED",
+        "SIMULATION_STATUS_UPDATED",
     ]
     data: dict[str, Any]
 
@@ -63,6 +64,17 @@ def build_event_created_event(event: Event) -> RealtimeEvent:
             "simulation_day": event.simulation_day,
             "location_id": event.location_id,
         },
+    )
+
+
+
+def build_simulation_status_event(
+    simulation_id: UUID,
+    status: str,
+) -> RealtimeEvent:
+    return RealtimeEvent(
+        type="SIMULATION_STATUS_UPDATED",
+        data={"simulation_id": simulation_id, "status": status},
     )
 
 

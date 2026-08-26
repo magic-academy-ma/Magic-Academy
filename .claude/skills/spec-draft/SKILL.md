@@ -142,7 +142,7 @@ updated: YYYY-MM-DD
 ## 3. API 연동
 | Method | Endpoint | 호출 시점 | 응답 |
 ## 4. 빈 상태 / 로딩 / 에러 처리
-## 5. Mock Data Fixture (백엔드 미완성 시 프론트 독립 실행용)
+## 5. Mock Data Fixture
 - API 응답 스키마와 `docs/02-domain/` 규칙에 맞는 샘플 JSON
 - `VITE_USE_MOCK=true`에서 사용할 fixture 경로 또는 Props 주입 지점
 - API 명세에서 확정되지 않은 값은 `[미정]`으로 표시

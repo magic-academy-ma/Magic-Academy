@@ -24,6 +24,7 @@ class FakeWebSocket:
         "AGENT_ACTION_UPDATED",
         "EVENT_CREATED",
         "RELATIONSHIP_UPDATED",
+        "SIMULATION_STATUS_UPDATED",
     ],
 )
 def test_realtime_event_supports_documented_message_types(event_type: str) -> None:
