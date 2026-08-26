@@ -513,6 +513,35 @@ def test_tick_publishes_once_after_commit_and_matches_rest_result(client):
     ] == stored_payload["events"]
 
 
+class LossyTickPublisher:
+    async def publish(self, messages):
+        raise RuntimeError("WebSocket connection lost")
+
+
+def test_publish_failure_does_not_fail_rest_response_and_rest_stays_authoritative(client):
+    """WS는 알림 채널일 뿐이다. push 유실이 REST 응답/재조회 결과를 오염시키면 안 된다."""
+    from app.main import app
+    from app.services.simulation_events import get_tick_result_publisher
+
+    test_client, _ = client
+    simulation_id, headers = register_login_create(test_client)
+    app.dependency_overrides[get_tick_result_publisher] = lambda: LossyTickPublisher()
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert response.status_code == 200
+    advance_payload = response.json()
+    assert advance_payload["current_tick"] == 1
+
+    stored = test_client.get(
+        f"/v1/simulations/{simulation_id}/event-results/1",
+        headers=headers,
+    )
+    assert stored.status_code == 200
+    assert stored.json()["tick_number"] == 1
+
+
 @pytest.mark.parametrize("failure_stage", ["persistence", "runtime_relationship"])
 def test_failed_tick_never_publishes(client, monkeypatch, failure_stage):
     from app.main import app

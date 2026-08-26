@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -18,6 +19,9 @@ from app.services.simulation_events import (
     get_tick_result_publisher,
 )
 from app.simulation.agent_runtime import AgentRuntime
+
+
+logger = logging.getLogger(__name__)
 
 
 class DecisionExplanationResponse(BaseModel):
@@ -125,13 +129,22 @@ async def advance_tick(
         for effect in result.policy_result.relationship_effects
         if effect.target_agent_id is not None
     ]
-    await publisher.publish(
-        build_tick_result_messages(
-            simulation.id,
-            result.event_batch_result,
-            relationship_deltas,
+    try:
+        await publisher.publish(
+            build_tick_result_messages(
+                simulation.id,
+                result.event_batch_result,
+                relationship_deltas,
+            )
         )
-    )
+    except Exception:
+        # WebSocket은 알림 채널일 뿐이다. Tick은 이미 commit되었으므로
+        # push 실패가 REST 응답을 오염시키지 않는다 (REST가 단일 진실 소스).
+        logger.exception(
+            "tick result publish failed after commit (simulation_id=%s, tick_number=%s)",
+            simulation.id,
+            result.current_tick,
+        )
 
     return TickAdvanceResponse(
         simulation_id=simulation.id,
