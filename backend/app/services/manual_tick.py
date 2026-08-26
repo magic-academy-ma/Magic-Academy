@@ -15,6 +15,7 @@ from app.simulation.agent_runtime import (
     AgentRuntime,
     AgentRuntimeResult,
     Block,
+    EventType,
     ScheduleSummary,
 )
 from app.simulation.tick_engine import (
@@ -126,7 +127,7 @@ async def advance_manual_tick(
     )
     schedule = ScheduleSummary(
         event_id=event.id,
-        schedule_type="class",
+        schedule_type=EventType.CLASS,
         is_mandatory=True,
         location_id=event.location_id,
         start_tick=current_tick,

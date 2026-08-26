@@ -1,4 +1,8 @@
-from app.simulation.agent_runtime import RelationshipSignalType, SignalIntensity, StateSignalType
+from app.simulation.agent_runtime import (
+    RelationshipSignalType,
+    SignalIntensity,
+    StateSignalType,
+)
 
 INTENSITY_TO_RELATIONSHIP_BASE: dict[SignalIntensity, int] = {
     SignalIntensity.LOW: 1,

@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.models import Agent, AgentState, Relationship
+from app.domain.relationship_metrics import RelationshipMetric
 from app.repositories.relationships import RelationshipDelta, apply_deltas
 from app.simulation.agent_runtime import AgentRuntimeResult
 from app.simulation.policy.conflict import resolve_conflicts
@@ -111,7 +113,7 @@ def evaluate_and_apply_policy(
             RelationshipDelta(
                 source_agent_id=UUID(effect.source_agent_id),
                 target_agent_id=UUID(effect.target_agent_id),
-                metric=effect.metric,
+                metric=cast(RelationshipMetric, effect.metric),
                 before=effect.before,
                 requested_total=effect.delta,
                 applied_delta=effect.after_preview - effect.before,

@@ -12,7 +12,6 @@ from app.domain.relationship_metrics import (
     RelationshipMetric,
 )
 
-
 RelationshipRow: TypeAlias = Relationship
 
 
@@ -100,11 +99,12 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
             )
         related_agent_ids.update((delta.source_agent_id, delta.target_agent_id))
 
-    agent_simulation_ids = dict(
-        session.execute(
+    agent_simulation_ids: dict[UUID, UUID] = {
+        agent_id: simulation_id
+        for agent_id, simulation_id in session.execute(
             select(Agent.id, Agent.simulation_id).where(Agent.id.in_(related_agent_ids))
-        ).all()
-    )
+        )
+    }
     pending: list[tuple[Relationship, RelationshipDelta]] = []
     for delta in deltas:
         source_simulation_id = agent_simulation_ids.get(delta.source_agent_id)
