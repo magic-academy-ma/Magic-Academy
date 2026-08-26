@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 import secrets
 from uuid import UUID
 
@@ -6,7 +8,18 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.domain.models import Agent, Event, EventParticipant, Simulation
+from app.domain.models import (
+    Agent,
+    AgentState,
+    Event,
+    EventParticipant,
+    Relationship,
+    Simulation,
+)
+from app.repositories.memory_repository import (
+    MemoryCreateInput,
+    MemoryRepository,
+)
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.execution_metadata import (
     ExecutionMetadataInput,
@@ -14,6 +27,7 @@ from app.services.execution_metadata import (
 )
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
+from app.services.runtime_target_selection import select_tick_participant_ids
 from app.services.simulation_tick import SimulationTickService
 from app.simulation.agent_runtime import (
     AgentRuntime,
@@ -24,12 +38,33 @@ from app.simulation.agent_runtime import (
 from app.simulation.tick_engine import (
     AgentType,
     MemoryItem,
+    MemoryRetrieverFn,
+    MemoryStoreFn,
     PolicyFn,
     TickAgent,
     TickEngine,
     TickEvent,
     WorldSnapshot,
 )
+from app.simulation.policy.models import (
+    AgentSnapshot,
+    PolicyEvaluationInput,
+    PolicyEvaluationResult,
+    RelationshipSnapshot,
+)
+from app.simulation.policy.types import (
+    AgentReaction as PolicyAgentReaction,
+    PolicyRuntimeResult,
+    RelationshipSignal as PolicyRelationshipSignal,
+    RelationshipSignalType as PolicyRelationshipSignalType,
+    SignalIntensity as PolicySignalIntensity,
+    StateSignal as PolicyStateSignal,
+    StateSignalType as PolicyStateSignalType,
+)
+
+
+POLICY_VERSION = "policy-mvp-0.1"
+EMPTY_QUERY_EMBEDDING = [0.0] * 1536
 
 
 class TickAlreadyRunningError(Exception):
@@ -45,6 +80,146 @@ class ManualTickResult:
     runtime_results: tuple[AgentRuntimeResult, ...]
     retrieval_traces: dict[str, list[str]]
     retrieved_memories: dict[str, tuple[MemoryItem, ...]]
+
+
+def create_policy_callback(
+    db: Session,
+    simulation_id: UUID,
+    evaluator: Callable[[PolicyEvaluationInput], PolicyEvaluationResult],
+) -> PolicyFn:
+    async def apply_policy(inputs):
+        runtime_results = [item.runtime_result for item in inputs]
+        if not runtime_results:
+            return
+        agent_ids = list(
+            db.scalars(
+                select(Agent.id).where(
+                    Agent.simulation_id == simulation_id,
+                    Agent.deleted_at.is_(None),
+                )
+            )
+        )
+        states = list(
+            db.scalars(select(AgentState).where(AgentState.agent_id.in_(agent_ids)))
+        )
+        relationships = list(
+            db.scalars(
+                select(Relationship).where(
+                    Relationship.source_agent_id.in_(agent_ids),
+                    Relationship.target_agent_id.in_(agent_ids),
+                )
+            )
+        )
+        evaluator(
+            PolicyEvaluationInput(
+                run_id=runtime_results[0].run_id,
+                tick_number=runtime_results[0].tick_number,
+                policy_version=POLICY_VERSION,
+                agent_snapshots={
+                    str(state.agent_id): AgentSnapshot(
+                        agent_id=str(state.agent_id),
+                        hunger=state.hunger,
+                        fatigue=state.fatigue,
+                        stress=state.stress,
+                        satisfaction=state.satisfaction,
+                        mood=state.mood,
+                    )
+                    for state in states
+                },
+                relationship_snapshots=[
+                    RelationshipSnapshot(
+                        source_agent_id=str(relationship.source_agent_id),
+                        target_agent_id=str(relationship.target_agent_id),
+                        trust=relationship.trust,
+                        tension=relationship.tension,
+                        affection=relationship.affection,
+                        closeness=relationship.closeness,
+                        rivalry=relationship.rivalry,
+                        dependency=relationship.dependency,
+                    )
+                    for relationship in relationships
+                ],
+                runtime_results=[
+                    PolicyRuntimeResult(
+                        agent_id=str(result.agent_id),
+                        action_type=result.intent.action_type.value,
+                        target_agent_id=(
+                            None
+                            if result.intent.target_agent_id is None
+                            else str(result.intent.target_agent_id)
+                        ),
+                        reaction=PolicyAgentReaction(
+                            valence=result.intent.reaction.valence.value,
+                            relationship_signals=[
+                                PolicyRelationshipSignal(
+                                    signal_type=PolicyRelationshipSignalType(
+                                        signal.signal_type.value
+                                    ),
+                                    intensity=PolicySignalIntensity(
+                                        signal.intensity.value
+                                    ),
+                                    target_agent_id=str(signal.target_agent_id),
+                                )
+                                for signal in result.intent.reaction.relationship_signals
+                            ],
+                            state_signals=[
+                                PolicyStateSignal(
+                                    signal_type=PolicyStateSignalType(
+                                        signal.signal_type.value
+                                    ),
+                                    intensity=PolicySignalIntensity(
+                                        signal.intensity.value
+                                    ),
+                                )
+                                for signal in result.intent.reaction.state_signals
+                            ],
+                        ),
+                    )
+                    for result in runtime_results
+                ],
+                valid_agent_ids={str(agent_id) for agent_id in agent_ids},
+            )
+        )
+
+    return apply_policy
+
+
+def create_memory_callbacks(
+    db: Session, repository: MemoryRepository
+) -> tuple[MemoryRetrieverFn, MemoryStoreFn]:
+    async def retrieve_memories(agent_id, current_tick, _query_text):
+        rows = repository.retrieve_for_runtime(
+            db, UUID(agent_id), current_tick, EMPTY_QUERY_EMBEDDING
+        )
+        return [
+            MemoryItem(
+                id=str(row.id),
+                content=row.content,
+                memory_type=row.memory_type,
+                importance=row.importance,
+                created_tick=row.created_tick,
+                event_id=None if row.event_id is None else str(row.event_id),
+            )
+            for row in rows
+        ]
+
+    async def store_memory(agent_id, event_id, candidate, current_tick):
+        row = repository.create(
+            db,
+            MemoryCreateInput(
+                agent_id=UUID(agent_id),
+                event_id=None if event_id is None else UUID(event_id),
+                content=candidate.content,
+                memory_type=candidate.memory_type,
+                importance=candidate.importance,
+                created_tick=current_tick,
+                occurred_at=datetime.now(UTC),
+            ),
+        )
+        repository.enforce_cap(db, UUID(agent_id))
+        return str(row.id)
+
+    return retrieve_memories, store_memory
 
 
 def tick_position(tick_number: int) -> tuple[int, Block]:
@@ -64,6 +239,8 @@ async def advance_manual_tick(
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
     policy_version: str | None = None,
+    memory_retriever: MemoryRetrieverFn | None = None,
+    memory_store: MemoryStoreFn | None = None,
     seed: int | None = None,
 ) -> ManualTickResult:
     if (policy is None) != (policy_version is None):
@@ -115,14 +292,24 @@ async def advance_manual_tick(
         )
     )
     participant_ids = {participant.agent_id for participant in participants}
-    preselected_ids = [
+    selected_ids = select_tick_participant_ids(
+        agents,
+        event_participant_agent_ids=participant_ids,
+    )
+    students = [
         agent.id
         for agent in agents
-        if agent.fixture_key == "student-01"
-        or (agent.agent_type == "professor" and agent.id in participant_ids)
+        if agent.id in selected_ids
+        and agent.agent_type in ("student", "user_persona")
     ]
-    if not any(agent.fixture_key == "student-01" for agent in agents):
-        raise RuntimeError("Slice 1 student fixture is missing")
+    professors = [
+        agent.id
+        for agent in agents
+        if agent.id in selected_ids and agent.agent_type == "professor"
+    ]
+    if len(students) != 5:
+        raise RuntimeError("Slice 0 Student fixture must contain exactly 5 Agents")
+    preselected_ids = [*students, *professors[:1]]
 
     service = SimulationTickService(
         RuntimeInputAdapter(
@@ -177,12 +364,14 @@ async def advance_manual_tick(
     ]
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
-        current_tick=previous_tick,
+        current_tick=current_tick,
         data={"execution_seed": execution_seed},
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=policy,
+        memory_retriever=memory_retriever,
+        memory_store=memory_store,
     ).run_tick(
         tick_candidates,
         TickEvent(
