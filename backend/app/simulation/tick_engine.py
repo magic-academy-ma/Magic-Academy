@@ -12,6 +12,8 @@ from app.simulation.agent_runtime import (
     StateSignal,
     StateSignalType,
 )
+from app.simulation.replay_guard import assert_not_replay
+from app.simulation.instrumentation import increment_tick, increment_runtime
 
 
 class AgentType(str, Enum):
@@ -137,6 +139,12 @@ class TickEngine:
         if simulation_id in self._running:
             raise TickConflictError(f"Tick is already running for simulation {simulation_id}")
 
+        # Replay mode must block Tick execution at this entry boundary — before
+        # participant selection, Memory query, or Runtime invocation — regardless
+        # of whether participants exist.
+        assert_not_replay("Tick execution attempted during replay")
+        increment_tick()
+
         self._running.add(simulation_id)
         try:
             participants = self._select_participants(
@@ -156,6 +164,7 @@ class TickEngine:
 
             runtime_outputs: dict[str, AgentRuntimeResult] = {}
             if participants:
+                increment_runtime()
                 runtime_outputs = await self._runtime(participants, event, snapshot)
 
             if self._policy and runtime_outputs:
