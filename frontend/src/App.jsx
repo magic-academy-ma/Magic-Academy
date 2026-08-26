@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
+import RelationshipModal from "./components/RelationshipModal.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
@@ -104,6 +105,12 @@ export default function App() {
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [agentTypeFilter, setAgentTypeFilter] = useState("전체");
+  const [isPaused, setIsPaused] = useState(false);
+  const [showInspectorModal, setShowInspectorModal] = useState(false);
+  const [showRelationshipModal, setShowRelationshipModal] = useState(false);
+
   const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
     simulation?.id,
     auth?.access_token
@@ -193,6 +200,15 @@ export default function App() {
 
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
+  const filteredAgents = agents.filter((agent) => {
+    const matchesSearch = !searchQuery || agent.name.includes(searchQuery);
+    const matchesType =
+      agentTypeFilter === "전체" ||
+      (agentTypeFilter === "학생" && agent.agent_type === "student") ||
+      (agentTypeFilter === "교수" && agent.agent_type === "professor");
+    return matchesSearch && matchesType;
+  });
+
   // WS RELATIONSHIP_UPDATED 메시지를 flat delta 배열로 변환 (REST relationship_deltas 형식 호환)
   const wsDeltas = wsRelationshipDeltas.flatMap((msg) =>
     (msg.deltas ?? []).map((d) => ({
@@ -242,6 +258,14 @@ export default function App() {
         {simulation && lastTick && (
           <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
         )}
+        <div className="header-controls">
+          <button type="button" onClick={() => setIsPaused((p) => !p)}>
+            {isPaused ? "재개" : "일시정지"}
+          </button>
+          <button type="button" onClick={() => { /* TODO: 밤 스킵 API 미확정 */ }}>
+            밤 스킵
+          </button>
+        </div>
         <div className="header-right">
           {simulation && (
             <span
@@ -256,17 +280,40 @@ export default function App() {
         <section className="workspace">
             <div className="panel agent-list">
               <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
+              <input
+                type="search"
+                aria-label="Agent 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Agent 검색"
+              />
+              <div className="agent-type-filter">
+                <button type="button" onClick={() => setAgentTypeFilter("전체")}>전체</button>
+                <button type="button" onClick={() => setAgentTypeFilter("학생")}>학생</button>
+                <button type="button" onClick={() => setAgentTypeFilter("교수")}>교수</button>
+              </div>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
-              {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
+              {filteredAgents.map((agent) => (
+                <button
+                  data-agent-id={agent.id}
+                  className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent)}
+                >
+                  <span>{agent.name} · {agent.agent_type} · {agent.mbti_type}</span>
+                </button>
+              ))}
             </div>
             <aside className="panel inspector">
               <h2>Inspector</h2>
               {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
                 <h3>{selectedAgent.name}</h3>
                 <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
+                <button type="button" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
+                <button type="button" onClick={() => setShowRelationshipModal(true)}>관계 보기</button>
               </>}
             </aside>
             <div className="panel tick-panel">
@@ -365,6 +412,28 @@ export default function App() {
             onAgentSelect={handleEventAgentSelect}
           />
       </main>
+      {showInspectorModal && selectedAgent && (
+        <div role="dialog" aria-label="Agent Inspector" className="inspector-modal-backdrop" onClick={() => setShowInspectorModal(false)}>
+          <div className="inspector-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Agent Inspector</h2>
+            <button type="button" onClick={() => setShowInspectorModal(false)}>Inspector 닫기</button>
+            <dl>
+              <dt>이름</dt><dd>{selectedAgent.name}</dd>
+              <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+              <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+            </dl>
+          </div>
+        </div>
+      )}
+      {showRelationshipModal && selectedAgent && (
+        <RelationshipModal
+          selectedAgent={selectedAgent}
+          agents={agents}
+          auth={auth}
+          onSelectAgent={(agent) => setSelectedAgent(agent)}
+          onClose={() => setShowRelationshipModal(false)}
+        />
+      )}
     </div>
   );
 }
