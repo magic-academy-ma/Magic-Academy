@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import ReplayPanel from "./components/ReplayPanel.jsx";
+import SnapshotPanel from "./components/SnapshotPanel.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -95,6 +98,7 @@ export default function App() {
   const [tickError, setTickError] = useState(null); // { type, message }
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
+  const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
   function resetSession(notice = "") {
     setAuth(null);
     setSimulation(null);
@@ -104,6 +108,7 @@ export default function App() {
     setTickResult(null);
     setTickError(null);
     setAuthNotice(notice);
+    setManagementView(null);
   }
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
@@ -181,7 +186,7 @@ export default function App() {
   // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
   // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
-  const tickSucceeded = tickResult?.status === "COMPLETED";
+  const tickSucceeded = (tickResult?.status || "").toLowerCase() === "completed";
   const tickFailed = tickResult && !tickSucceeded;
 
   return (
@@ -258,11 +263,11 @@ export default function App() {
 										      <li key={agentResult.agent_id} className={`agent-result status-${status?.toLowerCase()}`}>
 										        <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
 										        <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
-										          {status === "PROPOSED" && "정상 진행"}
-										          {status === "FALLBACK" && "재시도 실패 → Fallback 적용"}
-										          {status === "SKIPPED" && "이번 Tick 미참여"}
+										          {status?.toUpperCase() === "PROPOSED" && "정상 진행"}
+										          {status?.toUpperCase() === "FALLBACK" && "재시도 실패 → Fallback 적용"}
+										          {status?.toUpperCase() === "SKIPPED" && "이번 Tick 미참여"}
 										        </span>
-										        {status === "SKIPPED" ? (
+										        {status?.toUpperCase() === "SKIPPED" ? (
 										          <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
 										        ) : (
 										          <>
@@ -282,7 +287,7 @@ export default function App() {
 										            )}
 										          </>
 										        )}
-										        {status === "FALLBACK" && (
+										        {status?.toUpperCase() === "FALLBACK" && (
 										          <p className="fallback-info">
 										            재시도 {agentResult.retry_count}회 실패
 										            {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
@@ -294,6 +299,47 @@ export default function App() {
 										</ul>
                   )}
                 </div>
+              )}
+            </div>
+
+            <div className="panel management-panel">
+              <h2>관리</h2>
+              <div className="management-tabs">
+                <button
+                  type="button"
+                  aria-pressed={managementView === "settings"}
+                  onClick={() => setManagementView("settings")}
+                >
+                  설정
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "replay"}
+                  onClick={() => setManagementView("replay")}
+                >
+                  Replay
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "snapshot"}
+                  onClick={() => setManagementView("snapshot")}
+                >
+                  Snapshot
+                </button>
+              </div>
+
+              {managementView === "settings" && (
+                <SettingsPanel
+                  token={auth.access_token}
+                  simulationId={simulation.id}
+                  simulationStatus={simulation.status}
+                />
+              )}
+              {managementView === "replay" && (
+                <ReplayPanel token={auth.access_token} simulationId={simulation.id} />
+              )}
+              {managementView === "snapshot" && (
+                <SnapshotPanel token={auth.access_token} simulationId={simulation.id} />
               )}
             </div>
           </section>
