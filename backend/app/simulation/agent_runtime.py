@@ -159,6 +159,28 @@ class AgentContext(StrictModel):
     active_status: bool = Field(strict=True)
 
 
+class AgentSummary(StrictModel):
+    agent_id: UUID
+    name: str
+    agent_type: Literal["student", "professor"]
+    active_status: bool = Field(strict=True)
+    current_location_id: UUID
+    mood: int = Field(ge=-100, le=100)
+    stress: int = Field(ge=0, le=100)
+    fatigue: int = Field(ge=0, le=100)
+
+
+class RelationshipSummary(StrictModel):
+    source_agent_id: UUID
+    target_agent_id: UUID
+    affection: int
+    closeness: int
+    trust: int
+    tension: int
+    rivalry: int
+    dependency: int
+
+
 class EventSummary(StrictModel):
     event_id: UUID
     event_type: EventType
@@ -188,8 +210,8 @@ class AgentRuntimeInput(StrictModel):
     tick_number: int = Field(ge=0)
     block: Block
     agent: AgentContext
-    nearby_agents: list[dict[str, Any]]
-    relationships: list[dict[str, Any]]
+    nearby_agents: list[AgentSummary]
+    relationships: list[RelationshipSummary]
     memories: list[dict[str, Any]]
     events: list[EventSummary]
     schedule: ScheduleSummary
@@ -201,7 +223,9 @@ class AgentRuntimeInput(StrictModel):
         events_by_id = {event.event_id: event for event in self.events}
         scheduled_event = events_by_id.get(self.schedule.event_id)
         if scheduled_event is None:
-            raise ValueError("schedule event_id must be included in events")
+            if self.schedule.is_mandatory:
+                raise ValueError("mandatory schedule event_id must be included in events")
+            return self
         if scheduled_event.event_type != self.schedule.schedule_type:
             raise ValueError("schedule_type must match the linked event_type")
         if scheduled_event.location_id != self.schedule.location_id:

@@ -3,7 +3,7 @@ from uuid import UUID
 
 import pytest
 
-from app.domain.models import Agent, AgentState, Event, EventParticipant
+from app.domain.models import Agent, AgentState, Event, EventParticipant, Relationship
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
 from app.services.runtime_results import InMemoryRuntimeResultSink
@@ -87,6 +87,21 @@ def make_participant(event_id: UUID, agent_id: UUID) -> EventParticipant:
         event_id=event_id,
         agent_id=agent_id,
         result={},
+    )
+
+
+def make_relationship(source_agent_id: UUID, target_agent_id: UUID) -> Relationship:
+    return Relationship(
+        id=UUID(int=(source_agent_id.int + target_agent_id.int + 200) % (1 << 128)),
+        simulation_id=SIMULATION_ID,
+        source_agent_id=source_agent_id,
+        target_agent_id=target_agent_id,
+        affection=1,
+        closeness=2,
+        trust=3,
+        tension=4,
+        rivalry=5,
+        dependency=6,
     )
 
 
@@ -229,6 +244,16 @@ def test_participant_event_mismatch_is_rejected() -> None:
             [make_event()],
             {CLASS_EVENT_ID: [make_participant(SECOND_EVENT_ID, STUDENT_ID)]},
         )
+
+
+def test_directional_relationship_is_mapped_to_typed_summary() -> None:
+    summary = RuntimeInputAdapter.to_relationship_summaries(
+        [make_relationship(STUDENT_ID, PROFESSOR_ID)]
+    )[0]
+
+    assert summary.source_agent_id == STUDENT_ID
+    assert summary.target_agent_id == PROFESSOR_ID
+    assert summary.model_dump()["trust"] == 3
 
 
 class SpyOrchestrator:

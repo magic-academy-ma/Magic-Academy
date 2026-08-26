@@ -309,11 +309,11 @@ def test_duplicate_relationship_signals_are_deduplicated():
 
 # ── conflict ───────────────────────────────────────────────────────────────────
 
-def _rel_effect(source, target, metric, delta, before):
+def _rel_effect(source, target, metric, delta, before, *, effect_id=None):
     from app.simulation.policy.models import EffectCandidate, EffectTargetType
     lo, hi = (-100, 100) if metric in {"trust", "affection", "mood"} else (0, 100)
     return EffectCandidate(
-        effect_id=f"test:{source}:{target}:{metric}",
+        effect_id=effect_id or f"test:{source}:{target}:{metric}",
         target_type=EffectTargetType.RELATIONSHIP,
         source_agent_id=source,
         target_agent_id=target,
@@ -329,8 +329,8 @@ def _rel_effect(source, target, metric, delta, before):
 def test_multiple_deltas_on_same_pair_are_summed():
     from app.simulation.policy.conflict import resolve_conflicts
     candidates = [
-        _rel_effect("a", "b", "trust", 3, 20),
-        _rel_effect("a", "b", "trust", 2, 20),
+        _rel_effect("a", "b", "trust", 3, 20, effect_id="effect-1"),
+        _rel_effect("a", "b", "trust", 2, 20, effect_id="effect-2"),
     ]
     committed = resolve_conflicts(candidates)
     ab_trust = [c for c in committed if c.source_agent_id == "a" and c.metric == "trust"]
@@ -356,8 +356,8 @@ def test_ab_and_ba_are_independent_in_conflict():
 def test_summed_delta_clamped_at_range():
     from app.simulation.policy.conflict import resolve_conflicts
     candidates = [
-        _rel_effect("a", "b", "trust", 5, 97),
-        _rel_effect("a", "b", "trust", 5, 97),
+        _rel_effect("a", "b", "trust", 5, 97, effect_id="effect-1"),
+        _rel_effect("a", "b", "trust", 5, 97, effect_id="effect-2"),
     ]
     committed = resolve_conflicts(candidates)
     assert committed[0].after_preview == 100
@@ -385,6 +385,56 @@ def test_merged_candidates_join_rule_id_and_reason():
     assert "REL_TRUST_UP_HIGH" in committed[0].rule_id
     assert "MEDIUM 반응" in committed[0].reason
     assert "HIGH 반응" in committed[0].reason
+
+
+def test_identical_effect_id_and_payload_is_applied_once():
+    from copy import deepcopy
+
+    from app.simulation.policy.conflict import resolve_conflicts
+
+    event_effect = _rel_effect(
+        "a", "b", "trust", 3, 20, effect_id="canonical-event-effect"
+    )
+    magic_effect = deepcopy(event_effect)
+
+    committed = resolve_conflicts([event_effect, magic_effect])
+
+    assert len(committed) == 1
+    assert committed[0].delta == 3
+    assert committed[0].effect_id == "canonical-event-effect"
+
+
+def test_same_effect_id_with_different_payload_raises_error():
+    from app.simulation.policy.conflict import resolve_conflicts
+
+    candidates = [
+        _rel_effect("a", "b", "trust", 3, 20, effect_id="same-effect"),
+        _rel_effect("a", "b", "trust", 5, 20, effect_id="same-effect"),
+    ]
+
+    with pytest.raises(ValueError, match="conflicting payloads.*same-effect"):
+        resolve_conflicts(candidates)
+
+
+def test_distinct_effect_ids_for_same_metric_sum_in_first_seen_order():
+    from copy import deepcopy
+
+    from app.simulation.policy.conflict import resolve_conflicts
+
+    candidates = [
+        _rel_effect("a", "b", "affection", 2, 10, effect_id="first"),
+        _rel_effect("a", "b", "trust", 3, 20, effect_id="second"),
+        _rel_effect("a", "b", "affection", 4, 10, effect_id="third"),
+    ]
+    original = deepcopy(candidates)
+
+    committed = resolve_conflicts(candidates)
+
+    assert [(effect.metric, effect.delta) for effect in committed] == [
+        ("affection", 6),
+        ("trust", 3),
+    ]
+    assert candidates == original
 
 
 def test_missing_relationship_snapshot_treats_as_neutral_zero():

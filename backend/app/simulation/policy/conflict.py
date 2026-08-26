@@ -1,11 +1,16 @@
 from app.simulation.policy.models import METRIC_RANGE, EffectCandidate
 
 
+class ConflictingEffectIdError(ValueError):
+    pass
+
+
 def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate]:
     """같은 (source, target, metric) 쌍의 delta를 합산하고 clamp한다. (MVP: 단순 가산)"""
     groups: dict[tuple, EffectCandidate] = {}
+    unique_candidates = _deduplicate_effect_ids(candidates)
 
-    for c in candidates:
+    for c in unique_candidates:
         key = (c.source_agent_id, c.target_agent_id, c.metric)
         if key not in groups:
             groups[key] = EffectCandidate(
@@ -32,3 +37,21 @@ def resolve_conflicts(candidates: list[EffectCandidate]) -> list[EffectCandidate
         result.append(resolved)
 
     return result
+
+
+def _deduplicate_effect_ids(
+    candidates: list[EffectCandidate],
+) -> list[EffectCandidate]:
+    seen_by_effect_id: dict[str, EffectCandidate] = {}
+    unique_candidates = []
+    for candidate in candidates:
+        existing = seen_by_effect_id.get(candidate.effect_id)
+        if existing is None:
+            seen_by_effect_id[candidate.effect_id] = candidate
+            unique_candidates.append(candidate)
+            continue
+        if existing != candidate:
+            raise ConflictingEffectIdError(
+                f"conflicting payloads for effect_id {candidate.effect_id}"
+            )
+    return unique_candidates
