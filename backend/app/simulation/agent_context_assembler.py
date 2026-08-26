@@ -3,13 +3,13 @@ from typing import Any, Literal
 from uuid import UUID
 
 from app.simulation.agent_runtime import (
+    MBTI,
     AgentContext,
     AgentRuntimeInput,
     AgentStateContext,
     BigFiveContext,
     Block,
     EventSummary,
-    MBTI,
     ScheduleSummary,
 )
 

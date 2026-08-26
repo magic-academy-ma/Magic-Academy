@@ -2,6 +2,7 @@
 import os
 import threading
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
@@ -11,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.domain.models import Agent, AgentMemory, Simulation, User
 from app.repositories.memory_repository import MemoryRepository, MemoryRow
-from app.services.memory_adapter import build_memory_retriever, build_memory_store
+from app.services.memory_adapter import MemoryAdapter, build_memory_retriever, build_memory_store
 from app.simulation.tick_engine import MemoryCandidateItem
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -205,3 +206,43 @@ async def test_memory_store_enforces_cap_end_to_end_via_real_db() -> None:
             assert not any(row.content == "memory-lowest-importance" for row in rows)
     finally:
         engine.dispose()
+class FakeRepository:
+    def __init__(self):
+        self.created = None
+        self.cap_agent_id = None
+
+    def retrieve_for_runtime(self, session, agent_id, current_tick, query_embedding):
+        return [SimpleNamespace(
+            id=uuid4(), content="기억", memory_type="observation", importance=50,
+            created_tick=1, event_id=None,
+        )]
+
+    def create(self, session, item):
+        self.created = item
+        return SimpleNamespace(id=uuid4())
+
+    def enforce_cap(self, session, agent_id, max_active=10):
+        self.cap_agent_id = agent_id
+
+
+class FakeEmbeddingClient:
+    async def embed(self, text):
+        return [0.1] * 1536
+
+
+async def test_memory_adapter_retrieves_and_stores_with_embedding():
+    repository = FakeRepository()
+    adapter = MemoryAdapter(object(), repository=repository, embedding_client=FakeEmbeddingClient())
+    agent_id, event_id = uuid4(), uuid4()
+
+    memories = await adapter.retrieve(str(agent_id), 2, "class")
+    stored_id = await adapter.store(
+        str(agent_id), str(event_id),
+        MemoryCandidateItem(content="새 기억", memory_type="observation", importance=60), 2,
+    )
+
+    assert memories[0].content == "기억"
+    assert repository.created.embedding == [0.1] * 1536
+    assert repository.created.occurred_at.tzinfo is UTC
+    assert repository.cap_agent_id == agent_id
+    assert stored_id

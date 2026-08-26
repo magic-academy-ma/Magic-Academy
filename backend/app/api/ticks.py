@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.core.security import require_user_role
 from app.domain.models import User
 from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
 from app.services.memory_dependency import get_memory_hooks
+from app.services.realtime_events import build_tick_events, connection_manager
 from app.services.runtime_dependency import get_agent_runtime
 from app.services.simulations import require_owned_simulation
 from app.simulation.agent_runtime import AgentRuntime
@@ -56,7 +57,19 @@ class RelationshipDeltaResponse(BaseModel):
     metric: str
     delta: int
     before: int
-    after_preview: int
+    after: int
+    reason: str
+
+
+class StateDeltaResponse(BaseModel):
+    effect_id: str
+    rule_id: str
+    agent_id: UUID
+    agent_name: str
+    metric: str
+    delta: int
+    before: int
+    after: int
     reason: str
 
 
@@ -66,6 +79,7 @@ class TickAdvanceResponse(BaseModel):
     current_tick: int
     current_day: int
     status: str
+    state_deltas: list[StateDeltaResponse] = Field(default_factory=list)
     relationship_deltas: list[RelationshipDeltaResponse]
     agent_results: list[AgentTickResultResponse]
     retrieved_memories: list[AgentMemoryResponse] = Field(default_factory=list)
@@ -80,6 +94,7 @@ router = APIRouter(tags=["ticks"])
 )
 def advance_tick(
     simulation_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
@@ -97,6 +112,7 @@ def advance_tick(
                 memory_store=memory_store,
             )
         )
+        realtime_events = build_tick_events(db, simulation.id, result)
         db.commit()
     except TickAlreadyRunningError:
         db.rollback()
@@ -113,12 +129,32 @@ def advance_tick(
         db.rollback()
         raise
 
+    background_tasks.add_task(
+        connection_manager.broadcast,
+        simulation.id,
+        realtime_events,
+    )
+
     return TickAdvanceResponse(
         simulation_id=simulation.id,
         previous_tick=result.previous_tick,
         current_tick=result.current_tick,
         current_day=result.current_day,
         status="COMPLETED",
+        state_deltas=[
+            StateDeltaResponse(
+                effect_id=effect.effect_id,
+                rule_id=effect.rule_id,
+                agent_id=UUID(effect.source_agent_id),
+                agent_name=result.agent_names[UUID(effect.source_agent_id)],
+                metric=effect.metric,
+                delta=effect.after_preview - effect.before,
+                before=effect.before,
+                after=effect.after_preview,
+                reason=effect.reason,
+            )
+            for effect in result.policy_result.state_effects
+        ],
         relationship_deltas=[
             RelationshipDeltaResponse(
                 effect_id=effect.effect_id,
@@ -128,7 +164,7 @@ def advance_tick(
                 metric=effect.metric,
                 delta=effect.after_preview - effect.before,
                 before=effect.before,
-                after_preview=effect.after_preview,
+                after=effect.after_preview,
                 reason=effect.reason,
             )
             for effect in result.policy_result.relationship_effects

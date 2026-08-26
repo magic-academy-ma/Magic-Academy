@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from app.domain.models import Agent, AgentState, Event, EventParticipant
 from app.repositories.simulations import (
     list_active_runtime_location_ids,
-    list_runtime_agents,
     list_runtime_agent_states,
+    list_runtime_agents,
 )
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeBatchExecutionResult
