@@ -255,12 +255,11 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
             seed=4242,
         )
 
+    observed_metadata = []
+
     def fail_after_all_tick_writes(session, metadata):
         """Flush metadata and related writes, then fail before tick advancement."""
-        assert metadata.seed == 4242
-        assert metadata.model == "slice4-persistence-model"
-        assert metadata.prompt_version == "slice4-persistence-prompt-v1"
-        assert metadata.policy_version == "policy-slice4-transaction-v1"
+        observed_metadata.append(metadata)
         execution = original_record(session, metadata)
         state = session.scalar(
             select(AgentState)
@@ -289,7 +288,7 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
             )
         )
         session.flush()
-        assert execution.id is not None
+        observed_metadata.append(execution.id)
         raise RuntimeError("metadata boundary failure")
 
     monkeypatch.setattr(
@@ -301,6 +300,13 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
     )
 
     assert response.status_code == 500
+    # Assert outside the API exception handler so a swallowed AssertionError cannot pass.
+    metadata, execution_id = observed_metadata
+    assert metadata.seed == 4242
+    assert metadata.model == "slice4-persistence-model"
+    assert metadata.prompt_version == "slice4-persistence-prompt-v1"
+    assert metadata.policy_version == "policy-slice4-transaction-v1"
+    assert execution_id is not None
     with session_factory() as session:
         assert persistence_snapshot(session, simulation_id) == before
 

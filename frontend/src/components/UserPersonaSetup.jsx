@@ -123,7 +123,8 @@ export default function UserPersonaSetup({
   function updateTrait(key, delta) {
     if (!mbtiType || !config) return;
 
-    const rule = config.mbti_rules[mbtiType][key];
+    const rule = config.mbti_rules[mbtiType]?.[key];
+    if (!rule) return;
 
     setBigFive((prev) => {
       const next = Math.min(
@@ -151,10 +152,12 @@ export default function UserPersonaSetup({
         { token }
       );
 
-      await startSimulation(simulationId, { token });
-
-      setLocked(true);
+      // Persona 저장 결과를 먼저 반영해, 이후 startSimulation이 실패해도
+      // "서버에는 저장됐지만 UI는 미저장"인 불일치 상태를 남기지 않는다.
       onSavedRef.current?.(result);
+
+      await startSimulation(simulationId, { token });
+      setLocked(true);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -261,7 +264,7 @@ export default function UserPersonaSetup({
         <div className="persona-big-five">
           {BIG_FIVE_TRAITS.map(({ key, label }) => {
             const rule = mbtiType
-              ? config.mbti_rules[mbtiType][key]
+              ? config.mbti_rules[mbtiType]?.[key]
               : null;
 
             const value = bigFive?.[key];

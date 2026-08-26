@@ -13,6 +13,8 @@ from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.models import Agent
+
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 from app.services.runtime_target_selection import select_tick_participant_ids
 
 SIMULATION_ID = UUID("40000000-0000-0000-0000-000000000001")
@@ -151,12 +153,14 @@ class TestSelectionInvariants:
 
 @pytest.fixture()
 def api_context():
+    if not TEST_DATABASE_URL:
+        pytest.skip("TEST_DATABASE_URL is required")
     from app.core.database import get_db
     from app.main import app
     from app.services.runtime_dependency import get_agent_runtime
     from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
-    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    engine = create_engine(TEST_DATABASE_URL)
     session_factory = sessionmaker(
         bind=engine, autoflush=False, expire_on_commit=False
     )

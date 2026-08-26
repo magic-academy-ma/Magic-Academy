@@ -113,6 +113,8 @@ export default function App() {
     setAgents([]);
     setSelectedAgent(null);
     setPersonaAgentId(null);
+    setPersonaId(null);
+    setPersonaSetupDone(false);
     setError("");
     setTickResult(null);
     setTickError(null);

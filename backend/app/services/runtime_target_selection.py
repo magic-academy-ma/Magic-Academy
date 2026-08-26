@@ -33,7 +33,7 @@ def select_tick_participant_ids(
         if agent.agent_type in STUDENT_AGENT_TYPES:
             seen_ids.add(agent.id)
             student_ids.append(agent.id)
-        elif agent.agent_type == PROFESSOR_AGENT_TYPE:
+        elif agent.agent_type == PROFESSOR_AGENT_TYPE and not professor_ids:
             if schedule_requires_professor or agent.id in participant_event_id_set:
                 seen_ids.add(agent.id)
                 professor_ids.append(agent.id)
