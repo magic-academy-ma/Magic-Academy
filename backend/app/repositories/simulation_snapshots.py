@@ -112,6 +112,27 @@ class SimulationSnapshotRepository:
             )
         )
 
+    def list_by_simulation(
+        self,
+        session: Session,
+        simulation_id: UUID,
+        *,
+        after_tick: int | None = None,
+        limit: int = 20,
+    ) -> list[SimulationSnapshot]:
+        query = select(SimulationSnapshot).where(
+            SimulationSnapshot.simulation_id == simulation_id
+        )
+        if after_tick is not None:
+            query = query.where(SimulationSnapshot.tick_number > after_tick)
+        return list(
+            session.scalars(
+                query.order_by(SimulationSnapshot.tick_number, SimulationSnapshot.id).limit(
+                    limit
+                )
+            )
+        )
+
     def create(
         self,
         session: Session,
