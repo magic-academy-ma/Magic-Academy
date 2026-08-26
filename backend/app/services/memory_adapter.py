@@ -1,28 +1,16 @@
 from datetime import UTC, datetime
-from typing import Protocol
 from uuid import UUID
 
-from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
 from app.repositories.memory_repository import MemoryCreateInput, MemoryRepository
-from app.simulation.tick_engine import MemoryCandidateItem, MemoryItem
-
-
-class EmbeddingClient(Protocol):
-    async def embed(self, text: str) -> list[float]: ...
-
-
-class OpenAIEmbeddingClient:
-    def __init__(self, api_key: str) -> None:
-        self._client = AsyncOpenAI(api_key=api_key)
-
-    async def embed(self, text: str) -> list[float]:
-        response = await self._client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text,
-        )
-        return response.data[0].embedding
+from app.services.embedding_service import EmbeddingClient
+from app.simulation.tick_engine import (
+    MemoryCandidateItem,
+    MemoryItem,
+    MemoryRetrieverFn,
+    MemoryStoreFn,
+)
 
 
 class MemoryAdapter:
@@ -37,7 +25,9 @@ class MemoryAdapter:
         self._repository = repository or MemoryRepository()
         self._embedding_client = embedding_client
 
-    async def retrieve(self, agent_id: str, current_tick: int, query_text: str) -> list[MemoryItem]:
+    async def retrieve(
+        self, agent_id: str, current_tick: int, query_text: str
+    ) -> list[MemoryItem]:
         embedding = await self._embedding_client.embed(query_text)
         rows = self._repository.retrieve_for_runtime(
             self._session, UUID(agent_id), current_tick, embedding
@@ -77,3 +67,23 @@ class MemoryAdapter:
         )
         self._repository.enforce_cap(self._session, UUID(agent_id))
         return str(row.id)
+
+
+def build_memory_retriever(
+    session: Session,
+    repo: MemoryRepository,
+    embedding_client: EmbeddingClient,
+) -> MemoryRetrieverFn:
+    return MemoryAdapter(
+        session, repository=repo, embedding_client=embedding_client
+    ).retrieve
+
+
+def build_memory_store(
+    session: Session,
+    repo: MemoryRepository,
+    embedding_client: EmbeddingClient,
+) -> MemoryStoreFn:
+    return MemoryAdapter(
+        session, repository=repo, embedding_client=embedding_client
+    ).store

@@ -103,6 +103,7 @@ class RuntimeInputAdapter:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agents: Sequence[Agent],
         preselected_agent_ids: Sequence[UUID],
@@ -126,6 +127,7 @@ class RuntimeInputAdapter:
         return self._orchestrator.run_preselected(
             run_id=run_id,
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agent_candidates=agent_candidates,
             preselected_agent_ids=preselected_agent_ids,

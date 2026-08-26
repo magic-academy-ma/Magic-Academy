@@ -3,6 +3,7 @@ import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import InspectorPanel from "./components/InspectorPanel.jsx";
+import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
@@ -59,10 +60,6 @@ function AuthPanel({ onLogin, notice }) {
 }
 
 // 서버 응답의 code/HTTP status를 프론트에서 보여줄 오류 종류로 분류한다.
-// NOTE: ticks/advance 스펙(§4.2)에 정의된 코드(UNAUTHORIZED/RESOURCE_NOT_FOUND/CONFLICT) 기준.
-// "재시도 실패"는 백엔드가 별도 code로 내려주는 필드가 아직 확정되지 않아, 우선 CONFLICT(409)를
-// "지금은 재시도할 수 없는 상태"로 간주해 매핑했다. 실제 재시도 관련 code가 확정되면 이 매핑만
-// 바꾸면 되도록 분리해뒀다.
 function classifyTickError(requestError) {
   const status = requestError?.status;
   const code = requestError?.code;
@@ -95,6 +92,7 @@ export default function App() {
   const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
+  const [personaAgentId, setPersonaAgentId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -115,6 +113,9 @@ export default function App() {
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
+    setPersonaAgentId(null);
+    setPersonaId(null);
+    setPersonaSetupDone(false);
     setError("");
     setTickResult(null);
     setTickError(null);
@@ -159,6 +160,10 @@ export default function App() {
     }
   }
 
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "student");
+
   async function runTick() {
     setTickLoading(true);
     setTickError(null);
@@ -185,9 +190,7 @@ export default function App() {
       setTickLoading(false);
     }
   }
-  // agent_results: agent_id, agent_name, runtime_status(PROPOSED/FALLBACK/SKIPPED),
-  // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
-  // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
+
   const agentResults = tickResult?.agent_results ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
@@ -261,8 +264,27 @@ export default function App() {
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
-              {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
+              {agents.map((agent) => (
+                <button
+                  data-agent-id={agent.id}
+                  className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent)}
+                >
+                  <b>{agent.name}</b>
+                  <span>{agent.agent_type} · {agent.mbti_type}</span>
+                  {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
+                </button>
+              ))}
             </div>
+
+            <UserPersonaSetup
+              simulationId={simulation.id}
+              students={students}
+              token={auth.access_token}
+              onSaved={(result) => setPersonaAgentId(result.agent_id)}
+            />
+
             <InspectorPanel
               agent={selectedAgent}
               simulationId={simulation?.id}

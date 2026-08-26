@@ -9,8 +9,8 @@ from app.domain.models import Agent, AgentState, Relationship
 from app.domain.relationship_metrics import RelationshipMetric
 from app.repositories.relationships import RelationshipDelta, apply_deltas
 from app.simulation.agent_runtime import AgentRuntimeResult
+from app.simulation.policy import engine as policy_engine
 from app.simulation.policy.conflict import resolve_conflicts
-from app.simulation.policy.engine import evaluate_policy
 from app.simulation.policy.models import (
     AgentSnapshot,
     EffectCandidate,
@@ -59,7 +59,7 @@ def evaluate_and_apply_policy(
             select(Relationship).where(Relationship.simulation_id == simulation_id)
         )
     )
-    evaluation = evaluate_policy(
+    evaluation = policy_engine.evaluate_policy(
         PolicyEvaluationInput(
             run_id=str(run_id),
             tick_number=tick_number,
