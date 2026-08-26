@@ -9,6 +9,12 @@ global.ResizeObserver = global.ResizeObserver || class ResizeObserver {
   disconnect() {}
 }
 
+// jsdom에는 WebSocket이 없다.
+global.WebSocket = global.WebSocket || class WebSocket {
+  constructor() {}
+  close() {}
+}
+
 afterEach(() => {
   cleanup()
 })
