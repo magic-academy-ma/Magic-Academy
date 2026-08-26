@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getUserPersonaConfig,
   getUserPersona,
@@ -30,9 +30,11 @@ export default function UserPersonaSetup({
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [config, setConfig] = useState(null);
   const [locked, setLocked] = useState(false);
+  const [personaSaved, setPersonaSaved] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [mbtiType, setMbtiType] = useState("");
   const [bigFive, setBigFive] = useState(null);
@@ -44,6 +46,54 @@ export default function UserPersonaSetup({
   useEffect(() => {
     onSavedRef.current = onSaved;
   }, [onSaved]);
+
+  // 서버에 저장된 Persona 상태를 조회해 폼/잠금 상태에 반영한다.
+  // 최초 로딩과, Simulation 시작 시 409 충돌 발생 후 재동기화에 모두 쓰인다.
+  const loadPersona = useCallback(
+    async ({ isCancelled } = {}) => {
+      const cancelled = isCancelled ?? (() => false);
+
+      try {
+        const persona = await getUserPersona(simulationId, { token });
+
+        if (cancelled()) return persona;
+
+        setSelectedAgentId(persona.agent_id);
+        setMbtiType(persona.mbti_type);
+
+        setBigFive(
+          BIG_FIVE_TRAITS.reduce((acc, trait) => {
+            acc[trait.key] = persona[trait.key];
+            return acc;
+          }, {})
+        );
+
+        setPersonaSaved(true);
+        setLocked(Boolean(persona.locked));
+
+        // 이미 설정된 Persona를 발견한 경우 상위 컴포넌트에도 알린다.
+        onSavedRef.current?.(persona);
+
+        return persona;
+      } catch (personaError) {
+        if (personaError.status !== 404) {
+          throw personaError;
+        }
+
+        // 404 = 아직 User Persona가 설정되지 않음.
+        if (!cancelled()) {
+          setSelectedAgentId("");
+          setMbtiType("");
+          setBigFive(null);
+          setPersonaSaved(false);
+          setLocked(false);
+        }
+
+        return null;
+      }
+    },
+    [simulationId, token]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -61,36 +111,7 @@ export default function UserPersonaSetup({
 
         setConfig(configResult);
 
-        try {
-          const persona = await getUserPersona(simulationId, { token });
-
-          if (cancelled) return;
-
-          setSelectedAgentId(persona.agent_id);
-          setMbtiType(persona.mbti_type);
-
-          setBigFive(
-            BIG_FIVE_TRAITS.reduce((acc, trait) => {
-              acc[trait.key] = persona[trait.key];
-              return acc;
-            }, {})
-          );
-
-          setLocked(Boolean(persona.locked));
-
-          // 이미 설정된 Persona를 발견한 경우 상위 컴포넌트에도 알린다.
-          onSavedRef.current?.(persona);
-        } catch (personaError) {
-          if (personaError.status !== 404) {
-            throw personaError;
-          }
-
-          // 404 = 아직 User Persona가 설정되지 않음.
-          setSelectedAgentId("");
-          setMbtiType("");
-          setBigFive(null);
-          setLocked(false);
-        }
+        await loadPersona({ isCancelled: () => cancelled });
       } catch (requestError) {
         if (!cancelled) {
           setError(requestError.message);
@@ -107,11 +128,11 @@ export default function UserPersonaSetup({
     return () => {
       cancelled = true;
     };
-  }, [simulationId, token, refreshKey]);
+  }, [simulationId, token, refreshKey, loadPersona]);
 
   function selectMbti(nextMbti) {
     setMbtiType(nextMbti);
-
+    setPersonaSaved(false);
     if (!nextMbti || !config) {
       setBigFive(null);
       return;
@@ -133,9 +154,11 @@ export default function UserPersonaSetup({
 
       return { ...prev, [key]: next };
     });
+    setPersonaSaved(false);
   }
 
-  async function save() {
+  // Persona 저장만 수행한다. Simulation 시작은 별도 액션(handleStart)에서 담당한다.
+  async function savePersona() {
     setSaving(true);
     setError("");
 
@@ -151,14 +174,40 @@ export default function UserPersonaSetup({
         { token }
       );
 
-      await startSimulation(simulationId, { token });
-
-      setLocked(true);
+      setPersonaSaved(true);
       onSavedRef.current?.(result);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // 저장된 Persona를 기준으로 Simulation을 시작하고, 성공 시에만 Persona를 잠근다.
+  async function handleStart() {
+    setStarting(true);
+    setError("");
+
+    try {
+      await startSimulation(simulationId, { token });
+      setLocked(true);
+    } catch (requestError) {
+      if (requestError.status === 409) {
+        // 이미 다른 경로로 Simulation이 시작된 상태 — 서버 상태로 다시 동기화한다.
+        setError(
+          requestError.message || "Simulation이 이미 시작되어 있습니다."
+        );
+
+        try {
+          await loadPersona();
+        } catch (_syncError) {
+          // 동기화에 실패해도 위 충돌 메시지는 그대로 유지한다.
+        }
+      } else {
+        setError(requestError.message);
+      }
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -188,7 +237,9 @@ export default function UserPersonaSetup({
   const mbtiOptions = Object.keys(config.mbti_rules);
 
   const canSave =
-    Boolean(selectedAgentId && mbtiType && bigFive) && !saving;
+    Boolean(selectedAgentId && mbtiType && bigFive) && !saving && !locked;
+
+  const canStart = personaSaved && !locked && !starting && !saving;
 
   return (
     <div className="panel persona-setup">
@@ -206,7 +257,7 @@ export default function UserPersonaSetup({
         </p>
       )}
 
-      <fieldset disabled={locked || saving}>
+      <fieldset disabled={locked || saving || starting}>
         <legend>Student 선택</legend>
 
         <div
@@ -228,7 +279,10 @@ export default function UserPersonaSetup({
                 name="persona-student"
                 value={student.id}
                 checked={selectedAgentId === student.id}
-                onChange={() => setSelectedAgentId(student.id)}
+                onChange={() => {
+                  setSelectedAgentId(student.id);
+                  setPersonaSaved(false);
+                }}
               />
               {student.name}
             </label>
@@ -296,13 +350,24 @@ export default function UserPersonaSetup({
       </fieldset>
 
       {!locked && (
-        <button
-          type="button"
-          onClick={save}
-          disabled={!canSave}
-        >
-          {saving ? "저장 중..." : "Persona 저장"}
-        </button>
+        <div className="persona-actions">
+          <button type="button" onClick={savePersona} disabled={!canSave}>
+            {saving ? "저장 중..." : "Persona 저장"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={!canStart}
+            title={
+              !personaSaved
+                ? "먼저 Persona를 저장해야 Simulation을 시작할 수 있습니다."
+                : undefined
+            }
+          >
+            {starting ? "시작 중..." : "Simulation 시작"}
+          </button>
+        </div>
       )}
     </div>
   );

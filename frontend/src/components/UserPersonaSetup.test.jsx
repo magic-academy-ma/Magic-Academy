@@ -166,23 +166,12 @@ describe("UserPersonaSetup", () => {
     expect(screen.getByRole("group", { name: /Student 선택/ })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Persona 저장" })).not.toBeInTheDocument();
   });
-  it("Persona 저장 후 Simulation을 시작하고 locked 상태로 입력을 잠근다", async () => {
+  it("Persona를 저장해도 Simulation은 자동으로 시작되지 않는다", async () => {
     const fetchMock = mockInitialLoad();
 
     // POST /user-persona
     fetchMock.mockImplementationOnce(() =>
       response({ data: appliedPersona({ locked: false }) })
-    );
-
-    // POST /start
-    fetchMock.mockImplementationOnce(() =>
-      response({
-        data: {
-          id: "sim_01",
-          status: "RUNNING",
-          started_at: "2026-08-25T03:00:00Z",
-        },
-      })
     );
 
     const onSaved = vi.fn();
@@ -203,12 +192,11 @@ describe("UserPersonaSetup", () => {
     await user.selectOptions(screen.getByLabelText("MBTI preset"), "INFP");
     await user.click(screen.getByRole("button", { name: "Persona 저장" }));
 
-    await waitFor(() => {
-      expect(onSaved).toHaveBeenCalled();
-      expect(screen.getByText(/Simulation이 시작되어/)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
 
-    // Persona 저장 요청 확인
+    // Persona 저장 요청만 나가고 start는 호출되지 않는다.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
     const [personaUrl, personaOptions] = fetchMock.mock.calls[2];
 
     expect(personaUrl).toContain("/v1/simulations/sim_01/user-persona");
@@ -224,6 +212,55 @@ describe("UserPersonaSetup", () => {
       emotional_stability: 0,
     });
 
+    // 저장 후에도 잠기지 않고, 저장/시작 버튼이 모두 남아있어야 한다.
+    expect(screen.queryByText(/Simulation이 시작되어/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Persona 저장" })
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Simulation 시작" })
+    ).toBeEnabled();
+  });
+
+  it("저장된 Persona로 Simulation 시작 버튼을 누르면 locked 상태로 입력을 잠근다", async () => {
+    const fetchMock = mockInitialLoad();
+
+    // POST /user-persona
+    fetchMock.mockImplementationOnce(() =>
+      response({ data: appliedPersona({ locked: false }) })
+    );
+
+    // POST /start
+    fetchMock.mockImplementationOnce(() =>
+      response({
+        data: {
+          id: "sim_01",
+          status: "RUNNING",
+          started_at: "2026-08-25T03:00:00Z",
+        },
+      })
+    );
+
+    const user = userEvent.setup();
+
+    render(
+      <UserPersonaSetup simulationId="sim_01" students={students} token="t" />
+    );
+
+    await screen.findByLabelText(students[0].name);
+
+    await user.click(screen.getByLabelText(students[2].name));
+    await user.selectOptions(screen.getByLabelText("MBTI preset"), "INFP");
+    await user.click(screen.getByRole("button", { name: "Persona 저장" }));
+
+    await screen.findByRole("button", { name: "Simulation 시작" });
+
+    await user.click(screen.getByRole("button", { name: "Simulation 시작" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Simulation이 시작되어/)).toBeInTheDocument();
+    });
+
     // Simulation 시작 요청 확인
     const [startUrl, startOptions] = fetchMock.mock.calls[3];
 
@@ -234,9 +271,82 @@ describe("UserPersonaSetup", () => {
     expect(
       screen.getByRole("group", { name: /Student 선택/ })
     ).toBeDisabled();
-
     expect(screen.getByLabelText("MBTI preset")).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Persona 저장" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Simulation 시작" })
+    ).not.toBeInTheDocument();
+  });
 
+  it("아직 저장하지 않은 상태에서는 Simulation 시작 버튼이 비활성화된다", async () => {
+    mockInitialLoad();
+    const user = userEvent.setup();
+
+    render(
+      <UserPersonaSetup simulationId="sim_01" students={students} token="t" />
+    );
+
+    await screen.findByLabelText(students[0].name);
+    await user.click(screen.getByLabelText(students[0].name));
+    await user.selectOptions(screen.getByLabelText("MBTI preset"), "ISTJ");
+
+    expect(screen.getByRole("button", { name: "Simulation 시작" })).toBeDisabled();
+  });
+
+  it("Simulation 시작이 409로 실패하면 서버 상태로 재동기화하고 잠긴다", async () => {
+    const fetchMock = mockInitialLoad();
+
+    // POST /user-persona
+    fetchMock.mockImplementationOnce(() =>
+      response({ data: appliedPersona({ locked: false }) })
+    );
+
+    // POST /start -> 409 (다른 경로로 이미 시작됨)
+    fetchMock.mockImplementationOnce(() =>
+      response(
+        {
+          code: "CONFLICT",
+          message: "Simulation이 이미 시작되어 있습니다.",
+        },
+        409
+      )
+    );
+
+    // 재동기화용 GET /user-persona -> 서버는 이미 locked 상태
+    fetchMock.mockImplementationOnce(() =>
+      response({ data: appliedPersona({ locked: true }) })
+    );
+
+    const user = userEvent.setup();
+
+    render(
+      <UserPersonaSetup simulationId="sim_01" students={students} token="t" />
+    );
+
+    await screen.findByLabelText(students[0].name);
+
+    await user.click(screen.getByLabelText(students[2].name));
+    await user.selectOptions(screen.getByLabelText("MBTI preset"), "INFP");
+    await user.click(screen.getByRole("button", { name: "Persona 저장" }));
+
+    await screen.findByRole("button", { name: "Simulation 시작" });
+    await user.click(screen.getByRole("button", { name: "Simulation 시작" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Simulation이 이미 시작되어 있습니다."
+    );
+
+    // 재동기화 GET 요청이 실제로 나갔는지 확인
+    const [syncUrl, syncOptions] = fetchMock.mock.calls[4];
+    expect(syncUrl).toContain("/v1/simulations/sim_01/user-persona");
+    expect(syncOptions?.method ?? "GET").toBe("GET");
+
+    // 서버 상태(locked: true)로 동기화되어 입력이 잠긴다.
+    await waitFor(() => {
+      expect(screen.getByText(/Simulation이 시작되어/)).toBeInTheDocument();
+    });
     expect(
       screen.queryByRole("button", { name: "Persona 저장" })
     ).not.toBeInTheDocument();
@@ -298,4 +408,81 @@ describe("UserPersonaSetup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("서버 오류가 발생했습니다.");
     expect(screen.queryByLabelText("MBTI preset")).not.toBeInTheDocument();
   });
+  it(
+    "저장 후 값을 변경하면 Simulation 시작이 비활성화되고, 재저장하면 다시 활성화된다",
+    async () => {
+      const fetchMock = mockInitialLoad();
+
+      // 첫 번째 Persona 저장
+      fetchMock.mockImplementationOnce(() =>
+        response({ data: appliedPersona({ locked: false }) })
+      );
+
+      // 두 번째 Persona 재저장
+      fetchMock.mockImplementationOnce(() =>
+        response({ data: appliedPersona({ locked: false }) })
+      );
+
+      const user = userEvent.setup();
+
+      render(
+        <UserPersonaSetup
+          simulationId="sim_01"
+          students={students}
+          token="t"
+        />
+      );
+
+      await screen.findByLabelText(students[0].name);
+
+      // Persona 저장
+      await user.click(screen.getByLabelText(students[0].name));
+      await user.selectOptions(
+        screen.getByLabelText("MBTI preset"),
+        "ISTJ"
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Persona 저장" })
+      );
+
+      // 저장 후에는 Simulation 시작 가능
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Simulation 시작" })
+        ).toBeEnabled();
+      });
+
+      // 저장된 Persona의 값을 변경
+      await user.selectOptions(
+        screen.getByLabelText("MBTI preset"),
+        "INFP"
+      );
+
+      // 변경했으므로 다시 저장하기 전에는 시작 불가
+      expect(
+        screen.getByRole("button", { name: "Simulation 시작" })
+      ).toBeDisabled();
+
+      // Big Five를 직접 변경해도 시작 불가
+      await user.click(
+        screen.getByRole("button", { name: "개방성 증가" })
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Simulation 시작" })
+      ).toBeDisabled();
+
+      // 다시 저장
+      await user.click(
+        screen.getByRole("button", { name: "Persona 저장" })
+      );
+
+      // 재저장 후 다시 시작 가능
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Simulation 시작" })
+        ).toBeEnabled();
+      });
+    }
+  );
 });
