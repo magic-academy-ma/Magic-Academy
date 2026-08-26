@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
+import EventLogPanel from "./components/EventLogPanel.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
+import { useSimulationWS } from "./hooks/useSimulationWS.js";
 import BrandingPage from "./pages/BrandingPage.jsx";
 import "./App.css";
 
@@ -101,6 +103,11 @@ export default function App() {
   const [tickError, setTickError] = useState(null); // { type, message }
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
+
+  const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
+    simulation?.id,
+    auth?.access_token
+  );
   function resetSession(notice = "") {
     setAuth(null);
     setSimulationId(null);
@@ -181,14 +188,25 @@ export default function App() {
   // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
   // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
   const agentResults = tickResult?.agent_results ?? [];
-  const relationshipDeltas = tickResult?.relationship_deltas ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
 
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+
+  // WS RELATIONSHIP_UPDATED 메시지를 flat delta 배열로 변환 (REST relationship_deltas 형식 호환)
+  const wsDeltas = wsRelationshipDeltas.flatMap((msg) =>
+    (msg.deltas ?? []).map((d) => ({
+      ...d,
+      source_agent_id: msg.source_agent_id,
+      target_agent_id: msg.target_agent_id,
+    }))
+  );
+  const effectiveRelationshipDeltas =
+    wsDeltas.length > 0 ? wsDeltas : (tickResult?.relationship_deltas ?? []);
+
   const relationshipAgentIds = [
     ...new Set(
-      relationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
+      effectiveRelationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
     ),
   ];
   const flowNodes = relationshipAgentIds.map((id, index) => ({
@@ -197,7 +215,7 @@ export default function App() {
     data: { label: agentNameById[id] ?? String(id) },
   }));
   const edgesByPair = new Map();
-  for (const delta of relationshipDeltas) {
+  for (const delta of effectiveRelationshipDeltas) {
     const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
     if (!edgesByPair.has(key)) {
       edgesByPair.set(key, {
@@ -212,9 +230,28 @@ export default function App() {
   }
   const flowEdges = [...edgesByPair.values()];
 
+  function handleEventAgentSelect(agentId) {
+    const agent = agents.find((a) => a.id === agentId);
+    if (agent) setSelectedAgent(agent);
+  }
+
   return (
     <div className="app-shell">
-      <header><strong>Magic Academy</strong><div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div></header>
+      <header>
+        <strong>Magic Academy</strong>
+        {simulation && lastTick && (
+          <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
+        )}
+        <div className="header-right">
+          {simulation && (
+            <span
+              className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
+              title={connected ? "실시간 연결됨" : "연결 끊김"}
+            >●</span>
+          )}
+          <div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div>
+        </div>
+      </header>
       <main>
         <section className="workspace">
             <div className="panel agent-list">
@@ -314,15 +351,19 @@ export default function App() {
 										</ul>
                   )}
 
-                  <h4>관계 변화</h4>
-                  <RelationshipFlow
-                    nodes={flowNodes}
-                    edges={flowEdges}
-                  />
                 </div>
               )}
             </div>
+            <div className="panel relationship-panel">
+              <h4>관계 변화</h4>
+              <RelationshipFlow nodes={flowNodes} edges={flowEdges} />
+            </div>
           </section>
+          <EventLogPanel
+            eventLog={eventLog}
+            agentNames={agentNameById}
+            onAgentSelect={handleEventAgentSelect}
+          />
       </main>
     </div>
   );

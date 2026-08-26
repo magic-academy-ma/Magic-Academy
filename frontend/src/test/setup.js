@@ -9,6 +9,11 @@ global.ResizeObserver = global.ResizeObserver || class ResizeObserver {
   disconnect() {}
 }
 
+global.WebSocket = class WebSocket {
+  constructor() {}
+  close() {}
+}
+
 afterEach(() => {
   cleanup()
 })
