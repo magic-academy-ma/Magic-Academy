@@ -5,10 +5,10 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.core.config import get_settings
 from app.domain.models import Agent, Event, EventParticipant, Simulation
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
-from app.services.memory_adapter import MemoryAdapter, OpenAIEmbeddingClient
+from app.services.embedding_service import build_embedding_client
+from app.services.memory_adapter import MemoryAdapter
 from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_policy
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
@@ -23,6 +23,8 @@ from app.simulation.agent_runtime import (
 from app.simulation.tick_engine import (
     AgentType,
     MemoryItem,
+    MemoryRetrieverFn,
+    MemoryStoreFn,
     PolicyFn,
     TickAgent,
     TickEngine,
@@ -63,6 +65,8 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    memory_retriever: MemoryRetrieverFn | None = None,
+    memory_store: MemoryStoreFn | None = None,
     memory_adapter: MemoryAdapter | None = None,
 ) -> ManualTickResult:
     locked = db.scalar(
@@ -80,13 +84,11 @@ async def advance_manual_tick(
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
     run_id = uuid7()
-    if memory_adapter is None:
-        openai_api_key = get_settings().openai_api_key
-        if openai_api_key:
-            memory_adapter = MemoryAdapter(
-                db,
-                embedding_client=OpenAIEmbeddingClient(openai_api_key),
-            )
+    if memory_adapter is None and memory_retriever is None and memory_store is None:
+        try:
+            memory_adapter = MemoryAdapter(db, embedding_client=build_embedding_client())
+        except RuntimeError:
+            memory_adapter = None
 
     event = db.scalar(
         select(Event)
@@ -211,8 +213,10 @@ async def advance_manual_tick(
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=evaluate_policy_batch,
-        memory_retriever=None if memory_adapter is None else memory_adapter.retrieve,
-        memory_store=None if memory_adapter is None else memory_adapter.store,
+        memory_retriever=(
+            memory_retriever if memory_adapter is None else memory_adapter.retrieve
+        ),
+        memory_store=memory_store if memory_adapter is None else memory_adapter.store,
     ).run_tick(
         tick_candidates,
         TickEvent(
