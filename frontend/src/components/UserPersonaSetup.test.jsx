@@ -408,4 +408,81 @@ describe("UserPersonaSetup", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("서버 오류가 발생했습니다.");
     expect(screen.queryByLabelText("MBTI preset")).not.toBeInTheDocument();
   });
+  it(
+    "저장 후 값을 변경하면 Simulation 시작이 비활성화되고, 재저장하면 다시 활성화된다",
+    async () => {
+      const fetchMock = mockInitialLoad();
+
+      // 첫 번째 Persona 저장
+      fetchMock.mockImplementationOnce(() =>
+        response({ data: appliedPersona({ locked: false }) })
+      );
+
+      // 두 번째 Persona 재저장
+      fetchMock.mockImplementationOnce(() =>
+        response({ data: appliedPersona({ locked: false }) })
+      );
+
+      const user = userEvent.setup();
+
+      render(
+        <UserPersonaSetup
+          simulationId="sim_01"
+          students={students}
+          token="t"
+        />
+      );
+
+      await screen.findByLabelText(students[0].name);
+
+      // Persona 저장
+      await user.click(screen.getByLabelText(students[0].name));
+      await user.selectOptions(
+        screen.getByLabelText("MBTI preset"),
+        "ISTJ"
+      );
+      await user.click(
+        screen.getByRole("button", { name: "Persona 저장" })
+      );
+
+      // 저장 후에는 Simulation 시작 가능
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Simulation 시작" })
+        ).toBeEnabled();
+      });
+
+      // 저장된 Persona의 값을 변경
+      await user.selectOptions(
+        screen.getByLabelText("MBTI preset"),
+        "INFP"
+      );
+
+      // 변경했으므로 다시 저장하기 전에는 시작 불가
+      expect(
+        screen.getByRole("button", { name: "Simulation 시작" })
+      ).toBeDisabled();
+
+      // Big Five를 직접 변경해도 시작 불가
+      await user.click(
+        screen.getByRole("button", { name: "개방성 증가" })
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Simulation 시작" })
+      ).toBeDisabled();
+
+      // 다시 저장
+      await user.click(
+        screen.getByRole("button", { name: "Persona 저장" })
+      );
+
+      // 재저장 후 다시 시작 가능
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Simulation 시작" })
+        ).toBeEnabled();
+      });
+    }
+  );
 });

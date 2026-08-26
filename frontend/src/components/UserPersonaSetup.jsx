@@ -132,7 +132,7 @@ export default function UserPersonaSetup({
 
   function selectMbti(nextMbti) {
     setMbtiType(nextMbti);
-
+    setPersonaSaved(false);
     if (!nextMbti || !config) {
       setBigFive(null);
       return;
@@ -154,6 +154,7 @@ export default function UserPersonaSetup({
 
       return { ...prev, [key]: next };
     });
+    setPersonaSaved(false);
   }
 
   // Persona 저장만 수행한다. Simulation 시작은 별도 액션(handleStart)에서 담당한다.
@@ -278,7 +279,10 @@ export default function UserPersonaSetup({
                 name="persona-student"
                 value={student.id}
                 checked={selectedAgentId === student.id}
-                onChange={() => setSelectedAgentId(student.id)}
+                onChange={() => {
+                  setSelectedAgentId(student.id);
+                  setPersonaSaved(false);
+                }}
               />
               {student.name}
             </label>
