@@ -288,6 +288,47 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
         assert persistence_snapshot(session, simulation_id) == before
 
 
+def test_failure_after_tick_flush_restores_tick_position_and_persistence(
+    api_client, monkeypatch
+) -> None:
+    from app.api import ticks
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+
+    client, session_factory = api_client
+    simulation_id, headers = register_login_create(client)
+    with session_factory() as session:
+        seed_rollback_rows(session, simulation_id)
+        simulation = session.get(Simulation, simulation_id)
+        simulation.current_tick = 3
+        simulation.current_day = 1
+        session.commit()
+        before = persistence_snapshot(session, simulation_id)
+
+    observed = {}
+
+    async def fail_after_tick_flush(session, simulation, *, runtime):
+        await advance_manual_tick(session, simulation, runtime=runtime)
+        # Read the flushed DB values, not only the ORM identity-map values.
+        session.refresh(simulation)
+        observed.update(persistence_snapshot(session, simulation_id))
+        raise RuntimeError("failure after tick position flush")
+
+    monkeypatch.setattr(ticks, "advance_manual_tick", fail_after_tick_flush)
+    response = client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 500
+    # Assert outside the API exception handler so an early failure cannot pass.
+    assert observed["current_tick"] == 4
+    assert observed["current_day"] == 2
+    assert observed["runtime_executions"] == before["runtime_executions"] + 1
+    assert observed["runtime_results"] > before["runtime_results"]
+    with session_factory() as session:
+        assert persistence_snapshot(session, simulation_id) == before
+
+
 def test_persona_start_and_execution_metadata_persist_through_api_to_db(
     api_client,
 ) -> None:
