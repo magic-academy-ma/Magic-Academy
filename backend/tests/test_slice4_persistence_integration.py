@@ -321,9 +321,26 @@ def test_failure_after_tick_flush_restores_tick_position_and_persistence(
 
     observed = {}
 
-    async def fail_after_tick_flush(session, simulation, *, runtime):
+    async def fail_after_tick_flush(
+        session,
+        simulation,
+        *,
+        runtime,
+        policy,
+        policy_version,
+        memory_retriever,
+        memory_store,
+    ):
         """Capture completed Tick writes before forcing the API to roll back."""
-        await advance_manual_tick(session, simulation, runtime=runtime)
+        await advance_manual_tick(
+            session,
+            simulation,
+            runtime=runtime,
+            policy=policy,
+            policy_version=policy_version,
+            memory_retriever=memory_retriever,
+            memory_store=memory_store,
+        )
         # Read the flushed DB values, not only the ORM identity-map values.
         session.refresh(simulation)
         observed.update(persistence_snapshot(session, simulation_id))
@@ -416,7 +433,7 @@ def test_persona_start_and_execution_metadata_persist_through_api_to_db(
         assert execution.seed >= 0
         assert execution.model == "slice4-persistence-model"
         assert execution.prompt_version == "slice4-persistence-prompt-v1"
-        assert execution.policy_version is None
+        assert execution.policy_version == "policy-mvp-0.1"
         assert results
         assert {result.model for result in results} == {execution.model}
         assert {result.prompt_version for result in results} == {
