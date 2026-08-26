@@ -3,6 +3,7 @@ import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import RelationshipModal from "./components/RelationshipModal.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
+import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
@@ -59,10 +60,6 @@ function AuthPanel({ onLogin, notice }) {
 }
 
 // 서버 응답의 code/HTTP status를 프론트에서 보여줄 오류 종류로 분류한다.
-// NOTE: ticks/advance 스펙(§4.2)에 정의된 코드(UNAUTHORIZED/RESOURCE_NOT_FOUND/CONFLICT) 기준.
-// "재시도 실패"는 백엔드가 별도 code로 내려주는 필드가 아직 확정되지 않아, 우선 CONFLICT(409)를
-// "지금은 재시도할 수 없는 상태"로 간주해 매핑했다. 실제 재시도 관련 code가 확정되면 이 매핑만
-// 바꾸면 되도록 분리해뒀다.
 function classifyTickError(requestError) {
   const status = requestError?.status;
   const code = requestError?.code;
@@ -95,6 +92,7 @@ export default function App() {
   const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
+  const [personaAgentId, setPersonaAgentId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -121,6 +119,9 @@ export default function App() {
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
+    setPersonaAgentId(null);
+    setPersonaId(null);
+    setPersonaSetupDone(false);
     setError("");
     setTickResult(null);
     setTickError(null);
@@ -165,6 +166,10 @@ export default function App() {
     }
   }
 
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "student");
+
   async function runTick() {
     setTickLoading(true);
     setTickError(null);
@@ -191,9 +196,7 @@ export default function App() {
       setTickLoading(false);
     }
   }
-  // agent_results: agent_id, agent_name, runtime_status(PROPOSED/FALLBACK/SKIPPED),
-  // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
-  // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
+
   const agentResults = tickResult?.agent_results ?? [];
   const tickSucceeded = tickResult?.status === "COMPLETED";
   const tickFailed = tickResult && !tickSucceeded;
@@ -304,14 +307,34 @@ export default function App() {
                   onClick={() => setSelectedAgent(agent)}
                 >
                   <span>{agent.name} · {agent.agent_type} · {agent.mbti_type}</span>
+                  {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
                 </button>
               ))}
             </div>
+
+            <UserPersonaSetup
+              simulationId={simulation.id}
+              students={students}
+              token={auth.access_token}
+              onSaved={(result) => setPersonaAgentId(result.agent_id)}
+            />
+
             <aside className="panel inspector">
               <h2>Inspector</h2>
               {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
                 <h3>{selectedAgent.name}</h3>
-                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
+                <dl>
+                  <dt>Persona 여부</dt><dd>{selectedAgent.id === personaAgentId ? "예 (User Persona)" : "아니오"}</dd>
+                  <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+                  <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+                  <dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd>
+                  <dt>위치</dt><dd>{selectedAgent.location.name}</dd>
+                  <dt>기분</dt><dd>{selectedAgent.state.mood}</dd>
+                  <dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd>
+                  <dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd>
+                  <dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd>
+                  <dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd>
+                </dl>
                 <button type="button" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
                 <button type="button" onClick={() => setShowRelationshipModal(true)}>관계 보기</button>
               </>}

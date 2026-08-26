@@ -645,3 +645,132 @@ def test_inactive_slice_one_student_is_skipped_without_llm_and_saved(runtime_db)
     assert llm_client.agent_ids == []
     assert sink.call_count == 1
     assert sink.list_results() == [batch.results[0]]
+
+
+# ── Slice 4 Task 2: preselected_agent_ids 자동 편성 ───────────────────────────
+
+
+def _runtime_agent_ids_by_fixture_key(db, simulation_id) -> dict[str, UUID]:
+    rows = db.execute(
+        select(Agent.fixture_key, Agent.id).where(Agent.simulation_id == simulation_id)
+    ).all()
+    return {fixture_key: agent_id for fixture_key, agent_id in rows}
+
+
+def test_default_selection_runs_five_students_without_professor(runtime_db) -> None:
+    """preselected_agent_ids를 생략하면 Student 5명만 자동 편성된다."""
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    ids_by_fixture_key = _runtime_agent_ids_by_fixture_key(db, simulation.id)
+    adapter = SpyAdapter()
+
+    run_phase(
+        SimulationTickService(adapter),
+        db,
+        simulation,
+        event,
+        [],
+        make_schedule(location_id),
+        preselected_agent_ids=None,
+    )
+
+    assert adapter.calls[0]["preselected_agent_ids"] == tuple(
+        ids_by_fixture_key[f"student-{index:02d}"] for index in range(1, 6)
+    )
+
+
+def test_default_selection_adds_professor_when_event_participant(runtime_db) -> None:
+    """Professor가 Event 참여자면 자동 편성 결과에 6명이 포함된다."""
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    ids_by_fixture_key = _runtime_agent_ids_by_fixture_key(db, simulation.id)
+    professor_id = ids_by_fixture_key["professor-01"]
+    participant = EventParticipant(
+        id=uuid4(), event_id=event.id, agent_id=professor_id, result={}
+    )
+    adapter = SpyAdapter()
+
+    run_phase(
+        SimulationTickService(adapter),
+        db,
+        simulation,
+        event,
+        [participant],
+        make_schedule(location_id),
+        preselected_agent_ids=None,
+    )
+
+    assert adapter.calls[0]["preselected_agent_ids"] == (
+        *(ids_by_fixture_key[f"student-{index:02d}"] for index in range(1, 6)),
+        professor_id,
+    )
+
+
+def test_default_selection_adds_professor_when_schedule_requires(runtime_db) -> None:
+    """schedule_requires_professor=True면 Event 미참여 Professor도 자동 편성에 포함된다."""
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    ids_by_fixture_key = _runtime_agent_ids_by_fixture_key(db, simulation.id)
+    adapter = SpyAdapter()
+
+    run_phase(
+        SimulationTickService(adapter),
+        db,
+        simulation,
+        event,
+        [],
+        make_schedule(location_id),
+        preselected_agent_ids=None,
+        schedule_requires_professor=True,
+    )
+
+    assert adapter.calls[0]["preselected_agent_ids"] == (
+        *(ids_by_fixture_key[f"student-{index:02d}"] for index in range(1, 6)),
+        ids_by_fixture_key["professor-01"],
+    )
+
+
+def test_explicit_preselected_agent_ids_bypasses_automatic_selection(runtime_db) -> None:
+    """preselected_agent_ids를 명시하면 자동 편성 대신 그대로 사용된다."""
+    db, simulation, _, _, _ = runtime_db
+    location_id = db.scalar(
+        select(Location.id).where(
+            Location.simulation_id == simulation.id,
+            Location.code == "classroom",
+        )
+    )
+    event = make_event(simulation.id, location_id)
+    ids_by_fixture_key = _runtime_agent_ids_by_fixture_key(db, simulation.id)
+    only_student = ids_by_fixture_key["student-02"]
+    adapter = SpyAdapter()
+
+    run_phase(
+        SimulationTickService(adapter),
+        db,
+        simulation,
+        event,
+        [],
+        make_schedule(location_id),
+        preselected_agent_ids=[only_student],
+        schedule_requires_professor=True,
+    )
+
+    assert adapter.calls[0]["preselected_agent_ids"] == [only_student]
