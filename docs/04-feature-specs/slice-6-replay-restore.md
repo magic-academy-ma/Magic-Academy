@@ -1,7 +1,7 @@
 ---
 title: Slice 6 — 설정 저장·Replay·시점 복원 계약
 status: approved
-updated: 2026-08-25
+updated: 2026-08-26
 visibility: public
 source:
   - "GitHub Issue #116"
@@ -25,7 +25,7 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - Replay는 Runtime, LLM, Tick Engine을 호출하지 않는다.
 - Replay는 새 Tick, Intent, Event, Memory 또는 관계 변화를 생성하지 않는다.
 - Replay 결과의 순서와 식별자는 원본 실행 기록과 같아야 한다.
-- 복원과 설정 변경은 인증된 Simulation 소유자만 수행한다.
+- 설정 조회·변경, Snapshot 조회, Replay 및 복원은 인증된 Simulation 소유자만 수행한다.
 - Snapshot 저장에 실패하면 같은 Tick transaction 전체를 rollback한다.
 - 조회·복원은 읽기 전용이며 성공·실패와 관계없이 DB 상태를 변경하지 않는다.
 
@@ -60,20 +60,27 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 
 ### 3.1 설정
 
-일반 Event 설정은 다음 두 값을 사용한다.
+일반 Event 및 Magic Layer의 빈도·영향도 설정은 다음 값을 사용한다.
 
 | 필드 | 허용값 | 기본값 |
 | --- | --- | --- |
 | `event_frequency` | `low`, `medium`, `high` | `medium` |
 | `event_impact` | `low`, `medium`, `high` | `medium` |
+| `magic_frequency` | `low`, `medium`, `high` | `medium` |
+| `magic_impact` | `low`, `medium`, `high` | `medium` |
 
 - 일반 Event의 `event_frequency`, `event_impact`는 `ready`, `running`, `paused`
   상태에서 변경할 수 있다. 실행 중 변경은 현재 Tick에 영향을 주지 않고 다음 Tick
   Snapshot부터 적용한다.
 - Tick 실행과 일반 Event 설정 변경이 경합하면 현재 Tick은 시작 시 고정한 기존 설정
   버전으로 완료하고 변경값은 다음 Tick부터 적용한다.
-- `magic_enabled`와 User Persona 설정은 `ready`에서만 변경할 수 있으며 Simulation
+- `magic_enabled`, `magic_frequency`, `magic_impact`와 User Persona 설정은 `ready`에서만 변경할 수 있으며 Simulation
   시작 후에는 고정한다.
+- 초기 seed는 Simulation 생성 시 사용한 실제 값을 초기 설정 버전에 저장하고 이후
+  설정 버전에도 보존한다. Tick별 실행 seed와 구분하며 Replay·복원 시 재생성하지 않는다.
+- 일반 Event 설정, Magic 설정, User Persona 설정 및 초기 seed를 설정 버전의 저장
+  범위에 포함한다. Tick 0과 이후 모든 Snapshot은 해당 시점의 설정 버전과 실제 값을
+  불변 payload로 보존하며 현재 설정을 다시 조회해 과거 값을 대체하지 않는다.
 - Replay와 복원은 각 Tick에 저장된 설정 Snapshot을 사용한다.
 - 동적 Event 확률 판정은 `simulation_id`, `tick_number`, 해당 Tick 설정 Snapshot을 입력으로 사용한다.
 
@@ -106,7 +113,8 @@ Slice 6의 핵심 불변 조건은 다음과 같다.
 - Event와 Event participant 결과
 - Agent Memory
 - Runtime 결과와 실행 식별자(원본 Replay·감사용)
-- 해당 Tick에 적용된 설정값과 정책·Resolver 버전
+- 해당 Tick에 적용된 설정 버전·설정값(일반 Event·Magic 빈도/영향도,
+  `magic_enabled`, User Persona, 초기 seed)과 정책·Resolver 버전
 
 Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 Replay에 필요한 값을
 불변 payload로 보존한다. Runtime 결과는 원본 Replay·감사용 실행 이력으로 payload에
@@ -116,6 +124,7 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 ### 4.3 Replay
 
 - Replay API는 Snapshot과 저장된 실행 기록만 조회한다.
+- Replay 목록·상세 조회 모두 인증 및 Simulation 소유권을 검사한다.
 - 기본 순서는 `tick_number ASC`이며 같은 Tick에서는 원본 저장 순서를 보존한다.
 - Replay 요청은 Simulation의 현재 상태를 변경하지 않는다.
 - 원본 기록이나 Snapshot이 누락되거나 서로 일치하지 않으면 새 실행으로 보완하지 않고 오류를 반환한다.
@@ -143,6 +152,9 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 | Snapshot과 실행 기록 불일치 | 409 | `SNAPSHOT_MISMATCH` |
 | 지원하지 않는 Snapshot schema version | 409 | `UNSUPPORTED_SNAPSHOT_SCHEMA` |
 
+Replay 목록·상세, Snapshot 조회·복원, 설정 조회·변경 각각에 대해 인증 정보 없음·
+유효하지 않음은 401, 다른 사용자 소유 리소스 접근은 403임을 검증한다.
+
 ## 5. Task 경계와 통합 순서
 
 | Task | 책임 | 선행 조건 |
@@ -164,9 +176,10 @@ Snapshot은 원본 행을 참조하는 링크만 저장하지 않고, 복원과 
 2. **Snapshot 생성 단위**: Tick 0과 모든 Tick의 batch transaction 안에서 Snapshot을
    저장하고 전체 결과를 한 번에 commit한다.
 3. **Snapshot 상태 범위**: 4.2의 전체 범위를 불변 payload로 저장한다.
-4. **설정 범위**: `event_frequency`, `event_impact`, `magic_enabled`, User Persona 설정을
-   버전 관리한다. 일반 Event 설정만 실행 중 변경할 수 있고 Magic·Persona 설정은
-   시작 후 잠근다.
+4. **설정 범위**: `event_frequency`, `event_impact`, `magic_frequency`, `magic_impact`,
+   `magic_enabled`, User Persona 및 초기 seed를 설정 버전에 저장하고 Snapshot에
+   보존한다. 일반 Event 설정만 실행 중 변경할 수 있고 Magic·Persona 설정은
+   시작 후 잠근다. 초기 seed는 생성 시 실제 사용한 값을 유지한다.
 5. **보존 정책**: MVP에서는 Snapshot을 기간·개수 제한 없이 보존한다.
 6. **동일 Tick 정렬 기준**: Tick 안의 원본 출력 순서를 보존하는 별도 sequence를 저장한다.
 7. **시점 복원 부작용**: 새 Simulation·Tick·실행 계보 생성과 원본 변경은 모두 금지한다.
