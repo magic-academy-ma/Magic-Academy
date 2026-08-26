@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
+import InspectorPanel from "./components/InspectorPanel.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
@@ -262,13 +263,13 @@ export default function App() {
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
               {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
             </div>
-            <aside className="panel inspector">
-              <h2>Inspector</h2>
-              {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
-                <h3>{selectedAgent.name}</h3>
-                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
-              </>}
-            </aside>
+            <InspectorPanel
+              agent={selectedAgent}
+              simulationId={simulation?.id}
+              token={auth?.access_token}
+              currentTick={lastTick?.current_tick}
+              onClose={() => setSelectedAgent(null)}
+            />
             <div className="panel tick-panel">
               <h2>Tick</h2>
 
