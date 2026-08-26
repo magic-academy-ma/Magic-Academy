@@ -179,6 +179,98 @@ def test_commit_failure_does_not_broadcast(client: TestClient, monkeypatch) -> N
     assert simulation.json()["current_tick"] == 0
 
 
+
+def test_simulation_status_broadcast_matches_rest(client: TestClient) -> None:
+    token, simulation_id = register_login_and_create(client, "ws-status-owner")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with client.websocket_connect(f"/v1/ws/simulations/{simulation_id}") as websocket:
+        websocket.send_json({"type": "AUTH", "token": token})
+        assert websocket.receive_json()["type"] == "AUTHENTICATED"
+
+        updated = client.patch(
+            f"/v1/simulations/{simulation_id}/status",
+            headers=headers,
+            json={"status": "running"},
+        )
+        assert updated.status_code == 200, updated.text
+        event = websocket.receive_json()
+
+    current = client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert current.status_code == 200, current.text
+    assert event == {
+        "type": "SIMULATION_STATUS_UPDATED",
+        "data": {"simulation_id": simulation_id, "status": "running"},
+    }
+    assert current.json()["status"] == event["data"]["status"]
+
+
+def test_simulation_status_rejects_invalid_transition_and_other_owner(
+    client: TestClient,
+) -> None:
+    owner_token, simulation_id = register_login_and_create(client, "status-owner")
+    other_token, _ = register_login_and_create(client, "status-other")
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    forbidden = client.patch(
+        f"/v1/simulations/{simulation_id}/status",
+        headers={"Authorization": f"Bearer {other_token}"},
+        json={"status": "running"},
+    )
+    assert forbidden.status_code == 403
+
+    assert client.patch(
+        f"/v1/simulations/{simulation_id}/status",
+        headers=owner_headers,
+        json={"status": "running"},
+    ).status_code == 200
+    assert client.patch(
+        f"/v1/simulations/{simulation_id}/status",
+        headers=owner_headers,
+        json={"status": "completed"},
+    ).status_code == 200
+    invalid = client.patch(
+        f"/v1/simulations/{simulation_id}/status",
+        headers=owner_headers,
+        json={"status": "running"},
+    )
+    assert invalid.status_code == 409
+    assert invalid.json()["detail"] == "Invalid simulation status transition"
+
+
+def test_simulation_status_commit_failure_rolls_back_without_broadcast(
+    client: TestClient, monkeypatch
+) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.services.realtime_events import connection_manager
+
+    token, simulation_id = register_login_and_create(client, "status-rollback-owner")
+    headers = {"Authorization": f"Bearer {token}"}
+    broadcasts = []
+
+    async def record_broadcast(*args):
+        broadcasts.append(args)
+
+    def fail_commit(self):
+        raise RuntimeError("forced commit failure")
+
+    monkeypatch.setattr(connection_manager, "broadcast", record_broadcast)
+    monkeypatch.setattr(Session, "commit", fail_commit)
+
+    response = client.patch(
+        f"/v1/simulations/{simulation_id}/status",
+        headers=headers,
+        json={"status": "running"},
+    )
+
+    assert response.status_code == 500
+    assert broadcasts == []
+    current = client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert current.status_code == 200, current.text
+    assert current.json()["status"] == "ready"
+
+
 def test_created_event_broadcast_matches_rest(client: TestClient) -> None:
     token, simulation_id = register_login_and_create(client, "ws-event-owner")
     headers = {"Authorization": f"Bearer {token}"}

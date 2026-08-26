@@ -33,8 +33,10 @@ describe('Mock 모드 통합 흐름', () => {
     await userEvent.type(screen.getByLabelText('비밀번호'), 'mock-password')
     await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 
-    expect(await screen.findByText('아카데미 수석 마법사')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
+    await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
 
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
@@ -42,5 +44,5 @@ describe('Mock 모드 통합 흐름', () => {
     expect(screen.getByRole('heading', { name: '에단' })).toBeInTheDocument()
     expect(screen.getByText('교실')).toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
+  }, 10000)
 })
