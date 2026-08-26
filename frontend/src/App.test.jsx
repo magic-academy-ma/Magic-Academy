@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App.jsx'
 
 const user = { id: '01900000-0000-7000-8000-000000000001', username: 'owner-a', display_name: 'Owner A', roles: ['USER'] }
-const simulation = { id: '01900000-0000-7000-8000-000000000002', owner_id: user.id, name: 'Slice 0', status: 'ready', current_day: 1, current_tick: 0, magic_enabled: true, created_at: '2026-08-05T00:00:00Z' }
+const simulation = { id: '01900000-0000-7000-8000-000000000002', owner_id: user.id, name: 'Magic Academy Simulation', status: 'ready', current_day: 1, current_tick: 0, magic_enabled: true, created_at: '2026-08-05T00:00:00Z' }
 const names = ['에단', '아델', '레오', '리아', '카이', '세라']
 const agents = ['professor-01', 'student-01', 'student-02', 'student-03', 'student-04', 'student-05'].map((key, index) => ({
   id: `01900000-0000-7000-8000-00000000001${index}`,

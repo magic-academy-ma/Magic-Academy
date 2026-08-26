@@ -126,10 +126,10 @@ export default function App() {
     setManagementView(null);
   }
 
-  function handleEnroll(id) {
-    setSimulationId(id);
-    setSimulation({ id, name: 'Magic Academy Simulation' });
-    loadAgents(id);
+  function handleEnroll(newSimulation) {
+    setSimulationId(newSimulation.id);
+    setSimulation(newSimulation);
+    loadAgents(newSimulation.id);
   }
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
