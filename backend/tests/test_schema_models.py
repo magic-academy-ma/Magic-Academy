@@ -1,6 +1,6 @@
 import unittest
 
-from sqlalchemy import CheckConstraint
+from sqlalchemy import BigInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 
@@ -27,12 +27,16 @@ class SchemaModelTests(unittest.TestCase):
                 "organization_memberships",
                 "events",
                 "event_participants",
+                "event_batch_results",
             },
         )
 
     def test_primary_and_foreign_keys_use_postgresql_uuid(self) -> None:
         for table in Base.metadata.tables.values():
             for primary_key in table.primary_key.columns:
+                if table.name == "event_batch_results" and primary_key.name == "tick_number":
+                    self.assertIsInstance(primary_key.type, BigInteger)
+                    continue
                 self.assertIsInstance(primary_key.type, UUID)
             for foreign_key in table.foreign_keys:
                 self.assertIsInstance(foreign_key.parent.type, UUID)

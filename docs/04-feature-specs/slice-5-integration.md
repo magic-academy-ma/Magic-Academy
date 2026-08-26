@@ -194,6 +194,40 @@ Frontend는 §1 Event 계약을 기준으로 구현한다.
 3. 버전 필드 포함: `policy_version`, `resolver_version`, `resolution_id` 를 REST/WS 모두에 포함한다.
 4. WebSocket은 알림 채널이며 진실의 원천은 REST 저장 결과이다.
 
+### Task 3 저장 경계 (#103)
+
+- 참여 Agent ID는 실제 DB와 동일한 UUID를 사용한다 (위 정수 예시는 설명용).
+- CURSED 기간은 Task 0의 3 Tick 계약을 따른다. 이전 Policy snapshot의 미확정 표기보다 이 계약을 적용한다.
+- `persist_event_batch(session, batch)`는 내부 서버용 저장 인터페이스다. HTTP 쓰기 API로 노출하지 않는다.
+- 일반 Event와 Magic 특수 Event를 구분해 `events`/`event_participants`에 저장한다. Magic은 `random_incident`로 변환하지 않는다.
+- 확정 State delta만 받으며 `before`, `requested_total`, `applied_delta`, `after`, 기여 effect ID와 버전을 저장한다. preview로 수치를 계산하지 않는다.
+- Memory는 생성된 후보를 저장할 뿐 새 내용을 생성하지 않는다. Event·Agent·Location은 같은 Simulation이어야 하고 Memory 작성자는 해당 Event 참여자여야 한다.
+- `(simulation_id, tick_number)`당 동일 입력은 재저장하지 않는다. 다른 입력의 재사용과 stale State는 오류다.
+- 저장 함수는 flush만 수행한다. 상위 Tick transaction이 Runtime·관계·현재 Tick과 함께 commit/rollback한다. 실패 예외를 삼키고 commit하면 안 된다.
+- `GET /v1/simulations/{simulation_id}/event-results/{tick_number}`는 저장된 결과를 반환한다. JWT 401, 비소유자 403, 없는 Simulation/결과 404.
+- 응답의 `events`, `resolved_effects`, `memories`, `agent_statuses`는 해당 Tick의 저장 snapshot이다. WS 발행은 commit 성공 후 이 저장값을 사용한다.
+- TODO(#101/#105): Event Master/Magic 및 Resolver 결과를 이 입력 계약에 연결하고, lease/fence 검증·Tick 진행·WS 발행을 상위 통합 경계에서 수행한다. Task 3은 Scheduler/Runtime 선택 로직을 변경하지 않는다.
+
+#### 호출 순서 및 검증 증적 (2026-08-27)
+
+1. 상위 Commit 경계에서 lease/fence 검증 후 `persist_event_batch(session, EventBatch(...))` 호출.
+2. `tick_number`는 DB의 `current_tick + 1`. State는 아직 적용하지 않은 확정 delta를 전달한다. 기존 `evaluate_and_apply_policy`와 같은 delta를 두 번 적용하지 않는다.
+3. 같은 transaction 안에서 나머지 Runtime/Relationship 저장과 `current_tick` 진행 후 commit. 어느 단계든 예외면 전체 rollback.
+4. 성공 후 새 Session에서 `get_event_result`를 읽어 WS에 전달. 반환 payload를 commit 전에 외부로 발행하지 않는다.
+
+Event ID는 배치에 저장할 신규 Event UUID이며, 기존 fixture Event 행을 덮어쓰지 않는다. 지속 일정을 재사용하는 상위 로직은 해당 Tick의 발생 Event를 별도로 식별해야 한다.
+`missing_agent_ids`는 Policy/Resolver가 승인한 실종 대상만 전달하며, STUDENT_MISSING 참여자 중 Student여야 한다. 저장 계층은 발생 조건을 재계산하지 않는다.
+만료 상태는 Commit 시점에 저장된다. Task 5는 동일 만료 규칙을 Runtime 대상 선정용 snapshot에도 반영해야 하며, Task 3만으로 해당 선정 로직이 연결되지는 않는다.
+
+검증 환경: 개발 DB와 분리된 로컬 PostgreSQL `magic_academy_slice5_task3`.
+
+- `alembic upgrade head`: 빈 DB부터 `20260827_0103`까지 성공.
+- `alembic check`: 모델/migration drift 없음.
+- `pytest -q -p no:cacheprovider tests/test_event_persistence.py tests/test_schema_models.py`: 21 passed.
+- DB 환경변수 없이 전체 `pytest -q -p no:cacheprovider`: 229 passed, 65 skipped (DB 연동 테스트 등; 전체 DB 검증 완료를 의미하지 않음).
+- 신규 PostgreSQL 검증: 실제 JWT REST 조회·401/403/404, 동일 입력 재시도, 동시 transaction, State stale 및 타 Simulation 참조 거부, Memory 10개 제한, repository 실패·DB 제약 실패·후속 단계 실패 rollback, 실종/저주 만료.
+- migration downgrade는 실행하지 않음. Task 1/5 연결·WS 정합성 및 Slice 5 E2E/PASS는 미검증.
+
 ---
 
 ## 6. Tick 10 E2E 검증 시나리오 및 완료 기준
