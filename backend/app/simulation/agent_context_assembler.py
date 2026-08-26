@@ -20,6 +20,7 @@ class AgentContextAssembler:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agent_id: UUID,
         fixture_key: str,
@@ -39,6 +40,7 @@ class AgentContextAssembler:
         return AgentRuntimeInput(
             run_id=run_id,
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agent=AgentContext(
                 agent_id=agent_id,

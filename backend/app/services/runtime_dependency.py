@@ -1,6 +1,11 @@
+from collections.abc import Callable
+
 from app.core.config import Settings, get_settings
+from app.repositories.memory_repository import MemoryRepository
 from app.simulation.agent_runtime import AgentRuntime
 from app.simulation.anthropic_llm_client import AnthropicLLMClient
+from app.simulation.policy import engine as policy_engine
+from app.simulation.policy.models import PolicyEvaluationInput, PolicyEvaluationResult
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -23,3 +28,13 @@ def create_agent_runtime(settings: Settings) -> AgentRuntime:
 
 def get_agent_runtime() -> AgentRuntime:
     return create_agent_runtime(get_settings())
+
+
+def get_policy_evaluator() -> Callable[
+    [PolicyEvaluationInput], PolicyEvaluationResult
+]:
+    return policy_engine.evaluate_policy
+
+
+def get_memory_repository() -> MemoryRepository:
+    return MemoryRepository()

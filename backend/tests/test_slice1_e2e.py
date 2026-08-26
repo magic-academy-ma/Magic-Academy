@@ -75,6 +75,7 @@ def test_slice_one_full_vertical_flow(client):
         Event,
         EventParticipant,
         Relationship,
+        RuntimeExecution,
         RuntimeResult,
         Simulation,
     )
@@ -99,7 +100,11 @@ def test_slice_one_full_vertical_flow(client):
         1,
     )
     assert body["status"] == "COMPLETED"
-    assert body["retrieved_memories"] == []
+    assert len(body["retrieved_memories"]) == 6
+    assert all(
+        item["memory_ids_passed"] == [] and item["memories"] == []
+        for item in body["retrieved_memories"]
+    )
     assert "runtime_outputs" not in body
     assert "participant_ids" not in body
     assert {result["runtime_status"] for result in body["agent_results"]} <= {
@@ -137,6 +142,10 @@ def test_slice_one_full_vertical_flow(client):
         )
         assert {fixtures_by_id[result.agent_id] for result in stored} == {
             "student-01",
+            "student-02",
+            "student-03",
+            "student-04",
+            "student-05",
             "professor-01",
         }
         run_ids = {result.run_id for result in stored}
@@ -150,6 +159,15 @@ def test_slice_one_full_vertical_flow(client):
             for result in stored
         )
         assert {result.model for result in stored} == {"test-runtime-override"}
+        execution = db.scalar(
+            select(RuntimeExecution).where(RuntimeExecution.run_id == stored_run_id)
+        )
+        assert execution.simulation_id == simulation_uuid
+        assert execution.tick_number == 1
+        assert execution.seed >= 0
+        assert execution.model == "test-runtime-override"
+        assert execution.prompt_version == "agent-runtime-10.1"
+        assert execution.policy_version == "policy-mvp-0.1"
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
@@ -166,12 +184,12 @@ def test_slice_one_full_vertical_flow(client):
         inspected_agent_id = stored[0].agent_id
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
-        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
-        assert len(body["state_deltas"]) == 2
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 6
+        assert len(body["state_deltas"]) == 6
         assert {
             (delta["metric"], delta["delta"], delta["after"])
             for delta in body["state_deltas"]
-        } == {("fatigue", 2, 17)}
+        } == {("fatigue", 2, 17), ("fatigue", 2, 22), ("fatigue", 2, 12)}
         states = list(
             db.scalars(
                 select(AgentState).where(AgentState.agent_id.in_(participant_ids))
@@ -205,9 +223,14 @@ def test_slice_two_policy_applies_directional_relationship_delta(client, monkeyp
 
     def generate_relationship_signal(self, runtime_input):
         response = original_generate(self, runtime_input)
+        participant_ids = runtime_input.events[0].participant_agent_ids
+        if runtime_input.agent.agent_id not in participant_ids:
+            # Non-participants still receive the shared world snapshot; only the
+            # actual Event participant reacts to the other participant.
+            return response
         target_agent_id = next(
             agent_id
-            for agent_id in runtime_input.events[0].participant_agent_ids
+            for agent_id in participant_ids
             if agent_id != runtime_input.agent.agent_id
         )
         response["reaction"]["relationship_signals"] = [
@@ -276,7 +299,7 @@ def test_other_user_cannot_advance_owned_simulation(client):
 
 
 def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
-    from app.domain.models import RuntimeResult, Simulation
+    from app.domain.models import RuntimeExecution, RuntimeResult, Simulation
     from app.services.simulation_tick import SimulationTickService
 
     test_client, session_factory = client
@@ -298,6 +321,7 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
         simulation = db.get(Simulation, UUID(simulation_id))
         assert simulation.current_tick == 0
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+        assert db.scalar(select(func.count()).select_from(RuntimeExecution)) == 0
 
     monkeypatch.setattr(SimulationTickService, "run_runtime_phase", original)
     retry = test_client.post(
@@ -306,9 +330,11 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
     assert retry.status_code == 200
     with session_factory() as db:
         saved_run_ids = set(db.scalars(select(RuntimeResult.run_id)))
+        execution_run_ids = set(db.scalars(select(RuntimeExecution.run_id)))
     assert len(failed_run_ids) == 1
     assert len(saved_run_ids) == 1
     assert failed_run_ids[0] not in saved_run_ids
+    assert execution_run_ids == saved_run_ids
 
 
 def test_policy_changes_and_runtime_results_roll_back_together(client, monkeypatch):
@@ -384,6 +410,72 @@ def test_consecutive_ticks_use_distinct_batch_run_ids(client):
     assert all(simulation_id not in run_ids for run_ids in run_ids_by_tick.values())
 
 
+def test_same_seed_reaches_runtime_and_matches_execution_metadata(client):
+    from app.domain.models import RuntimeExecution, Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    class DeterministicSeedLLM(MockLLMClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.received_seeds = []
+
+        def generate(self, runtime_input):
+            self.received_seeds.append(runtime_input.seed)
+            response = super().generate(runtime_input)
+            response["motivation_summary"] = f"seed-result-{runtime_input.seed % 7}"
+            return response
+
+    test_client, session_factory = client
+    first_id, headers = register_login_create(test_client)
+    second = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Same Seed Run"}
+    )
+    assert second.status_code == 201
+    simulation_ids = [first_id, second.json()["id"]]
+    fake_llm = DeterministicSeedLLM()
+    runtime = AgentRuntime(fake_llm, model="deterministic-seed-runtime")
+    normalized_results = []
+
+    for simulation_id in simulation_ids:
+        with session_factory() as db:
+            simulation = db.get(Simulation, UUID(simulation_id))
+            result = asyncio.run(
+                advance_manual_tick(db, simulation, runtime=runtime, seed=4242)
+            )
+            normalized_results.append(
+                [
+                    (
+                        runtime_result.intent.action_type,
+                        runtime_result.intent.motivation_summary,
+                    )
+                    for runtime_result in result.runtime_results
+                ]
+            )
+            db.commit()
+
+    with session_factory() as db:
+        executions = list(
+            db.scalars(
+                select(RuntimeExecution)
+                .where(
+                    RuntimeExecution.simulation_id.in_(
+                        [UUID(value) for value in simulation_ids]
+                    )
+                )
+                .order_by(RuntimeExecution.simulation_id)
+            )
+        )
+
+    assert normalized_results[0] == normalized_results[1]
+    assert fake_llm.received_seeds == [4242] * 12
+    assert len({execution.run_id for execution in executions}) == 2
+    assert {execution.seed for execution in executions} == {4242}
+    assert {execution.model for execution in executions} == {
+        "deterministic-seed-runtime"
+    }
+
+
 def test_concurrent_tick_returns_immediate_conflict(client, monkeypatch):
     from app.simulation.agent_runtime import AgentRuntime
 
@@ -457,12 +549,16 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
     assert calls == {"engine": 1, "runtime_phase": 1, "save_batch": 1}
     assert {result["agent_name"] for result in response.json()["agent_results"]} == {
         "아델",
+        "레오",
+        "리아",
+        "카이",
+        "세라",
         "에단",
     }
 
 
 def test_manual_tick_preserves_tick_engine_policy_extension(client):
-    from app.domain.models import Simulation
+    from app.domain.models import RuntimeExecution, Simulation
     from app.services.manual_tick import advance_manual_tick
     from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
@@ -481,11 +577,182 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
                 simulation,
                 runtime=AgentRuntime(MockLLMClient(), model="test-direct-runtime"),
                 policy=policy,
+                policy_version="policy-test-2.0",
             )
         )
         db.commit()
 
-    assert len(received_policy_inputs) == len(result.runtime_results) == 2
+        execution = db.scalar(
+            select(RuntimeExecution).where(
+                RuntimeExecution.simulation_id == UUID(simulation_id)
+            )
+        )
+
+    assert len(received_policy_inputs) == len(result.runtime_results) == 6
+    assert execution.policy_version == "policy-test-2.0"
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results
     }
+
+
+def test_manual_tick_rejects_policy_version_mismatch(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    async def policy(_inputs):
+        return None
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        with pytest.raises(ValueError, match="policy and policy_version"):
+            asyncio.run(
+                advance_manual_tick(
+                    db,
+                    simulation,
+                    runtime=AgentRuntime(MockLLMClient()),
+                    policy=policy,
+                )
+            )
+        with pytest.raises(ValueError, match="policy and policy_version"):
+            asyncio.run(
+                advance_manual_tick(
+                    db,
+                    simulation,
+                    runtime=AgentRuntime(MockLLMClient()),
+                    policy_version="policy-test-2.0",
+                )
+            )
+
+
+def test_manual_tick_wires_memory_retriever_when_provided(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    retrieved_calls = []
+
+    async def fake_retriever(agent_id, current_tick, query_text):
+        retrieved_calls.append((agent_id, current_tick, query_text))
+        return []
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_retriever=fake_retriever,
+            )
+        )
+        db.commit()
+
+    assert len(retrieved_calls) == len(result.runtime_results) == 6
+    assert {agent_id for agent_id, _, _ in retrieved_calls} == set(
+        result.retrieval_traces.keys()
+    )
+
+
+def test_manual_tick_stores_memory_with_executed_tick(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    stored_ticks = []
+
+    async def fake_store(agent_id, event_id, candidate, tick):
+        stored_ticks.append(tick)
+        return f"memory-{agent_id}"
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_store=fake_store,
+            )
+        )
+        db.commit()
+
+    assert stored_ticks == [result.current_tick] * len(result.runtime_results)
+
+
+def test_manual_tick_reinjects_tick_n_memory_into_tick_n_plus_one_runtime(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+    from app.simulation.tick_engine import MemoryItem
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    memories_by_agent = {}
+    runtime_inputs = []
+    mock_client = MockLLMClient()
+
+    class RecordingLLMClient:
+        def generate(self, runtime_input):
+            runtime_inputs.append(runtime_input)
+            return mock_client.generate(runtime_input)
+
+    async def store(agent_id, event_id, candidate, tick):
+        memory = MemoryItem(
+            id=f"{agent_id}:{tick}",
+            content=candidate.content,
+            memory_type=candidate.memory_type,
+            importance=candidate.importance,
+            created_tick=tick,
+            event_id=event_id,
+        )
+        memories_by_agent.setdefault(agent_id, []).append(memory)
+        return memory.id
+
+    async def retrieve(agent_id, current_tick, _query_text):
+        return [
+            memory
+            for memory in memories_by_agent.get(agent_id, [])
+            if memory.created_tick < current_tick
+        ]
+
+    runtime = AgentRuntime(RecordingLLMClient(), model="test-memory-reinjection")
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        first = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+        second = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+
+    assert (first.current_tick, second.current_tick) == (1, 2)
+    assert all(second.retrieval_traces.values())
+    second_tick_inputs = [item for item in runtime_inputs if item.tick_number == 2]
+    assert len(second_tick_inputs) == len(second.runtime_results) == 6
+    assert all(item.memories for item in second_tick_inputs)
+    assert {
+        memory["created_tick"]
+        for item in second_tick_inputs
+        for memory in item.memories
+    } == {1}

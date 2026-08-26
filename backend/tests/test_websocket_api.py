@@ -92,9 +92,14 @@ def test_tick_broadcasts_committed_relationship_matching_rest(
 
     def generate_relationship_signal(self, runtime_input):
         response = original_generate(self, runtime_input)
+        participant_ids = runtime_input.events[0].participant_agent_ids
+        if runtime_input.agent.agent_id not in participant_ids:
+            # Non-participants still receive the shared world snapshot; only the
+            # actual Event participant reacts to the other participant.
+            return response
         target_agent_id = next(
             agent_id
-            for agent_id in runtime_input.events[0].participant_agent_ids
+            for agent_id in participant_ids
             if agent_id != runtime_input.agent.agent_id
         )
         response["reaction"]["relationship_signals"] = [
@@ -126,7 +131,8 @@ def test_tick_broadcasts_committed_relationship_matching_rest(
                 "tick_number": 1,
             },
         }
-        action_events = [websocket.receive_json(), websocket.receive_json()]
+        # All 5 Students + the conditional Professor run every Tick.
+        action_events = [websocket.receive_json() for _ in range(6)]
         assert {event["type"] for event in action_events} == {
             "AGENT_ACTION_UPDATED"
         }
