@@ -17,6 +17,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture()
 def api_client():
+    """Provide the real API with an isolated PostgreSQL DB and mock LLM."""
     from app.core.database import get_db
     from app.main import app
     from app.services.runtime_dependency import get_agent_runtime
@@ -32,6 +33,7 @@ def api_client():
         )
 
     def override_db():
+        """Give each API request its own session on the test database."""
         with session_factory() as session:
             yield session
 
@@ -48,6 +50,7 @@ def api_client():
 
 
 def register_login_create(client: TestClient) -> tuple[UUID, dict[str, str]]:
+    """Create an authenticated owner and Simulation through the public API."""
     credentials = {
         "username": "slice4-persistence-owner",
         "display_name": "Slice 4 Persistence",
@@ -92,6 +95,7 @@ def world_snapshot(session: Session, simulation_id: UUID) -> tuple[tuple, ...]:
 
 
 def seed_rollback_rows(session: Session, simulation_id: UUID) -> None:
+    """Persist baseline Memory and Relationship rows before failure tests."""
     from app.domain.models import Agent, AgentMemory, Relationship
 
     agents = list(
@@ -133,6 +137,7 @@ def seed_rollback_rows(session: Session, simulation_id: UUID) -> None:
 
 
 def persistence_snapshot(session: Session, simulation_id: UUID) -> dict:
+    """Capture tick position and persisted data for rollback comparisons."""
     from app.domain.models import (
         AgentMemory,
         Relationship,
@@ -186,6 +191,7 @@ def persistence_snapshot(session: Session, simulation_id: UUID) -> dict:
 def test_runtime_batch_failure_preserves_tick_and_db_world_snapshot(
     api_client, monkeypatch
 ) -> None:
+    """Verify a Runtime failure leaves the pre-Tick database state intact."""
     from app.main import app
     from app.services.runtime_dependency import get_agent_runtime
     from app.simulation.tick_engine import RuntimeExecutionError
@@ -197,7 +203,10 @@ def test_runtime_batch_failure_preserves_tick_and_db_world_snapshot(
         before = persistence_snapshot(session, simulation_id)
 
     class FailingRuntime:
+        """Runtime stub that fails before returning a batch result."""
+
         def run(self, _runtime_input):
+            """Raise a deterministic Runtime error for the rollback test."""
             raise RuntimeExecutionError("runtime batch failed")
 
     app.dependency_overrides[get_agent_runtime] = lambda: FailingRuntime()
@@ -213,6 +222,7 @@ def test_runtime_batch_failure_preserves_tick_and_db_world_snapshot(
 def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
     api_client, monkeypatch
 ) -> None:
+    """Verify metadata-boundary failure rolls back all staged persistence."""
     from app.domain.models import AgentMemory, AgentState, Relationship
     from app.api import ticks
     from app.services import manual_tick
@@ -227,7 +237,9 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
     original_advance = manual_tick.advance_manual_tick
 
     async def advance_with_policy(session, simulation, *, runtime):
+        """Supply known execution metadata without changing production wiring."""
         async def policy(_inputs):
+            """Complete the test Policy phase without producing deltas."""
             return None
 
         return await original_advance(
@@ -240,6 +252,7 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
         )
 
     def fail_after_all_tick_writes(session, metadata):
+        """Flush metadata and related writes, then fail before tick advancement."""
         assert metadata.seed == 4242
         assert metadata.model == "slice4-persistence-model"
         assert metadata.prompt_version == "slice4-persistence-prompt-v1"
@@ -291,6 +304,7 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
 def test_failure_after_tick_flush_restores_tick_position_and_persistence(
     api_client, monkeypatch
 ) -> None:
+    """Verify API rollback restores flushed tick and day changes and records."""
     from app.api import ticks
     from app.domain.models import Simulation
     from app.services.manual_tick import advance_manual_tick
@@ -308,6 +322,7 @@ def test_failure_after_tick_flush_restores_tick_position_and_persistence(
     observed = {}
 
     async def fail_after_tick_flush(session, simulation, *, runtime):
+        """Capture completed Tick writes before forcing the API to roll back."""
         await advance_manual_tick(session, simulation, runtime=runtime)
         # Read the flushed DB values, not only the ORM identity-map values.
         session.refresh(simulation)
@@ -332,6 +347,7 @@ def test_failure_after_tick_flush_restores_tick_position_and_persistence(
 def test_persona_start_and_execution_metadata_persist_through_api_to_db(
     api_client,
 ) -> None:
+    """Verify Persona locking and execution records through the API to DB."""
     from app.domain.models import (
         Agent,
         RuntimeExecution,
