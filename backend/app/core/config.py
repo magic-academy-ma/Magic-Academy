@@ -28,7 +28,6 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
     anthropic_api_key: str | None = None
-    openai_api_key: str | None = None
     agent_runtime_model: str = "claude-haiku-4-5-20251001"
     agent_runtime_max_tokens: int = Field(default=4096, gt=0)
 
