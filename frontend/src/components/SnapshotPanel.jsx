@@ -2,18 +2,16 @@
 //
 // 시점(Tick) 선택 → Snapshot 조회(읽기 전용) → 복원.
 //
-// ⚠️ 복원(restore)은 백엔드 구현 기준으로 처리한다: 원본 Simulation을
-// 제자리에서 갱신하지 않고 새 Simulation(브랜치)을 생성해 반환하므로,
-// 복원 성공 시 반환된 새 id로 이동해야 한다. (API 명세 문서상 "제자리 갱신"
-// 설명과 다름 — 팀 결정에 따라 백엔드 구현을 기준으로 함)
-//
-// onRestored(newSimulationId)로 실제 라우팅은 상위(App)에 위임한다.
+// 복원(restore)은 백엔드 구현(SimulationSnapshotService.restore_snapshot) 기준으로
+// 처리한다: 새 Simulation을 생성하지 않고, 선택한 시점의 저장된 payload를
+// 읽기 전용으로 반환한다. 새 Simulation으로 이동하지 않고, 반환된 payload를
+// 그대로 이 화면에 표시한다. Runtime/LLM/Tick은 다시 실행되지 않는다.
 
 import { useState } from "react";
 import { getSnapshot, restoreSnapshot } from "../api/simulationHistory.js";
 import ErrorMessage from "./ErrorMessage";
 
-export default function SnapshotPanel({ token, simulationId, onRestored }) {
+export default function SnapshotPanel({ token, simulationId }) {
   const [tickInput, setTickInput] = useState("");
 
   const [viewLoading, setViewLoading] = useState(false);
@@ -22,7 +20,7 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
 
   const [confirming, setConfirming] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
-  const [restoreDone, setRestoreDone] = useState(false);
+  const [restoredPayload, setRestoredPayload] = useState(null);
   const [restoreError, setRestoreError] = useState(null);
 
   async function handleView(event) {
@@ -31,7 +29,7 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
 
     setSnapshot(null);
     setConfirming(false);
-    setRestoreDone(false);
+    setRestoredPayload(null);
     setRestoreError(null);
 
     if (!Number.isInteger(tickNumber) || tickNumber < 0) {
@@ -60,10 +58,9 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
         simulationId,
         snapshot.snapshot_id ?? snapshot.tick_number
       );
-      setRestoreDone(true);
+      // 새 Simulation을 생성하지 않는다 — 반환된 payload를 그대로 표시한다.
+      setRestoredPayload(result);
       setConfirming(false);
-      // 백엔드가 새 Simulation을 생성하므로, 결과의 id로 이동을 위임한다.
-      onRestored?.(result.id);
     } catch (requestError) {
       setRestoreError(requestError);
     } finally {
@@ -99,7 +96,7 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
             Event {snapshot.events?.length ?? 0}건
           </p>
 
-          {!confirming && !restoreDone && (
+          {!confirming && !restoredPayload && (
             <button type="button" onClick={() => setConfirming(true)}>
               이 시점으로 복원
             </button>
@@ -108,7 +105,7 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
           {confirming && (
             <div role="alertdialog" aria-labelledby="restore-confirm-title" className="restore-confirm">
               <p id="restore-confirm-title">
-                이 시점을 기반으로 새 시뮬레이션이 생성됩니다. 계속할까요?
+                이 시점의 저장 상태를 복원합니다. 계속할까요?
               </p>
               <button type="button" onClick={handleConfirmRestore} disabled={restoreLoading}>
                 {restoreLoading ? "복원 중..." : "복원 확인"}
@@ -119,9 +116,9 @@ export default function SnapshotPanel({ token, simulationId, onRestored }) {
             </div>
           )}
 
-          {restoreDone && (
+          {restoredPayload && (
             <p className="message" role="status">
-              새 시뮬레이션이 생성되었습니다. 이동합니다...
+              선택한 시점(Tick {snapshot.tick_number})의 저장 상태가 복원되었습니다.
             </p>
           )}
 

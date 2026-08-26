@@ -14,7 +14,7 @@ import { apiRequest } from "./client.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Draft 상태 Simulation의 초기 파라미터 전체 저장/변경.
+ * ready 상태 Simulation의 초기 파라미터 전체 저장/변경.
  * PUT /simulations/{simulation_id}/parameters
  */
 export async function saveDraftConfig(token, simulationId, config) {
@@ -61,11 +61,10 @@ export async function getSnapshot(token, simulationId, tickNumber) {
 /**
  * 저장본 복원.
  *
- * ⚠️ 백엔드 구현(SimulationSnapshotService.restore_as_branch) 기준:
- * 원본 Simulation을 제자리에서 갱신하지 않고, origin_simulation_id /
- * origin_snapshot_id로 원본을 참조하는 새 Simulation을 생성해 반환한다.
- * 호출 측(컴포넌트)에서는 응답의 id를 원본과 동일하다고 가정하지 말고,
- * 반환된 새 id로 이동(navigate)해야 한다.
+ * 백엔드 구현(SimulationSnapshotService.restore_snapshot) 기준: 새 Simulation을
+ * 생성하지 않고, 선택한 시점의 저장된 payload를 읽기 전용으로 반환한다.
+ * 호출 측(컴포넌트)에서는 새 Simulation id로 이동(navigate)하지 말고,
+ * 반환된 payload를 그대로 화면에 표시해야 한다.
  *
  * POST /simulations/{simulation_id}/restore
  */

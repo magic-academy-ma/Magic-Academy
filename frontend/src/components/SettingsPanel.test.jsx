@@ -16,14 +16,14 @@ afterEach(() => {
 });
 
 describe("SettingsPanel", () => {
-  it("draft 상태에서 저장 시 PUT 요청을 보내고 성공 메시지를 표시한다", async () => {
+  it("ready 상태에서 저장 시 PUT 요청을 보내고 성공 메시지를 표시한다", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementationOnce((url, options) => {
       // Expect a PUT to parameters endpoint
       expect(options?.method).toBe("PUT");
       return response({ data: { changed_at: "2026-08-24T00:00:00Z" } });
     });
 
-    render(<SettingsPanel token="tok" simulationId="sim_01" simulationStatus="draft" />);
+    render(<SettingsPanel token="tok" simulationId="sim_01" simulationStatus="ready" />);
     await userEvent.click(screen.getByRole("button", { name: "설정 저장" }));
 
     expect(await screen.findByText(/설정이 저장되었습니다/)).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("SettingsPanel", () => {
       response({ error: { code: "BUSINESS_RULE_VIOLATION", message: "허용 범위 초과" } }, 422)
     );
 
-    render(<SettingsPanel token="tok" simulationId="sim_01" simulationStatus="draft" />);
+    render(<SettingsPanel token="tok" simulationId="sim_01" simulationStatus="ready" />);
     await userEvent.click(screen.getByRole("button", { name: "설정 저장" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("허용 범위 초과");

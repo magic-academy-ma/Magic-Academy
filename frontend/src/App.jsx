@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { apiRequest } from "./api/client.js";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import ReplayPanel from "./components/ReplayPanel.jsx";
+import SnapshotPanel from "./components/SnapshotPanel.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -95,6 +98,7 @@ export default function App() {
   const [tickError, setTickError] = useState(null); // { type, message }
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
+  const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
   function resetSession(notice = "") {
     setAuth(null);
     setSimulation(null);
@@ -104,6 +108,7 @@ export default function App() {
     setTickResult(null);
     setTickError(null);
     setAuthNotice(notice);
+    setManagementView(null);
   }
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
@@ -294,6 +299,47 @@ export default function App() {
 										</ul>
                   )}
                 </div>
+              )}
+            </div>
+
+            <div className="panel management-panel">
+              <h2>관리</h2>
+              <div className="management-tabs">
+                <button
+                  type="button"
+                  aria-pressed={managementView === "settings"}
+                  onClick={() => setManagementView("settings")}
+                >
+                  설정
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "replay"}
+                  onClick={() => setManagementView("replay")}
+                >
+                  Replay
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "snapshot"}
+                  onClick={() => setManagementView("snapshot")}
+                >
+                  Snapshot
+                </button>
+              </div>
+
+              {managementView === "settings" && (
+                <SettingsPanel
+                  token={auth.access_token}
+                  simulationId={simulation.id}
+                  simulationStatus={simulation.status}
+                />
+              )}
+              {managementView === "replay" && (
+                <ReplayPanel token={auth.access_token} simulationId={simulation.id} />
+              )}
+              {managementView === "snapshot" && (
+                <SnapshotPanel token={auth.access_token} simulationId={simulation.id} />
               )}
             </div>
           </section>

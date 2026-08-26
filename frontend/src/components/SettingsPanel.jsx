@@ -1,7 +1,7 @@
 // frontend/src/components/SettingsPanel.jsx
 //
 // 설정 저장·변경 화면.
-// Draft 상태 → saveDraftConfig (PUT, 전체 파라미터)
+// ready 상태 (초기 설정 가능 상태) → saveDraftConfig (PUT, 전체 파라미터)
 // RUNNING/PAUSED 상태 → updateRunningConfig (PATCH, event_frequency/impact만)
 //
 // App.jsx 컨벤션에 맞춰 token은 상위(App)에서 auth.access_token으로 전달받는다.
@@ -14,7 +14,7 @@ const LEVELS = ["low", "medium", "high"];
 
 export default function SettingsPanel({ token, simulationId, simulationStatus }) {
   const status = (simulationStatus || "").toLowerCase();
-  const isDraft = status === "draft";
+  const isReady = status === "ready";
   const isRunningOrPaused = status === "running" || status === "paused";
 
   const [eventFrequency, setEventFrequency] = useState("medium");
@@ -32,7 +32,7 @@ export default function SettingsPanel({ token, simulationId, simulationStatus })
     setSavedAt(null);
 
     try {
-      if (isDraft) {
+      if (isReady) {
         const result = await saveDraftConfig(token, simulationId, {
           event_frequency: eventFrequency,
           event_impact: eventImpact,
@@ -53,7 +53,7 @@ export default function SettingsPanel({ token, simulationId, simulationStatus })
     }
   }
 
-  const canSubmit = isDraft || isRunningOrPaused;
+  const canSubmit = isReady || isRunningOrPaused;
 
   return (
     <section className="panel settings-panel" aria-labelledby="settings-panel-title">
@@ -88,7 +88,7 @@ export default function SettingsPanel({ token, simulationId, simulationStatus })
           </select>
         </label>
 
-        {isDraft && (
+        {isReady && (
           <label>
             <input
               type="checkbox"
