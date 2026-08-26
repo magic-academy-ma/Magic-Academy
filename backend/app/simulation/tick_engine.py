@@ -139,6 +139,12 @@ class TickEngine:
         if simulation_id in self._running:
             raise TickConflictError(f"Tick is already running for simulation {simulation_id}")
 
+        # Replay mode must block Tick execution at this entry boundary — before
+        # participant selection, Memory query, or Runtime invocation — regardless
+        # of whether participants exist.
+        assert_not_replay("Tick execution attempted during replay")
+        increment_tick()
+
         self._running.add(simulation_id)
         try:
             participants = self._select_participants(
@@ -156,15 +162,8 @@ class TickEngine:
                     retrieval_traces[agent.id] = [m.id for m in memories]
                 snapshot.data["memories"] = all_memories
 
-            # Prevent runtime invocation and tick creation during replay, and instrument when allowed
-            from app.simulation.replay_guard import assert_not_replay
-
             runtime_outputs: dict[str, AgentRuntimeResult] = {}
             if participants:
-                # If replay mode is active, abort before creating or running ticks
-                assert_not_replay("Runtime invocation attempted during replay")
-                # instrument tick and runtime only when not in replay
-                increment_tick()
                 increment_runtime()
                 runtime_outputs = await self._runtime(participants, event, snapshot)
 
