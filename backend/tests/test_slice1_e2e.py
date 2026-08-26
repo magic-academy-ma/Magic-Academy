@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event as ThreadEvent
 from uuid import UUID
@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
-
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 if os.getenv("CI") == "true" and not TEST_DATABASE_URL:
@@ -27,9 +26,7 @@ def client():
     from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
 
     engine = create_engine(TEST_DATABASE_URL)
-    session_factory = sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -74,8 +71,10 @@ def register_login_create(test_client):
 def test_slice_one_full_vertical_flow(client):
     from app.domain.models import (
         Agent,
+        AgentState,
         Event,
         EventParticipant,
+        Relationship,
         RuntimeExecution,
         RuntimeResult,
         Simulation,
@@ -84,9 +83,10 @@ def test_slice_one_full_vertical_flow(client):
     test_client, session_factory = client
     simulation_id, headers = register_login_create(test_client)
 
-    assert test_client.post(
-        f"/v1/simulations/{simulation_id}/ticks/advance"
-    ).status_code == 401
+    assert (
+        test_client.post(f"/v1/simulations/{simulation_id}/ticks/advance").status_code
+        == 401
+    )
 
     response = test_client.post(
         f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
@@ -112,6 +112,7 @@ def test_slice_one_full_vertical_flow(client):
         "FALLBACK",
         "SKIPPED",
     }
+    assert body["relationship_deltas"] == []
 
     with session_factory() as db:
         simulation_uuid = UUID(simulation_id)
@@ -136,7 +137,9 @@ def test_slice_one_full_vertical_flow(client):
             "student-01",
             "professor-01",
         }
-        stored = list(db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id)))
+        stored = list(
+            db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id))
+        )
         assert {fixtures_by_id[result.agent_id] for result in stored} == {
             "student-01",
             "student-02",
@@ -168,12 +171,111 @@ def test_slice_one_full_vertical_flow(client):
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
+            assert set(result.intent["decision_explanation"]) == {
+                "alternatives",
+                "influencing_factors",
+            }
+            serialized_intent = str(result.intent)
+            for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
+                assert forbidden not in serialized_intent
             api_result = api_by_id[str(result.agent_id)]
             assert api_result["runtime_status"] == result.status
             assert api_result["action_type"] == result.action_type
+        inspected_agent_id = stored[0].agent_id
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
         assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 6
+        assert len(body["state_deltas"]) == 6
+        assert {
+            (delta["metric"], delta["delta"], delta["after"])
+            for delta in body["state_deltas"]
+        } == {("fatigue", 2, 17), ("fatigue", 2, 22), ("fatigue", 2, 12)}
+        states = list(
+            db.scalars(
+                select(AgentState).where(AgentState.agent_id.in_(participant_ids))
+            )
+        )
+        assert {state.fatigue for state in states} == {17}
+        assert db.scalar(select(func.count()).select_from(Relationship)) == 0
+
+    explanation = test_client.get(
+        f"/v1/agents/{inspected_agent_id}/decision-explanation?tick=1",
+        headers=headers,
+    )
+    assert explanation.status_code == 200
+    assert set(explanation.json()) == {
+        "agent_id",
+        "tick",
+        "alternatives",
+        "influencing_factors",
+    }
+    for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
+        assert forbidden not in explanation.text
+
+
+def test_slice_two_policy_applies_directional_relationship_delta(client, monkeypatch):
+    from app.domain.models import Agent, Relationship
+    from app.simulation.agent_runtime import MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+    original_generate = MockLLMClient.generate
+
+    def generate_relationship_signal(self, runtime_input):
+        response = original_generate(self, runtime_input)
+        participant_ids = runtime_input.events[0].participant_agent_ids
+        if runtime_input.agent.agent_id not in participant_ids:
+            # Non-participants still receive the shared world snapshot; only the
+            # actual Event participant reacts to the other participant.
+            return response
+        target_agent_id = next(
+            agent_id
+            for agent_id in participant_ids
+            if agent_id != runtime_input.agent.agent_id
+        )
+        response["reaction"]["relationship_signals"] = [
+            {
+                "signal_type": "TRUST_UP",
+                "intensity": "MEDIUM",
+                "target_agent_id": str(target_agent_id),
+            }
+        ]
+        return response
+
+    monkeypatch.setattr(MockLLMClient, "generate", generate_relationship_signal)
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    deltas = response.json()["relationship_deltas"]
+    assert len(deltas) == 2
+    assert {(delta["metric"], delta["delta"]) for delta in deltas} == {("trust", 3)}
+
+    with session_factory() as db:
+        agents = list(
+            db.scalars(select(Agent).where(Agent.simulation_id == UUID(simulation_id)))
+        )
+        participants = {
+            agent.id
+            for agent in agents
+            if agent.fixture_key in {"student-01", "professor-01"}
+        }
+        relationships = list(db.scalars(select(Relationship)))
+        assert len(relationships) == 2
+        assert {
+            (
+                relationship.source_agent_id,
+                relationship.target_agent_id,
+                relationship.trust,
+            )
+            for relationship in relationships
+        } == {
+            (source, target, 3)
+            for source in participants
+            for target in participants
+            if source != target
+        }
 
 
 def test_other_user_cannot_advance_owned_simulation(client):
@@ -235,6 +337,45 @@ def test_runtime_results_and_tick_roll_back_together(client, monkeypatch):
     assert execution_run_ids == saved_run_ids
 
 
+def test_policy_changes_and_runtime_results_roll_back_together(client, monkeypatch):
+    from app.domain.models import Agent, AgentState, RuntimeResult, Simulation
+    from app.services import manual_tick
+
+    test_client, session_factory = client
+    simulation_id, headers = register_login_create(test_client)
+    original = manual_tick.evaluate_and_apply_policy
+
+    def fail_after_policy(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("commit boundary failed")
+
+    monkeypatch.setattr(manual_tick, "evaluate_and_apply_policy", fail_after_policy)
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 500
+    with session_factory() as db:
+        simulation_uuid = UUID(simulation_id)
+        simulation = db.get(Simulation, simulation_uuid)
+        participant_ids = set(
+            db.scalars(
+                select(Agent.id).where(
+                    Agent.simulation_id == simulation_uuid,
+                    Agent.fixture_key.in_(("student-01", "professor-01")),
+                )
+            )
+        )
+        states = list(
+            db.scalars(
+                select(AgentState).where(AgentState.agent_id.in_(participant_ids))
+            )
+        )
+        assert simulation.current_tick == 0
+        assert {state.fatigue for state in states} == {15}
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 0
+
+
 def test_consecutive_ticks_use_distinct_batch_run_ids(client):
     from app.domain.models import RuntimeResult
 
@@ -266,9 +407,7 @@ def test_consecutive_ticks_use_distinct_batch_run_ids(client):
     assert set(run_ids_by_tick) == {1, 2}
     assert all(len(run_ids) == 1 for run_ids in run_ids_by_tick.values())
     assert run_ids_by_tick[1] != run_ids_by_tick[2]
-    assert all(
-        simulation_id not in run_ids for run_ids in run_ids_by_tick.values()
-    )
+    assert all(simulation_id not in run_ids for run_ids in run_ids_by_tick.values())
 
 
 def test_same_seed_reaches_runtime_and_matches_execution_metadata(client):
@@ -399,9 +538,7 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
         return original_save_batch(self, *args, **kwargs)
 
     monkeypatch.setattr(TickEngine, "run_tick", count_engine)
-    monkeypatch.setattr(
-        SimulationTickService, "run_runtime_phase", count_runtime_phase
-    )
+    monkeypatch.setattr(SimulationTickService, "run_runtime_phase", count_runtime_phase)
     monkeypatch.setattr(DatabaseRuntimeResultSink, "save_batch", count_save_batch)
 
     response = test_client.post(
@@ -438,9 +575,7 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
             advance_manual_tick(
                 db,
                 simulation,
-                runtime=AgentRuntime(
-                    MockLLMClient(), model="test-direct-runtime"
-                ),
+                runtime=AgentRuntime(MockLLMClient(), model="test-direct-runtime"),
                 policy=policy,
                 policy_version="policy-test-2.0",
             )
@@ -467,7 +602,6 @@ def test_manual_tick_rejects_policy_version_mismatch(client):
 
     test_client, session_factory = client
     simulation_id, _ = register_login_create(test_client)
-
     async def policy(_inputs):
         return None
 
@@ -491,3 +625,134 @@ def test_manual_tick_rejects_policy_version_mismatch(client):
                     policy_version="policy-test-2.0",
                 )
             )
+
+
+def test_manual_tick_wires_memory_retriever_when_provided(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    retrieved_calls = []
+
+    async def fake_retriever(agent_id, current_tick, query_text):
+        retrieved_calls.append((agent_id, current_tick, query_text))
+        return []
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_retriever=fake_retriever,
+            )
+        )
+        db.commit()
+
+    assert len(retrieved_calls) == len(result.runtime_results) == 6
+    assert {agent_id for agent_id, _, _ in retrieved_calls} == set(
+        result.retrieval_traces.keys()
+    )
+
+
+def test_manual_tick_stores_memory_with_executed_tick(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    stored_ticks = []
+
+    async def fake_store(agent_id, event_id, candidate, tick):
+        stored_ticks.append(tick)
+        return f"memory-{agent_id}"
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="test-memory-wiring"),
+                memory_store=fake_store,
+            )
+        )
+        db.commit()
+
+    assert stored_ticks == [result.current_tick] * len(result.runtime_results)
+
+
+def test_manual_tick_reinjects_tick_n_memory_into_tick_n_plus_one_runtime(client):
+    from app.domain.models import Simulation
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+    from app.simulation.tick_engine import MemoryItem
+
+    test_client, session_factory = client
+    simulation_id, _ = register_login_create(test_client)
+    memories_by_agent = {}
+    runtime_inputs = []
+    mock_client = MockLLMClient()
+
+    class RecordingLLMClient:
+        def generate(self, runtime_input):
+            runtime_inputs.append(runtime_input)
+            return mock_client.generate(runtime_input)
+
+    async def store(agent_id, event_id, candidate, tick):
+        memory = MemoryItem(
+            id=f"{agent_id}:{tick}",
+            content=candidate.content,
+            memory_type=candidate.memory_type,
+            importance=candidate.importance,
+            created_tick=tick,
+            event_id=event_id,
+        )
+        memories_by_agent.setdefault(agent_id, []).append(memory)
+        return memory.id
+
+    async def retrieve(agent_id, current_tick, _query_text):
+        return [
+            memory
+            for memory in memories_by_agent.get(agent_id, [])
+            if memory.created_tick < current_tick
+        ]
+
+    runtime = AgentRuntime(RecordingLLMClient(), model="test-memory-reinjection")
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        first = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+        second = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=retrieve,
+                memory_store=store,
+            )
+        )
+        db.commit()
+
+    assert (first.current_tick, second.current_tick) == (1, 2)
+    assert all(second.retrieval_traces.values())
+    second_tick_inputs = [item for item in runtime_inputs if item.tick_number == 2]
+    assert len(second_tick_inputs) == len(second.runtime_results) == 6
+    assert all(item.memories for item in second_tick_inputs)
+    assert {
+        memory["created_tick"]
+        for item in second_tick_inputs
+        for memory in item.memories
+    } == {1}

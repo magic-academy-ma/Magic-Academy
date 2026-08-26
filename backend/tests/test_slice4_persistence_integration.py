@@ -236,7 +236,9 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
     original_record = manual_tick.record_execution_metadata
     original_advance = manual_tick.advance_manual_tick
 
-    async def advance_with_policy(session, simulation, *, runtime):
+    async def advance_with_policy(
+        session, simulation, *, runtime, memory_retriever=None, memory_store=None
+    ):
         """Supply known execution metadata without changing production wiring."""
         async def policy(_inputs):
             """Complete the test Policy phase without producing deltas."""
@@ -248,6 +250,8 @@ def test_metadata_failure_rolls_back_runtime_results_and_tick_writes(
             runtime=runtime,
             policy=policy,
             policy_version="policy-slice4-transaction-v1",
+            memory_retriever=memory_retriever,
+            memory_store=memory_store,
             seed=4242,
         )
 
@@ -326,8 +330,8 @@ def test_failure_after_tick_flush_restores_tick_position_and_persistence(
         simulation,
         *,
         runtime,
-        policy,
-        policy_version,
+        policy=None,
+        policy_version=None,
         memory_retriever,
         memory_store,
     ):

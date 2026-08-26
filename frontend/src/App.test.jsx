@@ -32,7 +32,7 @@ async function setupSimulationWithAgents() {
 
   render(<App />)
   await login()
-  await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+  await completeOnboarding()
   await screen.findByText('Agent 6명')
 
   return fetchMock
@@ -96,18 +96,49 @@ async function login() {
   await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 }
 
+async function completeOnboarding() {
+  await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+  await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
+  await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
+}
+
 describe('Slice 0 UI', () => {
-  it('logs in, creates a simulation, and renders six API agents', async () => {
+  it('logs in, enrolls, completes persona setup, and renders six API agents', async () => {
     createFetchMock()
     render(<App />)
     await login()
-    expect(await screen.findByText('Owner A')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
+    await completeOnboarding()
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
     await userEvent.click(screen.getByRole('button', { name: /아델/ }))
     expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
     expect(screen.getByText('기숙사')).toBeInTheDocument()
+  }, 10000)
+
+  it('shows a disabled loading button while enrolling', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
+      .mockImplementationOnce(() => new Promise(() => {}))
+
+    render(<App />)
+    await login()
+    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+
+    expect(screen.getByRole('button', { name: '입학 중...' })).toBeDisabled()
+  })
+
+  it('shows an inline error when enrollment fails', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
+      .mockImplementationOnce(() => response({}, 500))
+
+    render(<App />)
+    await login()
+    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.')
+    expect(screen.getByRole('button', { name: '입학하기' })).toBeEnabled()
   })
 
   it('shows the basic 401 message', async () => {
@@ -121,7 +152,7 @@ describe('Slice 0 UI', () => {
     createFetchMock({ agents: [() => response([])] })
     render(<App />)
     await login()
-    await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+    await completeOnboarding()
     expect(await screen.findByText('표시할 Agent가 없습니다.')).toBeInTheDocument()
   })
 
@@ -130,9 +161,9 @@ describe('Slice 0 UI', () => {
 
     render(<App />)
     await login()
-    await userEvent.click(screen.getByRole('button', { name: 'Simulation 생성' }))
+    await completeOnboarding()
 
-    expect(await screen.findByRole('heading', { name: simulation.name })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Magic Academy Simulation' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.')
     await userEvent.click(screen.getByRole('button', { name: 'Agent 다시 불러오기' }))
 
@@ -155,14 +186,13 @@ describe('Slice 0 UI', () => {
 
     render(<App />)
     await login()
-    await userEvent.click(document.querySelector('.create-panel button'))
+    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
 
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     await login()
 
-    expect(await screen.findByText('Owner B')).toBeInTheDocument()
-    expect(document.querySelector('.create-panel')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: simulation.name })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Magic Academy Simulation' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
   })
   it('shows loading state while a tick is running', async () => {
@@ -226,6 +256,27 @@ describe('Slice 0 UI', () => {
 
     expect(await screen.findByText('재시도 실패 → Fallback 적용')).toBeInTheDocument()
     expect(screen.getByText('재시도 3회 실패 — 사유: LLM_TIMEOUT')).toBeInTheDocument()
+  })
+
+  it('renders relationship_deltas as delta badges on the relationship graph', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      relationship_deltas: [{
+        effect_id: 'run:1:a:rel:TRUST_UP:b',
+        rule_id: 'REL_TRUST_UP_MEDIUM',
+        source_agent_id: agents[0].id,
+        target_agent_id: agents[1].id,
+        metric: 'trust',
+        delta: 3,
+        before: 0,
+        after_preview: 3,
+        reason: '대화 후 신뢰 상승',
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('관계 변화')).toBeInTheDocument()
   })
 
   it('renders a SKIPPED agent result without action details', async () => {
