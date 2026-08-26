@@ -125,6 +125,23 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
+class SimulationShareCreateRequest(BaseModel):
+    visibility: str = Field(default="private", pattern=r"^(private|unlisted|public)$")
+    export_payload: dict[str, object] | None = None
+
+
+class SimulationShareResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    simulation_id: UUID
+    owner_id: UUID
+    visibility: str
+    export_schema_version: str
+    export_payload: dict[str, object]
+    created_at: datetime
+    updated_at: datetime
+
+
 class AgentProfileResponse(BaseModel):
     openness: int
     conscientiousness: int
