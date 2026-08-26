@@ -6,6 +6,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
+from app.domain.event_persistence import EventBatch, EventWrite, StateDelta
 from app.domain.models import (
     Agent,
     AgentState,
@@ -18,6 +19,7 @@ from app.domain.models import (
 )
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.event_magic_phase import EventAndMagicResult, run_event_and_magic_phase
+from app.services.event_persistence import persist_event_batch
 from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_policy
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
@@ -68,6 +70,7 @@ class ManualTickResult:
     retrieval_traces: dict[str, list[str]]
     retrieved_memories: dict[str, tuple[MemoryItem, ...]]
     event_and_magic_result: EventAndMagicResult
+    event_batch_result: dict
 
 
 def tick_position(tick_number: int) -> tuple[int, Block]:
@@ -306,6 +309,95 @@ def _run_event_and_magic_phase(
     )
 
 
+def _build_event_batch(
+    db: Session,
+    *,
+    simulation_id: UUID,
+    run_id: UUID,
+    tick_number: int,
+    result: EventAndMagicResult,
+) -> EventBatch:
+    """Adapt final Task 1 output to the existing Task 3 commit contract."""
+    event_writes = [
+        EventWrite(
+            id=uuid7(),
+            event_type=event.event_type,
+            event_subtype=event.event_subtype,
+            title=event.title,
+            description=event.description,
+            participant_agent_ids=tuple(
+                UUID(agent_id) for agent_id in event.participant_agent_ids
+            ),
+            location_id=UUID(event.location_id),
+            source="event_master",
+            impact_level=event.impact_level.value,
+            importance=event.importance,
+            expected_effects=event.expected_effects,
+        )
+        for event in result.events
+    ]
+    event_writes.extend(
+        EventWrite(
+            id=uuid7(),
+            event_type=event.event_subtype,
+            title=event.title,
+            description=event.description,
+            participant_agent_ids=tuple(
+                UUID(agent_id) for agent_id in event.participant_agent_ids
+            ),
+            location_id=UUID(event.location_id),
+            source="magic_layer",
+            impact_level="high",
+            importance=80,
+        )
+        for event in result.special_events
+        if event.location_id is not None
+    )
+
+    agent_ids = {UUID(effect.source_agent_id) for effect in result.resolved_effects}
+    states = {
+        state.agent_id: state
+        for state in db.scalars(
+            select(AgentState).where(AgentState.agent_id.in_(agent_ids)).with_for_update()
+        )
+    }
+    state_deltas = []
+    for effect in result.resolved_effects:
+        agent_id = UUID(effect.source_agent_id)
+        state = states[agent_id]
+        before = getattr(state, effect.metric)
+        minimum = -100 if effect.metric == "mood" else 0
+        after = max(minimum, min(100, before + effect.delta))
+        state_deltas.append(
+            StateDelta(
+                source_agent_id=agent_id,
+                metric=effect.metric,
+                before=before,
+                requested_total=effect.delta,
+                applied_delta=after - before,
+                after=after,
+                effect_ids=(effect.effect_id,),
+            )
+        )
+
+    missing_agent_ids = tuple(
+        UUID(agent_id)
+        for event in result.special_events
+        for agent_id in event.missing_agent_ids
+    )
+    return EventBatch(
+        simulation_id=simulation_id,
+        run_id=str(run_id),
+        tick_number=tick_number,
+        policy_version="policy-mvp-0.1",
+        resolver_version="resolver-mvp-0.1",
+        resolution_id=f"{run_id}:{tick_number}",
+        events=tuple(event_writes),
+        resolved_effects=tuple(state_deltas),
+        missing_agent_ids=missing_agent_ids,
+    )
+
+
 async def advance_manual_tick(
     db: Session,
     simulation: Simulation,
@@ -373,7 +465,7 @@ async def advance_manual_tick(
     preselected_ids = [
         agent.id
         for agent in agents
-        if agent.fixture_key == "student-01"
+        if agent.agent_type in ("student", "user_persona")
         or (agent.agent_type == "professor" and agent.id in participant_ids)
     ]
     if not any(agent.fixture_key == "student-01" for agent in agents):
@@ -460,6 +552,14 @@ async def advance_manual_tick(
     )
     if tick_result.status != "completed" or batch is None or policy_result is None:
         raise RuntimeError("TickEngine completed without a Runtime batch")
+    event_batch = _build_event_batch(
+        db,
+        simulation_id=simulation.id,
+        run_id=run_id,
+        tick_number=current_tick,
+        result=event_and_magic_result,
+    )
+    event_batch_result = persist_event_batch(db, event_batch)
     simulation.current_tick = current_tick
     simulation.current_day = current_day
     db.flush()
@@ -476,4 +576,5 @@ async def advance_manual_tick(
             for agent_id, memories in snapshot.data.get("memories", {}).items()
         },
         event_and_magic_result=event_and_magic_result,
+        event_batch_result=event_batch_result,
     )

@@ -18,6 +18,7 @@ from app.simulation.agent_runtime import (
     RelationshipSummary,
     ScheduleSummary,
 )
+from app.simulation.intent_conflict import resolve_talk_conflicts
 
 
 class AgentRuntimeExecutor(Protocol):
@@ -88,10 +89,11 @@ class RuntimeOrchestrator:
     def run_batch(
         self, runtime_inputs: Sequence[AgentRuntimeInput]
     ) -> RuntimeBatchExecutionResult:
-        results = tuple(
+        proposed_results = tuple(
             self._runtime.run(runtime_input)
             for runtime_input in runtime_inputs
         )
+        results = resolve_talk_conflicts(proposed_results).runtime_results
         save_result = self._result_sink.save_batch(results)
         return RuntimeBatchExecutionResult(
             results=results,

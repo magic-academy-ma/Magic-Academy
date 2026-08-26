@@ -38,6 +38,10 @@ class EventAndMagicResult:
     events: tuple[Event, ...]
     special_events: tuple[SpecialEvent, ...]
     resolved_effects: tuple[EffectCandidate, ...]
+    reflection_eligible_event_keys: tuple[str, ...]
+
+
+REFLECTION_IMPORTANCE_THRESHOLD = 70
 
 
 def run_event_and_magic_phase(
@@ -80,4 +84,15 @@ def run_event_and_magic_phase(
         events=magic_result.converted_events,
         special_events=magic_result.special_events,
         resolved_effects=tuple(resolved),
+        reflection_eligible_event_keys=tuple(
+            [
+                event.event_key
+                for event in magic_result.converted_events
+                if event.importance >= REFLECTION_IMPORTANCE_THRESHOLD
+            ]
+            + [
+                f"magic:{event.event_subtype}:{event.tick}"
+                for event in magic_result.special_events
+            ]
+        ),
     )

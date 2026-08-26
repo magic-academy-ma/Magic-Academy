@@ -132,6 +132,4 @@ def persist_event_batch(session: Session, batch: EventBatch) -> dict:
     session.add(EventBatchResult(simulation_id=batch.simulation_id, tick_number=batch.tick_number,
                                  input_payload=payload, result_payload=result))
     session.flush()
-    # TODO(#105): invoke inside the fenced Tick commit alongside Runtime/relationships;
-    # advance current_tick there, and publish get_event_result() only after commit.
     return deepcopy(result)

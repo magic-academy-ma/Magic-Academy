@@ -136,6 +136,10 @@ def test_slice_one_full_vertical_flow(client):
         stored = list(db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id)))
         assert {fixtures_by_id[result.agent_id] for result in stored} == {
             "student-01",
+            "student-02",
+            "student-03",
+            "student-04",
+            "student-05",
             "professor-01",
         }
         run_ids = {result.run_id for result in stored}
@@ -157,7 +161,7 @@ def test_slice_one_full_vertical_flow(client):
             assert api_result["action_type"] == result.action_type
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
-        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 6
         states = list(
             db.scalars(select(AgentState).where(AgentState.agent_id.in_(participant_ids)))
         )
@@ -175,11 +179,12 @@ def test_slice_two_policy_applies_directional_relationship_delta(client, monkeyp
 
     def generate_relationship_signal(self, runtime_input):
         response = original_generate(self, runtime_input)
-        target_agent_id = next(
-            agent_id
-            for agent_id in runtime_input.events[0].participant_agent_ids
-            if agent_id != runtime_input.agent.agent_id
-        )
+        if (
+            runtime_input.agent.agent_id not in runtime_input.events[0].participant_agent_ids
+            or not runtime_input.nearby_agents
+        ):
+            return response
+        target_agent_id = runtime_input.nearby_agents[0].agent_id
         response["reaction"]["relationship_signals"] = [
             {
                 "signal_type": "TRUST_UP",
@@ -196,7 +201,7 @@ def test_slice_two_policy_applies_directional_relationship_delta(client, monkeyp
 
     assert response.status_code == 200, response.text
     deltas = response.json()["relationship_deltas"]
-    assert len(deltas) == 2
+    assert len(deltas) == 1
     assert {(delta["metric"], delta["delta"]) for delta in deltas} == {
         ("trust", 3)
     }
@@ -205,19 +210,17 @@ def test_slice_two_policy_applies_directional_relationship_delta(client, monkeyp
         agents = list(
             db.scalars(select(Agent).where(Agent.simulation_id == UUID(simulation_id)))
         )
-        participants = {
-            agent.id for agent in agents if agent.fixture_key in {"student-01", "professor-01"}
-        }
         relationships = list(db.scalars(select(Relationship)))
-        assert len(relationships) == 2
+        assert len(relationships) == 1
         assert {
             (relationship.source_agent_id, relationship.target_agent_id, relationship.trust)
             for relationship in relationships
         } == {
-            (source, target, 3)
-            for source in participants
-            for target in participants
-            if source != target
+            (
+                UUID(deltas[0]["source_agent_id"]),
+                UUID(deltas[0]["target_agent_id"]),
+                3,
+            )
         }
 
 
@@ -425,6 +428,10 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
     assert calls == {"engine": 1, "runtime_phase": 1, "save_batch": 1}
     assert {result["agent_name"] for result in response.json()["agent_results"]} == {
         "아델",
+        "레오",
+        "리아",
+        "카이",
+        "세라",
         "에단",
     }
 
@@ -455,7 +462,87 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
         )
         db.commit()
 
-    assert len(received_policy_inputs) == len(result.runtime_results) == 2
+    assert len(received_policy_inputs) == len(result.runtime_results) == 6
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results
     }
+
+
+class RecordingTickPublisher:
+    def __init__(self):
+        self.calls = []
+
+    async def publish(self, messages):
+        self.calls.append(messages)
+
+
+def test_tick_publishes_once_after_commit_and_matches_rest_result(client):
+    from app.main import app
+    from app.services.simulation_events import get_tick_result_publisher
+
+    test_client, _ = client
+    simulation_id, headers = register_login_create(test_client)
+    publisher = RecordingTickPublisher()
+    app.dependency_overrides[get_tick_result_publisher] = lambda: publisher
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert response.status_code == 200
+    assert len(publisher.calls) == 1
+
+    stored = test_client.get(
+        f"/v1/simulations/{simulation_id}/event-results/1",
+        headers=headers,
+    )
+    assert stored.status_code == 200
+    stored_payload = stored.json()
+    messages = publisher.calls[0]
+    tick_message = next(item for item in messages if item["type"] == "TICK_UPDATED")
+    event_messages = [item for item in messages if item["type"] == "EVENT_CREATED"]
+    assert tick_message["data"]["simulation_id"] == simulation_id
+    assert tick_message["data"]["tick_number"] == stored_payload["tick_number"]
+    assert tick_message["data"]["resolved_effects"] == stored_payload["resolved_effects"]
+    assert [
+        {
+            key: value
+            for key, value in item["data"].items()
+            if key not in {"simulation_id", "tick_number", "event_id"}
+        }
+        for item in event_messages
+    ] == stored_payload["events"]
+
+
+@pytest.mark.parametrize("failure_stage", ["persistence", "runtime_relationship"])
+def test_failed_tick_never_publishes(client, monkeypatch, failure_stage):
+    from app.main import app
+    from app.services import manual_tick
+    from app.services.simulation_events import get_tick_result_publisher
+
+    test_client, _ = client
+    simulation_id, headers = register_login_create(test_client)
+    publisher = RecordingTickPublisher()
+    app.dependency_overrides[get_tick_result_publisher] = lambda: publisher
+
+    if failure_stage == "persistence":
+        monkeypatch.setattr(
+            manual_tick,
+            "persist_event_batch",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                RuntimeError("persistence failure")
+            ),
+        )
+    else:
+        monkeypatch.setattr(
+            manual_tick,
+            "evaluate_and_apply_policy",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                RuntimeError("runtime relationship failure")
+            ),
+        )
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+    assert response.status_code == 500
+    assert publisher.calls == []
