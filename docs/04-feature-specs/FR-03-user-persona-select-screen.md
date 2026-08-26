@@ -11,7 +11,7 @@ updated: 2026-08-25
 
 ## 0. 개요 및 목적
 
-온보딩 2/3 단계. 사용자가 시뮬레이션에서 관찰할 Persona(Student Agent 5명 중 1명)를 선택한다.  
+온보딩 2/3 단계. 사용자가 시뮬레이션에서 관찰할 Persona(Student Agent 5명 중 1명)를 선택한다.
 선택한 Persona는 페르소나 설정(Big Five) 화면으로 전달되며, 확정 후 변경 불가.
 
 ## 1. 컴포넌트 트리
@@ -49,7 +49,7 @@ PersonaSelectPage
 
 ## 3. API 연동
 
-이 화면에서 API 호출 없음. 페르소나 목록은 정적 fixture 사용.  
+이 화면에서 API 호출 없음. 페르소나 목록은 정적 fixture 사용.
 선택 결과는 쿼리 파라미터(`?char={id}`)로 06-persona-setup에 전달.
 
 | Method | Endpoint | 호출 시점 | 응답 |

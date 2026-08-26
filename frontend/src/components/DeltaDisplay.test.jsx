@@ -36,10 +36,10 @@ describe("DeltaBadge", () => {
   it("delta가 0이면 중립(회색) 표시가 된다", () => {
     const flat = { ...trustUp, delta: 0, after_preview: 21 };
     render(<DeltaBadge effect={flat} />);
-    
+
     expect(screen.getByText(/0/)).toBeInTheDocument();
   });
-  
+
   it("delta가 음수이면 절댓값으로 표시된다", () => {
     const down = { ...tensionUp, delta: -2, after_preview: 18 };
     render(<DeltaBadge effect={down} />);
