@@ -12,6 +12,11 @@ from app.domain.models import User
 from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
 from app.services.runtime_dependency import get_agent_runtime
 from app.services.simulations import require_owned_simulation
+from app.services.simulation_events import (
+    TickResultPublisher,
+    build_tick_result_messages,
+    get_tick_result_publisher,
+)
 from app.simulation.agent_runtime import AgentRuntime
 
 
@@ -77,18 +82,21 @@ router = APIRouter(tags=["ticks"])
     "/simulations/{simulation_id}/ticks/advance",
     response_model=TickAdvanceResponse,
 )
-def advance_tick(
+async def advance_tick(
     simulation_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
+    publisher: TickResultPublisher = Depends(get_tick_result_publisher),
 ):
     simulation = require_owned_simulation(db, simulation_id, current_user)
     try:
-        result = asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
-        db.commit()
+        result = await asyncio.to_thread(
+            lambda: asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
+        )
+        await asyncio.to_thread(db.commit)
     except TickAlreadyRunningError:
-        db.rollback()
+        await asyncio.to_thread(db.rollback)
         return JSONResponse(
             status_code=409,
             content={
@@ -99,8 +107,31 @@ def advance_tick(
             },
         )
     except Exception:
-        db.rollback()
+        await asyncio.to_thread(db.rollback)
         raise
+
+    relationship_deltas = [
+        {
+            "effect_id": effect.effect_id,
+            "rule_id": effect.rule_id,
+            "source_agent_id": str(effect.source_agent_id),
+            "target_agent_id": str(effect.target_agent_id),
+            "metric": effect.metric,
+            "before": effect.before,
+            "applied_delta": effect.after_preview - effect.before,
+            "after": effect.after_preview,
+            "reason": effect.reason,
+        }
+        for effect in result.policy_result.relationship_effects
+        if effect.target_agent_id is not None
+    ]
+    await publisher.publish(
+        build_tick_result_messages(
+            simulation.id,
+            result.event_batch_result,
+            relationship_deltas,
+        )
+    )
 
     return TickAdvanceResponse(
         simulation_id=simulation.id,

@@ -131,6 +131,64 @@ def test_apply_deltas_flushes_without_committing(relationship_db) -> None:
         assert get_pair(session, source_agent_id, target_agent_id).trust == 20
 
 
+def test_friend_entry_is_directional_and_uses_final_numeric_values(
+    relationship_db,
+) -> None:
+    session_factory, _, source_agent_id, target_agent_id = relationship_db
+    with session_factory.begin() as session:
+        relationship = get_pair(session, source_agent_id, target_agent_id)
+        relationship.trust = 49
+        relationship.affection = 51
+        relationship.closeness = 50
+
+    delta = make_delta(
+        source_agent_id,
+        target_agent_id,
+        before=49,
+        requested_total=1,
+        applied_delta=1,
+        after=50,
+    )
+    with session_factory.begin() as session:
+        apply_deltas(session, [delta])
+
+    with session_factory() as session:
+        relationship = get_pair(session, source_agent_id, target_agent_id)
+        assert relationship.relationship_type == "friend"
+        assert get_pair(session, target_agent_id, source_agent_id) is None
+
+
+def test_friend_entry_rolls_back_with_relationship_delta(relationship_db) -> None:
+    session_factory, _, source_agent_id, target_agent_id = relationship_db
+    with session_factory.begin() as session:
+        relationship = get_pair(session, source_agent_id, target_agent_id)
+        relationship.trust = 49
+        relationship.affection = 50
+        relationship.closeness = 50
+
+    with session_factory() as session:
+        apply_deltas(
+            session,
+            [
+                make_delta(
+                    source_agent_id,
+                    target_agent_id,
+                    before=49,
+                    requested_total=1,
+                    applied_delta=1,
+                    after=50,
+                )
+            ],
+        )
+        assert get_pair(session, source_agent_id, target_agent_id).relationship_type == "friend"
+        session.rollback()
+
+    with session_factory() as session:
+        relationship = get_pair(session, source_agent_id, target_agent_id)
+        assert relationship.trust == 49
+        assert relationship.relationship_type is None
+
+
 def test_apply_deltas_accepts_negative_closeness(relationship_db) -> None:
     session_factory, _, source_agent_id, target_agent_id = relationship_db
     delta = make_delta(

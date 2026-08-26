@@ -242,6 +242,7 @@ def test_invalid_relationship_signal_keeps_valid_effects():
     assert {(effect.metric, effect.target_agent_id) for effect in result.effect_candidates} == {
         ("trust", str(AGENT_B)),
         ("mood", None),
+        ("fatigue", None),
     }
     assert result.rejected_effects[0]["reason"] == "INVALID_RELATIONSHIP_TARGET"
 

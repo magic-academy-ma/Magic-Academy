@@ -559,3 +559,104 @@ def test_advance_manual_tick_wires_db_class_event_into_event_master(db):
 
     # Magic Layer로도 정상 전달된다 (converted_events에 동일 CLASS Event가 포함).
     assert any(e.event_type == "CLASS" for e in event_and_magic.events)
+
+    # Task 5 production commit 경계가 Task 3 저장 계약까지 실제로 연결된다.
+    saved = result.event_batch_result
+    assert saved["simulation_id"] == str(simulation_id)
+    assert saved["tick_number"] == 1
+    assert any(event["event_type"] == "CLASS" for event in saved["events"])
+    assert db.get(Simulation, simulation_id).current_tick == 1
+
+
+def test_advance_manual_tick_rolls_back_all_tick_writes_after_event_batch_failure(
+    db, monkeypatch
+):
+    """A fatal failure after Task 3 flush leaves the complete Tick unchanged."""
+    import asyncio
+
+    from sqlalchemy import func
+
+    from app.domain.models import (
+        Event as DomainEvent,
+        EventBatchResult,
+        Relationship,
+        RuntimeResult,
+    )
+    from app.services import manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    simulation_id = _setup_simulation(db)
+    simulation = db.get(Simulation, simulation_id)
+    participants = list(
+        db.scalars(
+            select(Agent)
+            .where(
+                Agent.simulation_id == simulation_id,
+                Agent.fixture_key.in_(("student-01", "professor-01")),
+            )
+            .order_by(Agent.fixture_key)
+        )
+    )
+    relationship = Relationship(
+        id=uuid4(),
+        simulation_id=simulation_id,
+        source_agent_id=participants[0].id,
+        target_agent_id=participants[1].id,
+        trust=7,
+    )
+    db.add(relationship)
+    db.commit()
+
+    state_before = {
+        state.agent_id: (state.hunger, state.fatigue, state.stress, state.satisfaction, state.mood)
+        for state in db.scalars(
+            select(AgentState).where(AgentState.simulation_id == simulation_id)
+        )
+    }
+    event_count_before = db.scalar(
+        select(func.count()).select_from(DomainEvent).where(
+            DomainEvent.simulation_id == simulation_id
+        )
+    )
+    original_persist = manual_tick.persist_event_batch
+
+    def fail_after_event_batch_flush(session, batch):
+        original_persist(session, batch)
+        relationship.trust = 10
+        session.flush()
+        raise RuntimeError("injected downstream failure")
+
+    monkeypatch.setattr(manual_tick, "persist_event_batch", fail_after_event_batch_flush)
+    with pytest.raises(RuntimeError, match="injected downstream"):
+        asyncio.run(
+            manual_tick.advance_manual_tick(
+                db,
+                simulation,
+                runtime=AgentRuntime(MockLLMClient(), model="rollback-test"),
+            )
+        )
+    db.rollback()
+
+    assert db.get(Simulation, simulation_id).current_tick == 0
+    assert db.get(Relationship, relationship.id).trust == 7
+    assert db.scalar(
+        select(func.count()).select_from(DomainEvent).where(
+            DomainEvent.simulation_id == simulation_id
+        )
+    ) == event_count_before
+    assert db.scalar(
+        select(func.count()).select_from(EventBatchResult).where(
+            EventBatchResult.simulation_id == simulation_id
+        )
+    ) == 0
+    assert db.scalar(
+        select(func.count()).select_from(RuntimeResult).join(
+            Agent, Agent.id == RuntimeResult.agent_id
+        ).where(Agent.simulation_id == simulation_id)
+    ) == 0
+    assert {
+        state.agent_id: (state.hunger, state.fatigue, state.stress, state.satisfaction, state.mood)
+        for state in db.scalars(
+            select(AgentState).where(AgentState.simulation_id == simulation_id)
+        )
+    } == state_before
