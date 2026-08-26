@@ -1,15 +1,15 @@
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from app.simulation.agent_runtime import (
+    MBTI,
     AgentContext,
     AgentRuntimeInput,
     AgentStateContext,
     BigFiveContext,
     Block,
     EventSummary,
-    MBTI,
     ScheduleSummary,
 )
 
@@ -20,6 +20,7 @@ class AgentContextAssembler:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agent_id: UUID,
         fixture_key: str,
@@ -34,10 +35,12 @@ class AgentContextAssembler:
         schedule: ScheduleSummary,
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        memories: Sequence[dict[str, Any]] = (),
     ) -> AgentRuntimeInput:
         return AgentRuntimeInput(
             run_id=run_id,
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agent=AgentContext(
                 agent_id=agent_id,
@@ -52,7 +55,7 @@ class AgentContextAssembler:
             ),
             nearby_agents=[],
             relationships=[],
-            memories=[],
+            memories=list(memories),
             events=list(events),
             schedule=schedule,
             valid_agent_ids=list(valid_agent_ids),

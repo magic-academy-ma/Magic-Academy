@@ -23,6 +23,8 @@ class SchemaModelTests(unittest.TestCase):
                 "agent_memories",
                 "relationships",
                 "runtime_results",
+                "runtime_executions",
+                "user_persona_configs",
                 "organizations",
                 "organization_memberships",
                 "events",
@@ -54,6 +56,9 @@ class SchemaModelTests(unittest.TestCase):
             "uq_relationships_pair",
             "uq_runtime_results_idempotency_key",
             "uq_runtime_results_run_tick_agent",
+            "uq_runtime_executions_run_id",
+            "uq_runtime_executions_simulation_tick",
+            "idx_runtime_executions_simulation_tick",
             "uq_organizations_simulation_type_name",
             "uq_organizations_simulation_id_id",
             "uq_organization_memberships_active",
@@ -84,6 +89,7 @@ class SchemaModelTests(unittest.TestCase):
             "relationships": {"agents"},
             "organization_memberships": {"agents", "organizations"},
             "events": {"locations"},
+            "user_persona_configs": {"agents"},
         }
         for table_name, target_names in expected_targets.items():
             table = Base.metadata.tables[table_name]
@@ -139,6 +145,24 @@ class SchemaModelTests(unittest.TestCase):
             expression = constraints[f"ck_agents_{column}"]
             self.assertIn("BETWEEN -50 AND 50", expression)
             self.assertIn("% 5 = 0", expression)
+
+    def test_relationship_metric_constraints_match_slice_two_contract(self) -> None:
+        relationships = Base.metadata.tables["relationships"]
+        constraints = {
+            constraint.name: str(constraint.sqltext)
+            for constraint in relationships.constraints
+            if isinstance(constraint, CheckConstraint)
+        }
+        for metric in ("affection", "closeness", "trust"):
+            self.assertIn(
+                "BETWEEN -100 AND 100",
+                constraints[f"ck_relationships_{metric}"],
+            )
+        for metric in ("tension", "rivalry", "dependency"):
+            self.assertIn(
+                "BETWEEN 0 AND 100",
+                constraints[f"ck_relationships_{metric}"],
+            )
 
     def test_memory_embedding_uses_vector_1536_and_hnsw_cosine_index(self) -> None:
         memories = Base.metadata.tables["agent_memories"]

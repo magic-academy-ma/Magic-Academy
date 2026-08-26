@@ -1,0 +1,75 @@
+/* Magic Academy Design System — CSS Tokens */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Noto+Serif+KR:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Backgrounds */
+  --c-bg:            #060d20;
+  --c-surface:       #0b1838;
+  --c-surface-hi:    #122450;
+  --c-surface-card:  rgba(12, 24, 58, 0.82);
+
+  /* Primary (Arcane Violet Blue) */
+  --c-primary:       #5e60e8;
+  --c-primary-hover: #7375f5;
+  --c-primary-muted: rgba(94, 96, 232, 0.16);
+  --c-primary-ring:  rgba(94, 96, 232, 0.38);
+
+  /* Gold Accent */
+  --c-cream:         #d4b26f;
+  --c-cream-muted:   rgba(212, 178, 111, 0.14);
+
+  /* Text */
+  --c-text:   #f2f5fc;
+  --c-text-2: #a4b5d6;
+  --c-text-3: #62759e;
+
+  /* Borders */
+  --c-border:    rgba(70, 100, 180, 0.24);
+  --c-border-hi: rgba(212, 178, 111, 0.30);
+
+  /* Critical */
+  --c-critical: #db4c4c;
+
+  /* Character Palette */
+  --c-char-adel:  #45c4b0;
+  --c-char-leo:   #f3ce5e;
+  --c-char-ria:   #ea8fa2;
+  --c-char-kai:   #e55f5f;
+  --c-char-sera:  #9d4edd;
+
+  /* Typography */
+  --f-serif-en: 'Playfair Display', Georgia, serif;
+  --f-serif-ko: 'Noto Serif KR', Georgia, serif;
+  --f-ui:       -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --f-mono:     'JetBrains Mono', 'IBM Plex Mono', monospace;
+
+  /* Type Scale */
+  --t-xs:   0.6875rem;
+  --t-sm:   0.8125rem;
+  --t-base: 0.9375rem;
+  --t-md:   1rem;
+  --t-lg:   1.125rem;
+  --t-xl:   1.375rem;
+  --t-2xl:  1.75rem;
+
+  /* Spacing */
+  --s-1: 4px;  --s-2: 8px;   --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px;  --s-8: 32px; --s-10: 40px;
+  --s-12: 48px;
+
+  /* Radius */
+  --r-sm:   6px;
+  --r-md:   10px;
+  --r-lg:   14px;
+  --r-xl:   18px;
+  --r-full: 9999px;
+
+  /* Shadows */
+  --sh-sm: 0 2px 8px rgba(3, 7, 18, 0.4);
+  --sh-md: 0 8px 24px rgba(3, 7, 18, 0.6);
+  --sh-lg: 0 16px 48px rgba(3, 7, 18, 0.8);
+
+  /* Transitions */
+  --tr-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --tr-normal: 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}

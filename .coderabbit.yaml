@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: ko-KR
+
+reviews:
+  profile: assertive
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - develop
+
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        모든 리뷰는 반드시 한국어로 작성한다.
+
+        Magic Academy 팀 코드 컨벤션을 기준으로 검토한다.
+
+        리뷰 코멘트는 아래 태그 중 하나로 시작한다.
+        [Must] 반드시 수정해야 하는 문제
+        [Question] 구현 이유나 확인이 필요한 부분
+        [Suggest] 개선 제안
+        [Nit] 사소한 수정
+        [Good] 잘 구현된 부분
+
+        공통 검토 기준:
+        - 변수명과 함수명만 보고 역할을 이해할 수 있는지 확인한다.
+        - 불필요한 축약어를 사용하지 않았는지 확인한다.
+        - 하나의 함수가 하나의 역할만 수행하는지 확인한다.
+        - 중복 로직이 있는지 확인한다.
+        - 매직 넘버가 상수로 분리되어 있는지 확인한다.
+        - console.log 또는 디버깅 코드가 남아 있는지 확인한다.
+        - 사용하지 않는 코드가 남아 있는지 확인한다.
+        - 폴더와 파일 위치가 프로젝트 구조에 적절한지 확인한다.
+        - 보안 문제, 예외 처리 누락, 테스트 누락 가능성을 확인한다.
+
+    - path: ".github/workflows/**/*"
+      instructions: |
+        GitHub Actions Workflow를 검토한다.
+        - 브랜치 컨벤션에 없는 타입이 트리거에 포함되지 않았는지 확인한다.
+        - main 또는 develop에 직접 push하도록 유도하지 않는지 확인한다.
+        - permissions가 필요한 최소 권한만 사용하는지 확인한다.
+        - YAML 문법과 들여쓰기를 확인한다.
+        - 파일 끝에 newline이 있는지 확인한다.

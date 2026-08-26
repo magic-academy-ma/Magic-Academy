@@ -1,6 +1,7 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from app.services.runtime_results import (
@@ -30,6 +31,8 @@ class RuntimeBatchExecutionResult:
 
 
 class RuntimeOrchestrator:
+    MAX_CONCURRENT_RUNTIMES = 6
+
     def __init__(
         self,
         runtime: AgentRuntimeExecutor,
@@ -46,6 +49,7 @@ class RuntimeOrchestrator:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agent_candidates: Sequence[AgentContext],
         preselected_agent_ids: Sequence[UUID],
@@ -53,15 +57,18 @@ class RuntimeOrchestrator:
         events: Sequence[EventSummary],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         selected_agents = self._target_selector.select(
             agent_candidates,
             preselected_agent_ids=preselected_agent_ids,
         )
+        memories_by_agent = memories_by_agent or {}
         runtime_inputs = tuple(
             self._context_assembler.assemble(
                 run_id=run_id,
                 tick_number=tick_number,
+                seed=seed,
                 block=block,
                 agent_id=agent.agent_id,
                 fixture_key=agent.fixture_key,
@@ -76,6 +83,7 @@ class RuntimeOrchestrator:
                 schedule=schedule,
                 valid_agent_ids=valid_agent_ids,
                 valid_location_ids=valid_location_ids,
+                memories=memories_by_agent.get(agent.agent_id, ()),
             )
             for agent in selected_agents
         )
@@ -84,10 +92,10 @@ class RuntimeOrchestrator:
     def run_batch(
         self, runtime_inputs: Sequence[AgentRuntimeInput]
     ) -> RuntimeBatchExecutionResult:
-        results = tuple(
-            self._runtime.run(runtime_input)
-            for runtime_input in runtime_inputs
-        )
+        with ThreadPoolExecutor(
+            max_workers=self.MAX_CONCURRENT_RUNTIMES
+        ) as executor:
+            results = tuple(executor.map(self._runtime.run, runtime_inputs))
         save_result = self._result_sink.save_batch(results)
         return RuntimeBatchExecutionResult(
             results=results,

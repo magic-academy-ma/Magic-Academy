@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -6,11 +7,12 @@ from sqlalchemy.orm import Session
 from app.domain.models import Agent, AgentState, Event, EventParticipant
 from app.repositories.simulations import (
     list_active_runtime_location_ids,
-    list_runtime_agents,
     list_runtime_agent_states,
+    list_runtime_agents,
 )
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeBatchExecutionResult
+from app.services.runtime_target_selection import select_tick_participant_ids
 from app.simulation.agent_runtime import Block, ScheduleSummary
 
 
@@ -29,11 +31,14 @@ class SimulationTickService:
         simulation_id: UUID,
         run_id: UUID,
         tick_number: int,
+        seed: int = 0,
         block: Block,
-        preselected_agent_ids: Sequence[UUID],
+        preselected_agent_ids: Sequence[UUID] | None = None,
+        schedule_requires_professor: bool = False,
         schedule: ScheduleSummary,
         events: Sequence[Event],
         event_participants: Mapping[UUID, Sequence[EventParticipant]],
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         agents = list_runtime_agents(db, simulation_id)
         agent_ids = self._validate_unique_agents(agents)
@@ -48,9 +53,21 @@ class SimulationTickService:
             valid_location_ids=valid_location_ids,
         )
 
+        if preselected_agent_ids is None:
+            # Student(User Persona 포함)를 기본 편성하고, Event 참여자이거나
+            # Schedule 조건을 충족하는 Professor만 추가한다 (Slice 4 Task 0 계약).
+            preselected_agent_ids = select_tick_participant_ids(
+                agents,
+                event_participant_agent_ids=self._flatten_event_participant_agent_ids(
+                    event_participants
+                ),
+                schedule_requires_professor=schedule_requires_professor,
+            )
+
         return self._runtime_input_adapter.run(
             run_id=str(run_id),
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agents=agents,
             preselected_agent_ids=preselected_agent_ids,
@@ -60,6 +77,17 @@ class SimulationTickService:
             event_participants=event_participants,
             valid_agent_ids=agent_ids,
             valid_location_ids=valid_location_ids,
+            memories_by_agent=memories_by_agent,
+        )
+
+    @staticmethod
+    def _flatten_event_participant_agent_ids(
+        event_participants: Mapping[UUID, Sequence[EventParticipant]],
+    ) -> tuple[UUID, ...]:
+        return tuple(
+            participant.agent_id
+            for participants in event_participants.values()
+            for participant in participants
         )
 
     @staticmethod

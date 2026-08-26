@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -9,8 +9,15 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
-from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
-from app.services.runtime_dependency import get_agent_runtime
+from app.repositories.memory_repository import MemoryRepository
+from app.services.manual_tick import (
+    TickAlreadyRunningError,
+    advance_manual_tick,
+    create_memory_callbacks,
+)
+from app.services.memory_dependency import get_memory_hooks
+from app.services.realtime_events import build_tick_events, connection_manager
+from app.services.runtime_dependency import get_agent_runtime, get_memory_repository
 from app.services.simulations import require_owned_simulation
 from app.simulation.agent_runtime import AgentRuntime
 
@@ -47,12 +54,38 @@ class AgentMemoryResponse(BaseModel):
     memories: list[AgentMemoryItem]
 
 
+class RelationshipDeltaResponse(BaseModel):
+    effect_id: str
+    rule_id: str
+    source_agent_id: UUID
+    target_agent_id: UUID
+    metric: str
+    delta: int
+    before: int
+    after: int
+    reason: str
+
+
+class StateDeltaResponse(BaseModel):
+    effect_id: str
+    rule_id: str
+    agent_id: UUID
+    agent_name: str
+    metric: str
+    delta: int
+    before: int
+    after: int
+    reason: str
+
+
 class TickAdvanceResponse(BaseModel):
     simulation_id: UUID
     previous_tick: int
     current_tick: int
     current_day: int
     status: str
+    state_deltas: list[StateDeltaResponse] = Field(default_factory=list)
+    relationship_deltas: list[RelationshipDeltaResponse]
     agent_results: list[AgentTickResultResponse]
     retrieved_memories: list[AgentMemoryResponse] = Field(default_factory=list)
 
@@ -66,13 +99,30 @@ router = APIRouter(tags=["ticks"])
 )
 def advance_tick(
     simulation_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
+    memory_repository: MemoryRepository = Depends(get_memory_repository),
+    memory_hooks: tuple = Depends(get_memory_hooks),
 ):
     simulation = require_owned_simulation(db, simulation_id, current_user)
+    memory_retriever, memory_store = memory_hooks
+    if memory_retriever is None and memory_store is None:
+        memory_retriever, memory_store = create_memory_callbacks(
+            db, memory_repository
+        )
     try:
-        result = asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                memory_retriever=memory_retriever,
+                memory_store=memory_store,
+            )
+        )
+        realtime_events = build_tick_events(db, simulation.id, result)
         db.commit()
     except TickAlreadyRunningError:
         db.rollback()
@@ -89,12 +139,47 @@ def advance_tick(
         db.rollback()
         raise
 
+    background_tasks.add_task(
+        connection_manager.broadcast,
+        simulation.id,
+        realtime_events,
+    )
+
     return TickAdvanceResponse(
         simulation_id=simulation.id,
         previous_tick=result.previous_tick,
         current_tick=result.current_tick,
         current_day=result.current_day,
         status="COMPLETED",
+        state_deltas=[
+            StateDeltaResponse(
+                effect_id=effect.effect_id,
+                rule_id=effect.rule_id,
+                agent_id=UUID(effect.source_agent_id),
+                agent_name=result.agent_names[UUID(effect.source_agent_id)],
+                metric=effect.metric,
+                delta=effect.after_preview - effect.before,
+                before=effect.before,
+                after=effect.after_preview,
+                reason=effect.reason,
+            )
+            for effect in result.policy_result.state_effects
+        ],
+        relationship_deltas=[
+            RelationshipDeltaResponse(
+                effect_id=effect.effect_id,
+                rule_id=effect.rule_id,
+                source_agent_id=UUID(effect.source_agent_id),
+                target_agent_id=UUID(effect.target_agent_id),
+                metric=effect.metric,
+                delta=effect.after_preview - effect.before,
+                before=effect.before,
+                after=effect.after_preview,
+                reason=effect.reason,
+            )
+            for effect in result.policy_result.relationship_effects
+            if effect.target_agent_id is not None
+        ],
         agent_results=[
             AgentTickResultResponse(
                 agent_id=runtime_result.agent_id,

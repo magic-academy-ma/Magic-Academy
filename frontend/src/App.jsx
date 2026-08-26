@@ -3,6 +3,13 @@ import { apiRequest } from "./api/client.js";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import ReplayPanel from "./components/ReplayPanel.jsx";
 import SnapshotPanel from "./components/SnapshotPanel.jsx";
+import RelationshipFlow from "./components/RelationshipFlow.jsx";
+import EventLogPanel from "./components/EventLogPanel.jsx";
+import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
+import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
+import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
+import { useSimulationWS } from "./hooks/useSimulationWS.js";
+import BrandingPage from "./pages/BrandingPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -55,10 +62,6 @@ function AuthPanel({ onLogin, notice }) {
 }
 
 // 서버 응답의 code/HTTP status를 프론트에서 보여줄 오류 종류로 분류한다.
-// NOTE: ticks/advance 스펙(§4.2)에 정의된 코드(UNAUTHORIZED/RESOURCE_NOT_FOUND/CONFLICT) 기준.
-// "재시도 실패"는 백엔드가 별도 code로 내려주는 필드가 아직 확정되지 않아, 우선 CONFLICT(409)를
-// "지금은 재시도할 수 없는 상태"로 간주해 매핑했다. 실제 재시도 관련 code가 확정되면 이 매핑만
-// 바꾸면 되도록 분리해뒀다.
 function classifyTickError(requestError) {
   const status = requestError?.status;
   const code = requestError?.code;
@@ -86,10 +89,13 @@ function classifyTickError(requestError) {
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [simulationId, setSimulationId] = useState(null);
+  const [personaId, setPersonaId] = useState(null);
+  const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
+  const [personaAgentId, setPersonaAgentId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [name, setName] = useState("Slice 0 Simulation");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -99,11 +105,20 @@ export default function App() {
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
+
+  const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
+    simulation?.id,
+    auth?.access_token
+  );
   function resetSession(notice = "") {
     setAuth(null);
+    setSimulationId(null);
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
+    setPersonaAgentId(null);
+    setPersonaId(null);
+    setPersonaSetupDone(false);
     setError("");
     setTickResult(null);
     setTickError(null);
@@ -111,7 +126,23 @@ export default function App() {
     setManagementView(null);
   }
 
+  function handleEnroll(id) {
+    setSimulationId(id);
+    setSimulation({ id, name: 'Magic Academy Simulation' });
+    loadAgents(id);
+  }
+
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
+  if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
+  if (!personaSetupDone) return (
+    <PersonaSetupPage
+      simulationId={simulationId}
+      charId={personaId}
+      onBack={() => setPersonaId(null)}
+      onStart={async (_charId, _config) => setPersonaSetupDone(true)}
+    />
+  );
 
   async function loadAgents(simulationId) {
     setLoading(true);
@@ -133,28 +164,9 @@ export default function App() {
     }
   }
 
-  async function createSimulation(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const created = await apiRequest("/v1/simulations", {
-        token: auth.access_token,
-        method: "POST",
-        body: JSON.stringify({ name }),
-      });
-      setSimulation(created);
-      await loadAgents(created.id);
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        resetSession();
-        return;
-      }
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "student");
 
   async function runTick() {
     setTickLoading(true);
@@ -182,39 +194,117 @@ export default function App() {
       setTickLoading(false);
     }
   }
-  // agent_results: agent_id, agent_name, runtime_status(PROPOSED/FALLBACK/SKIPPED),
-  // action_type, utterance, motivation_summary, decision_explanation.influencing_factors,
-  // retry_count, failure_reason (은혜님 스펙 확정, §3.2)
+
   const agentResults = tickResult?.agent_results ?? [];
   const tickSucceeded = (tickResult?.status || "").toLowerCase() === "completed";
   const tickFailed = tickResult && !tickSucceeded;
 
+  const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+
+  // WS RELATIONSHIP_UPDATED 메시지를 flat delta 배열로 변환 (REST relationship_deltas 형식 호환)
+  const wsDeltas = wsRelationshipDeltas.flatMap((msg) =>
+    (msg.deltas ?? []).map((d) => ({
+      ...d,
+      source_agent_id: msg.source_agent_id,
+      target_agent_id: msg.target_agent_id,
+    }))
+  );
+  const effectiveRelationshipDeltas =
+    wsDeltas.length > 0 ? wsDeltas : (tickResult?.relationship_deltas ?? []);
+
+  const relationshipAgentIds = [
+    ...new Set(
+      effectiveRelationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
+    ),
+  ];
+  const flowNodes = relationshipAgentIds.map((id, index) => ({
+    id: String(id),
+    position: { x: (index % 4) * 200, y: Math.floor(index / 4) * 150 },
+    data: { label: agentNameById[id] ?? String(id) },
+  }));
+  const edgesByPair = new Map();
+  for (const delta of effectiveRelationshipDeltas) {
+    const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
+    if (!edgesByPair.has(key)) {
+      edgesByPair.set(key, {
+        id: `e-${key}`,
+        source: String(delta.source_agent_id),
+        target: String(delta.target_agent_id),
+        type: "delta",
+        data: { effects: [] },
+      });
+    }
+    edgesByPair.get(key).data.effects.push(delta);
+  }
+  const flowEdges = [...edgesByPair.values()];
+
+  function handleEventAgentSelect(agentId) {
+    const agent = agents.find((a) => a.id === agentId);
+    if (agent) setSelectedAgent(agent);
+  }
+
   return (
     <div className="app-shell">
-      <header><strong>Magic Academy</strong><div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div></header>
+      <header>
+        <strong>Magic Academy</strong>
+        {simulation && lastTick && (
+          <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
+        )}
+        <div className="header-right">
+          {simulation && (
+            <span
+              className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
+              title={connected ? "실시간 연결됨" : "연결 끊김"}
+            >●</span>
+          )}
+          <div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div>
+        </div>
+      </header>
       <main>
-        {!simulation ? (
-          <form className="panel create-panel" onSubmit={createSimulation}>
-            <h1>Simulation 생성</h1>
-            <label>이름<input required value={name} onChange={(e) => setName(e.target.value)} /></label>
-            {error && <p className="message error" role="alert">{error}</p>}
-            <button disabled={loading}>{loading ? "Simulation과 Agent를 생성하는 중..." : "Simulation 생성"}</button>
-          </form>
-        ) : (
-          <section className="workspace">
+        <section className="workspace">
             <div className="panel agent-list">
               <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
-              {agents.map((agent) => <button data-agent-id={agent.id} className={selectedAgent?.id === agent.id ? "agent active" : "agent"} key={agent.id} onClick={() => setSelectedAgent(agent)}><b>{agent.name}</b><span>{agent.agent_type} · {agent.mbti_type}</span></button>)}
+              {agents.map((agent) => (
+                <button
+                  data-agent-id={agent.id}
+                  className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent)}
+                >
+                  <b>{agent.name}</b>
+                  <span>{agent.agent_type} · {agent.mbti_type}</span>
+                  {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
+                </button>
+              ))}
             </div>
+
+            <UserPersonaSetup
+              simulationId={simulation.id}
+              students={students}
+              token={auth.access_token}
+              onSaved={(result) => setPersonaAgentId(result.agent_id)}
+            />
+
             <aside className="panel inspector">
               <h2>Inspector</h2>
               {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
                 <h3>{selectedAgent.name}</h3>
-                <dl><dt>종류</dt><dd>{selectedAgent.agent_type}</dd><dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd><dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd><dt>위치</dt><dd>{selectedAgent.location.name}</dd><dt>기분</dt><dd>{selectedAgent.state.mood}</dd><dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd><dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd><dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd><dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd></dl>
+                <dl>
+                  <dt>Persona 여부</dt><dd>{selectedAgent.id === personaAgentId ? "예 (User Persona)" : "아니오"}</dd>
+                  <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+                  <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+                  <dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd>
+                  <dt>위치</dt><dd>{selectedAgent.location.name}</dd>
+                  <dt>기분</dt><dd>{selectedAgent.state.mood}</dd>
+                  <dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd>
+                  <dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd>
+                  <dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd>
+                  <dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd>
+                </dl>
               </>}
             </aside>
             <div className="panel tick-panel">
@@ -298,10 +388,10 @@ export default function App() {
 										  })}
 										</ul>
                   )}
+
                 </div>
               )}
             </div>
-
             <div className="panel management-panel">
               <h2>관리</h2>
               <div className="management-tabs">
@@ -342,8 +432,17 @@ export default function App() {
                 <SnapshotPanel token={auth.access_token} simulationId={simulation.id} />
               )}
             </div>
+
+            <div className="panel relationship-panel">
+              <h4>관계 변화</h4>
+              <RelationshipFlow nodes={flowNodes} edges={flowEdges} />
+            </div>
           </section>
-        )}
+          <EventLogPanel
+            eventLog={eventLog}
+            agentNames={agentNameById}
+            onAgentSelect={handleEventAgentSelect}
+          />
       </main>
     </div>
   );
