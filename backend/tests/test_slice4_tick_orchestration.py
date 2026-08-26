@@ -1,13 +1,16 @@
-"""Slice 4 Task 2 — 5-Student·조건부 Professor Tick orchestration.
+"""Slice 4 Task 2/6 — 5-Student·조건부 Professor Tick orchestration.
 
-Runtime·Persistence 통합(Task 1, Task 3)이 base에 병합되기 전에도 검증 가능한
-Student/Professor 실행 대상 편성 로직을 다룬다. 통합 인수 테스트는
-test_slice4_acceptance.py(Task 5)에서 다룬다.
+Student/Professor 실행 대상 편성 로직과 실제 API·PostgreSQL 운영 경로의
+Runtime batch, Policy, Memory 통합을 검증한다.
 """
 
+import os
 from uuid import UUID
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, delete, select, text
+from sqlalchemy.orm import sessionmaker
 
 from app.domain.models import Agent
 from app.services.runtime_target_selection import select_tick_participant_ids
@@ -143,19 +146,166 @@ class TestSelectionInvariants:
 
 
 # ── SimulationTickService 연동 뼈대 ────────────────────────────────────────
-# 실제 DB(Agent/Event/EventParticipant) 연동 시나리오는 Task 1·3 결과를 반영해
-# test_simulation_tick_runtime.py에서 검증한다. 아래는 통합 지점만 표시하는 뼈대다.
+# 실제 API·PostgreSQL에서 Runtime batch, Policy, Memory 연결을 검증한다.
 
 
-@pytest.mark.skip(
-    reason="Task 1(Runtime batch)·Task 3(저장·rollback) 병합 후 실제 Runtime 연결"
-)
-def test_tick_calls_runtime_batch_exactly_once_per_tick() -> None:
+@pytest.fixture()
+def api_context():
+    from app.core.database import get_db
+    from app.main import app
+    from app.services.runtime_dependency import get_agent_runtime
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    session_factory = sessionmaker(
+        bind=engine, autoflush=False, expire_on_commit=False
+    )
+    with engine.begin() as connection:
+        connection.execute(text("TRUNCATE users, simulations RESTART IDENTITY CASCADE"))
+
+    def override_db():
+        with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_agent_runtime] = lambda: AgentRuntime(
+        MockLLMClient(), model="slice4-task6-runtime"
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield client, session_factory
+    app.dependency_overrides.clear()
+    engine.dispose()
+
+
+def create_simulation(client: TestClient) -> tuple[UUID, dict[str, str]]:
+    credentials = {
+        "username": "slice4-task6-owner",
+        "display_name": "Slice 4 Task 6",
+        "password": "Slice4-task6-password!",
+    }
+    assert client.post("/v1/auth/register", json=credentials).status_code == 201
+    login = client.post(
+        "/v1/auth/login",
+        json={
+            "username": credentials["username"],
+            "password": credentials["password"],
+        },
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    created = client.post(
+        "/v1/simulations", headers=headers, json={"name": "Task 6 integration"}
+    )
+    assert created.status_code == 201
+    return UUID(created.json()["id"]), headers
+
+
+def test_tick_calls_runtime_batch_exactly_once_per_tick(api_context, monkeypatch) -> None:
     """Tick당 Runtime batch가 정확히 1회 호출된다."""
+    from app.repositories.memory_repository import MemoryRepository
+    from app.services.runtime_orchestrator import RuntimeOrchestrator
+    from app.simulation.policy import engine as policy_engine
+
+    client, session_factory = api_context
+    simulation_id, headers = create_simulation(client)
+    calls = {"batch": 0, "policy": 0, "retrieve": 0, "store": 0}
+    received_ids: list[UUID] = []
+    original_batch = RuntimeOrchestrator.run_batch
+    original_policy = policy_engine.evaluate_policy
+    original_retrieve = MemoryRepository.retrieve_for_runtime
+    original_create = MemoryRepository.create
+
+    def count_batch(self, runtime_inputs):
+        calls["batch"] += 1
+        received_ids.extend(item.agent.agent_id for item in runtime_inputs)
+        return original_batch(self, runtime_inputs)
+
+    def count_policy(policy_input):
+        calls["policy"] += 1
+        return original_policy(policy_input)
+
+    def count_retrieve(self, *args, **kwargs):
+        calls["retrieve"] += 1
+        return original_retrieve(self, *args, **kwargs)
+
+    def count_create(self, *args, **kwargs):
+        calls["store"] += 1
+        return original_create(self, *args, **kwargs)
+
+    monkeypatch.setattr(RuntimeOrchestrator, "run_batch", count_batch)
+    monkeypatch.setattr(policy_engine, "evaluate_policy", count_policy)
+    monkeypatch.setattr(MemoryRepository, "retrieve_for_runtime", count_retrieve)
+    monkeypatch.setattr(MemoryRepository, "create", count_create)
+
+    response = client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    with session_factory() as db:
+        fixtures_by_id = {
+            agent.id: agent.fixture_key
+            for agent in db.scalars(
+                select(Agent).where(Agent.simulation_id == simulation_id)
+            )
+        }
+    expected_keys = [
+        *(f"student-{index:02d}" for index in range(1, 6)),
+        "professor-01",
+    ]
+    assert [fixtures_by_id[agent_id] for agent_id in received_ids] == expected_keys
+    assert [result["agent_name"] for result in response.json()["agent_results"]] == [
+        "아델",
+        "레오",
+        "리아",
+        "카이",
+        "세라",
+        "에단",
+    ]
+    assert calls == {"batch": 1, "policy": 1, "retrieve": 6, "store": 6}
 
 
-@pytest.mark.skip(
-    reason="Task 1(Runtime batch)·Task 3(저장·rollback) 병합 후 실제 Runtime 연결"
-)
-def test_all_agents_receive_identical_world_snapshot() -> None:
-    """5/6명 모든 Agent가 동일한 World Snapshot을 전달받는다."""
+def test_all_agents_receive_identical_world_snapshot(api_context, monkeypatch) -> None:
+    """Professor 미참여 시 Student 5명이 동일 World Snapshot으로 실행된다."""
+    from app.domain.models import Event, EventParticipant
+    from app.simulation.tick_engine import TickEngine
+
+    client, session_factory = api_context
+    simulation_id, headers = create_simulation(client)
+    with session_factory.begin() as db:
+        professor_id = db.scalar(
+            select(Agent.id).where(
+                Agent.simulation_id == simulation_id,
+                Agent.agent_type == "professor",
+            )
+        )
+        class_event_id = db.scalar(
+            select(Event.id).where(Event.simulation_id == simulation_id)
+        )
+        db.execute(
+            delete(EventParticipant).where(
+                EventParticipant.event_id == class_event_id,
+                EventParticipant.agent_id == professor_id,
+            )
+        )
+
+    snapshots = []
+    original_run_tick = TickEngine.run_tick
+
+    async def capture_snapshot(self, agents, event, snapshot, **kwargs):
+        snapshots.append(snapshot)
+        return await original_run_tick(self, agents, event, snapshot, **kwargs)
+
+    monkeypatch.setattr(TickEngine, "run_tick", capture_snapshot)
+    response = client.post(
+        f"/v1/simulations/{simulation_id}/ticks/advance", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(snapshots) == 1
+    assert [result["agent_name"] for result in response.json()["agent_results"]] == [
+        "아델",
+        "레오",
+        "리아",
+        "카이",
+        "세라",
+    ]

@@ -100,7 +100,11 @@ def test_slice_one_full_vertical_flow(client):
         1,
     )
     assert body["status"] == "COMPLETED"
-    assert body["retrieved_memories"] == []
+    assert len(body["retrieved_memories"]) == 6
+    assert all(
+        item["memory_ids_passed"] == [] and item["memories"] == []
+        for item in body["retrieved_memories"]
+    )
     assert "runtime_outputs" not in body
     assert "participant_ids" not in body
     assert {result["runtime_status"] for result in body["agent_results"]} <= {
@@ -135,6 +139,10 @@ def test_slice_one_full_vertical_flow(client):
         stored = list(db.scalars(select(RuntimeResult).order_by(RuntimeResult.agent_id)))
         assert {fixtures_by_id[result.agent_id] for result in stored} == {
             "student-01",
+            "student-02",
+            "student-03",
+            "student-04",
+            "student-05",
             "professor-01",
         }
         run_ids = {result.run_id for result in stored}
@@ -156,7 +164,7 @@ def test_slice_one_full_vertical_flow(client):
         assert execution.seed >= 0
         assert execution.model == "test-runtime-override"
         assert execution.prompt_version == "agent-runtime-10.1"
-        assert execution.policy_version is None
+        assert execution.policy_version == "policy-mvp-0.1"
         api_by_id = {result["agent_id"]: result for result in body["agent_results"]}
         assert set(api_by_id) == {str(result.agent_id) for result in stored}
         for result in stored:
@@ -165,7 +173,7 @@ def test_slice_one_full_vertical_flow(client):
             assert api_result["action_type"] == result.action_type
         simulation = db.get(Simulation, simulation_uuid)
         assert (simulation.current_tick, simulation.current_day) == (1, 1)
-        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 2
+        assert db.scalar(select(func.count()).select_from(RuntimeResult)) == 6
 
 
 def test_other_user_cannot_advance_owned_simulation(client):
@@ -321,7 +329,7 @@ def test_same_seed_reaches_runtime_and_matches_execution_metadata(client):
         )
 
     assert normalized_results[0] == normalized_results[1]
-    assert fake_llm.received_seeds == [4242, 4242, 4242, 4242]
+    assert fake_llm.received_seeds == [4242] * 12
     assert len({execution.run_id for execution in executions}) == 2
     assert {execution.seed for execution in executions} == {4242}
     assert {execution.model for execution in executions} == {
@@ -404,6 +412,10 @@ def test_tick_api_uses_engine_and_each_batch_boundary_once(client, monkeypatch):
     assert calls == {"engine": 1, "runtime_phase": 1, "save_batch": 1}
     assert {result["agent_name"] for result in response.json()["agent_results"]} == {
         "아델",
+        "레오",
+        "리아",
+        "카이",
+        "세라",
         "에단",
     }
 
@@ -441,7 +453,7 @@ def test_manual_tick_preserves_tick_engine_policy_extension(client):
             )
         )
 
-    assert len(received_policy_inputs) == len(result.runtime_results) == 2
+    assert len(received_policy_inputs) == len(result.runtime_results) == 6
     assert execution.policy_version == "policy-test-2.0"
     assert {item.agent_id for item in received_policy_inputs} == {
         str(runtime_result.agent_id) for runtime_result in result.runtime_results

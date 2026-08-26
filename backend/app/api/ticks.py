@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -9,10 +10,21 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
-from app.services.manual_tick import TickAlreadyRunningError, advance_manual_tick
-from app.services.runtime_dependency import get_agent_runtime
+from app.repositories.memory_repository import MemoryRepository
+from app.services.manual_tick import (
+    TickAlreadyRunningError,
+    advance_manual_tick,
+    create_memory_callbacks,
+    create_policy_callback,
+)
+from app.services.runtime_dependency import (
+    get_agent_runtime,
+    get_memory_repository,
+    get_policy_evaluator,
+)
 from app.services.simulations import require_owned_simulation
 from app.simulation.agent_runtime import AgentRuntime
+from app.simulation.policy.models import PolicyEvaluationInput, PolicyEvaluationResult
 
 
 class DecisionExplanationResponse(BaseModel):
@@ -69,10 +81,25 @@ def advance_tick(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
+    policy_evaluator: Callable[
+        [PolicyEvaluationInput], PolicyEvaluationResult
+    ] = Depends(get_policy_evaluator),
+    memory_repository: MemoryRepository = Depends(get_memory_repository),
 ):
     simulation = require_owned_simulation(db, simulation_id, current_user)
+    memory_retriever, memory_store = create_memory_callbacks(db, memory_repository)
     try:
-        result = asyncio.run(advance_manual_tick(db, simulation, runtime=runtime))
+        result = asyncio.run(
+            advance_manual_tick(
+                db,
+                simulation,
+                runtime=runtime,
+                policy=create_policy_callback(db, simulation.id, policy_evaluator),
+                policy_version="policy-mvp-0.1",
+                memory_retriever=memory_retriever,
+                memory_store=memory_store,
+            )
+        )
         db.commit()
     except TickAlreadyRunningError:
         db.rollback()
