@@ -67,6 +67,7 @@ def build_event_created_event(event: Event) -> RealtimeEvent:
     )
 
 
+
 def build_simulation_status_event(
     simulation_id: UUID,
     status: str,

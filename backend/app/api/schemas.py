@@ -50,6 +50,10 @@ class SimulationCreateRequest(BaseModel):
         return value
 
 
+class SimulationStatusUpdateRequest(BaseModel):
+    status: Literal["running", "paused", "completed", "failed"]
+
+
 class SimulationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
