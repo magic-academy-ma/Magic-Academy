@@ -98,15 +98,27 @@ describe("getSnapshot", () => {
 });
 
 describe("restoreSnapshot", () => {
-  it("복원 성공 시 새 Simulation 데이터를 반환한다", async () => {
+  it("복원 성공 시 새 Simulation을 생성하지 않고 저장된 시점의 snapshot payload를 그대로 반환한다", async () => {
     mockFetchOnce(200, {
-      data: { id: "sim_02", status: "RUNNING", origin_simulation_id: "sim_01" },
+      data: {
+        schema_version: "slice6-snapshot-v1",
+        simulation: { id: "sim_01", current_tick: 5, current_day: 1 },
+        agents: [],
+        relationships: [],
+        events: [],
+      },
     });
 
     const result = await restoreSnapshot("tok", "sim_01", "snap_01");
 
-    expect(result.id).toBe("sim_02");
-    expect(result.origin_simulation_id).toBe("sim_01");
+    expect(result.schema_version).toBe("slice6-snapshot-v1");
+    expect(result.simulation.id).toBe("sim_01");
+    expect(result).not.toHaveProperty("origin_simulation_id");
+
+    const [url, options] = fetch.mock.calls[0];
+    expect(url).toContain("/simulations/sim_01/restore");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ snapshot_id: "snap_01" });
   });
 
   it("409 CONFLICT를 그대로 전달한다", async () => {
