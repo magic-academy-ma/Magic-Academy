@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
+import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -86,6 +87,7 @@ function classifyTickError(requestError) {
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [personaId, setPersonaId] = useState(null);
+  const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -111,6 +113,13 @@ export default function App() {
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
   if (!personaId) return <PersonaSelectPage onConfirm={setPersonaId} />;
+  if (!personaSetupDone) return (
+    <PersonaSetupPage
+      charId={personaId}
+      onBack={() => setPersonaId(null)}
+      onStart={async (_charId, _config) => setPersonaSetupDone(true)}
+    />
+  );
 
   async function loadAgents(simulationId) {
     setLoading(true);
