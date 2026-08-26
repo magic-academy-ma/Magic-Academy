@@ -1,6 +1,6 @@
 ---
 title: Slice 7 — 설정 공유·가져오기·배포 계약
-status: draft
+status: approved
 updated: 2026-08-25
 visibility: public
 source:
