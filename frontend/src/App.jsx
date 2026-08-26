@@ -3,6 +3,7 @@ import { apiRequest } from "./api/client.js";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
+import BrandingPage from "./pages/BrandingPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -86,12 +87,12 @@ function classifyTickError(requestError) {
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [simulationId, setSimulationId] = useState(null);
   const [personaId, setPersonaId] = useState(null);
   const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [name, setName] = useState("Slice 0 Simulation");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -102,6 +103,7 @@ export default function App() {
   const [authNotice, setAuthNotice] = useState("");
   function resetSession(notice = "") {
     setAuth(null);
+    setSimulationId(null);
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
@@ -111,10 +113,18 @@ export default function App() {
     setAuthNotice(notice);
   }
 
+  function handleEnroll(id) {
+    setSimulationId(id);
+    setSimulation({ id, name: 'Magic Academy Simulation' });
+    loadAgents(id);
+  }
+
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
-  if (!personaId) return <PersonaSelectPage onConfirm={setPersonaId} />;
+  if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
   if (!personaSetupDone) return (
     <PersonaSetupPage
+      simulationId={simulationId}
       charId={personaId}
       onBack={() => setPersonaId(null)}
       onStart={async (_charId, _config) => setPersonaSetupDone(true)}
@@ -130,29 +140,6 @@ export default function App() {
       });
       setAgents(agentList);
       setSelectedAgent(agentList[0] ?? null);
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        resetSession();
-        return;
-      }
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function createSimulation(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const created = await apiRequest("/v1/simulations", {
-        token: auth.access_token,
-        method: "POST",
-        body: JSON.stringify({ name }),
-      });
-      setSimulation(created);
-      await loadAgents(created.id);
     } catch (requestError) {
       if (requestError.status === 401) {
         resetSession();
@@ -229,15 +216,7 @@ export default function App() {
     <div className="app-shell">
       <header><strong>Magic Academy</strong><div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div></header>
       <main>
-        {!simulation ? (
-          <form className="panel create-panel" onSubmit={createSimulation}>
-            <h1>Simulation 생성</h1>
-            <label>이름<input required value={name} onChange={(e) => setName(e.target.value)} /></label>
-            {error && <p className="message error" role="alert">{error}</p>}
-            <button disabled={loading}>{loading ? "Simulation과 Agent를 생성하는 중..." : "Simulation 생성"}</button>
-          </form>
-        ) : (
-          <section className="workspace">
+        <section className="workspace">
             <div className="panel agent-list">
               <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
@@ -344,7 +323,6 @@ export default function App() {
               )}
             </div>
           </section>
-        )}
       </main>
     </div>
   );
