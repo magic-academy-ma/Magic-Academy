@@ -104,10 +104,12 @@ def test_registration_login_creation_and_idempotent_seed(client) -> None:
         Event,
         EventParticipant,
         Location,
+        Organization,
+        OrganizationMembership,
         ProfessorProfile,
         StudentProfile,
     )
-    from app.services.fixtures import AGENT_FIXTURES, seed_slice_zero
+    from app.services.fixtures import AGENT_FIXTURES, MVP_MAJOR_NAME, seed_slice_zero
 
     test_client, session_factory = client
     user, headers = register_and_login(test_client, "owner-a")
@@ -165,11 +167,26 @@ def test_registration_login_creation_and_idempotent_seed(client) -> None:
         db.commit()
         assert db.scalar(select(func.count()).select_from(Agent)) == 6
         assert db.scalar(select(func.count()).select_from(AgentState)) == 6
-        assert db.scalar(select(func.count()).select_from(Location)) == 2
+        # MVP 공간 6종 (mvp-feature-spec.md §2.5).
+        assert db.scalar(select(func.count()).select_from(Location)) == 6
         assert db.scalar(select(func.count()).select_from(StudentProfile)) == 5
         assert db.scalar(select(func.count()).select_from(ProfessorProfile)) == 1
         assert db.scalar(select(func.count()).select_from(Event)) == 1
         assert db.scalar(select(func.count()).select_from(EventParticipant)) == 2
+        # MVP 단일 전공: 마법공학과 1개 + 학생 5명 소속 (idempotent 재시드 후에도 안정).
+        major = db.scalar(
+            select(Organization).where(Organization.organization_type == "major")
+        )
+        assert major is not None and major.name == MVP_MAJOR_NAME
+        assert db.scalar(select(func.count()).select_from(Organization)) == 1
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(OrganizationMembership)
+                .where(OrganizationMembership.organization_id == major.id)
+            )
+            == 5
+        )
         for stored_agent in db.scalars(select(Agent)).all():
             fixture = fixtures_by_key[stored_agent.fixture_key]
             assert (
@@ -229,6 +246,88 @@ def test_owner_gets_200_other_user_gets_403_and_missing_gets_404(client) -> None
     assert test_client.get(f"/v1/simulations/{simulation_id}", headers=other_headers).status_code == 403
     assert test_client.get(f"/v1/simulations/{uuid4()}", headers=owner_headers).status_code == 404
     assert test_client.get(f"/v1/simulations/{simulation_id}/agents", headers=other_headers).status_code == 403
+
+
+def test_locations_endpoint_returns_six_mvp_spaces_and_enforces_ownership(client) -> None:
+    from app.services.fixtures import LOCATIONS
+
+    test_client, _ = client
+    _, owner_headers = register_and_login(test_client, "loc-owner")
+    _, other_headers = register_and_login(test_client, "loc-other")
+    simulation_id = test_client.post(
+        "/v1/simulations", headers=owner_headers, json={"name": "Loc"}
+    ).json()["id"]
+
+    response = test_client.get(
+        f"/v1/simulations/{simulation_id}/locations", headers=owner_headers
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert {location["code"]: location["name"] for location in body} == LOCATIONS
+    assert all(UUID(location["id"]).version == 7 for location in body)
+    # 학생의 현재 위치(dormitory)가 이 목록에 실제로 존재한다.
+    agents = test_client.get(
+        f"/v1/simulations/{simulation_id}/agents", headers=owner_headers
+    ).json()
+    student_location_codes = {
+        agent["location"]["code"] for agent in agents if agent["agent_type"] == "student"
+    }
+    assert student_location_codes <= set(LOCATIONS)
+
+    assert (
+        test_client.get(
+            f"/v1/simulations/{simulation_id}/locations", headers=other_headers
+        ).status_code
+        == 403
+    )
+    assert (
+        test_client.get(
+            f"/v1/simulations/{uuid4()}/locations", headers=owner_headers
+        ).status_code
+        == 404
+    )
+    assert (
+        test_client.get(f"/v1/simulations/{simulation_id}/locations").status_code == 401
+    )
+
+
+def test_simulation_detail_exposes_night_waiting(client) -> None:
+    from app.domain.models import Simulation
+
+    test_client, session_factory = client
+    _, headers = register_and_login(test_client, "night-owner")
+    simulation_id = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Night"}
+    ).json()["id"]
+
+    fresh = test_client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert fresh.status_code == 200
+    assert fresh.json()["night_waiting"] is False
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        simulation.night_waiting = True
+        db.commit()
+
+    waiting = test_client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert waiting.status_code == 200
+    assert waiting.json()["night_waiting"] is True
+
+
+def test_agents_list_exposes_active_status_and_location(client) -> None:
+    test_client, _ = client
+    _, headers = register_and_login(test_client, "active-owner")
+    simulation_id = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Active"}
+    ).json()["id"]
+
+    agents = test_client.get(
+        f"/v1/simulations/{simulation_id}/agents", headers=headers
+    ).json()
+    assert agents
+    for agent in agents:
+        assert agent["active_status"] == "active"
+        assert set(agent["location"]) == {"id", "code", "name"}
 
 
 def test_duplicate_username_returns_409_and_bad_password_returns_401(client) -> None:

@@ -66,9 +66,141 @@ class Simulation(TimestampMixin, Base):
     current_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     current_tick: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     magic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    night_waiting: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+class SimulationConfig(TimestampMixin, Base):
+    __tablename__ = "simulation_configs"
+    __table_args__ = (
+        UniqueConstraint("simulation_id", "version", name="uq_simulation_configs_version"),
+        CheckConstraint("version >= 1", name="ck_simulation_configs_version"),
+        CheckConstraint(
+            "event_frequency IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_event_frequency",
+        ),
+        CheckConstraint(
+            "event_impact IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_event_impact",
+        ),
+        CheckConstraint(
+            "magic_layer_frequency IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_magic_layer_frequency",
+        ),
+        CheckConstraint(
+            "magic_layer_impact IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_magic_layer_impact",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_frequency: Mapped[str] = mapped_column(String(10), nullable=False)
+    event_impact: Mapped[str] = mapped_column(String(10), nullable=False)
+    magic_layer_frequency: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="medium"
+    )
+    magic_layer_impact: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="medium"
+    )
+    magic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    policy_version: Mapped[str | None] = mapped_column(String(100))
+    resolver_version: Mapped[str | None] = mapped_column(String(100))
+    user_persona_settings: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
+
+class SimulationSnapshot(TimestampMixin, Base):
+    __tablename__ = "simulation_snapshots"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["simulation_id", "config_version"],
+            ["simulation_configs.simulation_id", "simulation_configs.version"],
+            name="fk_simulation_snapshots_config",
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("simulation_id", "tick_number", name="uq_simulation_snapshots_tick"),
+        CheckConstraint("tick_number >= 0", name="ck_simulation_snapshots_tick"),
+        CheckConstraint("config_version >= 1", name="ck_simulation_snapshots_config_version"),
+        Index("idx_simulation_snapshots_timeline", "simulation_id", "tick_number"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), nullable=False
+    )
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    config_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class SimulationShare(TimestampMixin, Base):
+    __tablename__ = "simulation_shares"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('private', 'unlisted', 'public')", name="ck_simulation_shares_visibility"),
+        Index(
+            "uq_simulation_shares_active_simulation",
+            "simulation_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index(
+            "idx_simulation_shares_public_listing",
+            "visibility",
+            "created_at",
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False, server_default="")
+    description: Mapped[str | None] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, server_default="private")
+    export_schema_version: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="slice7-share-v1"
+    )
+    export_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShareImport(TimestampMixin, Base):
+    """Idempotency ledger and provenance record for Slice 7 imports.
+
+    Identity is `(request_user_id, idempotency_key)`; `fingerprint` is the
+    canonical `share_id` fingerprint the request must match on retry.
+    """
+
+    __tablename__ = "share_imports"
+    __table_args__ = (
+        UniqueConstraint("request_user_id", "idempotency_key", name="uq_share_imports_user_key"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    request_user_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    share_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulation_shares.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
 
 
 class Location(TimestampMixin, Base):
@@ -101,6 +233,7 @@ class Agent(TimestampMixin, Base):
         CheckConstraint("agreeableness BETWEEN -50 AND 50 AND agreeableness % 5 = 0", name="ck_agents_agreeableness"),
         CheckConstraint("emotional_stability BETWEEN -50 AND 50 AND emotional_stability % 5 = 0", name="ck_agents_emotional_stability"),
         CheckConstraint("inactive_until_tick IS NULL OR inactive_until_tick >= 0", name="ck_agents_inactive_until_tick"),
+        CheckConstraint("cursed_until_tick IS NULL OR cursed_until_tick >= 0", name="ck_agents_cursed_until_tick"),
         Index("uq_agents_active_user_persona", "simulation_id", unique=True, postgresql_where=text("agent_type = 'user_persona' AND deleted_at IS NULL")),
         Index("idx_agents_simulation_id", "simulation_id", "id"),
         Index("idx_agents_runtime_active", "simulation_id", "active_status", "inactive_until_tick"),
@@ -123,6 +256,7 @@ class Agent(TimestampMixin, Base):
     role_description: Mapped[str | None] = mapped_column(Text)
     active_status: Mapped[str] = mapped_column(String(30), nullable=False, server_default="active")
     inactive_until_tick: Mapped[int | None] = mapped_column(BigInteger)
+    cursed_until_tick: Mapped[int | None] = mapped_column(BigInteger)
     persona_locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -260,7 +394,7 @@ class Event(TimestampMixin, Base):
     __tablename__ = "events"
     __table_args__ = (
         ForeignKeyConstraint(["simulation_id", "location_id"], ["locations.simulation_id", "locations.id"], ondelete="SET NULL (location_id)", onupdate="RESTRICT", name="fk_events_location"),
-        CheckConstraint("event_type IN ('class', 'group_project', 'exam', 'meeting', 'mt', 'festival', 'student_council', 'random_incident')", name="ck_events_type"),
+        CheckConstraint("event_type IN ('class', 'group_project', 'exam', 'meeting', 'mt', 'festival', 'student_council', 'random_incident', 'student_missing', 'curse_spread', 'magic_explosion', 'ritual_failure', 'magical_discovery')", name="ck_events_type"),
         CheckConstraint("status IN ('scheduled', 'ongoing', 'completed', 'cancelled')", name="ck_events_status"),
         CheckConstraint("simulation_day >= 1", name="ck_events_simulation_day"),
         Index("idx_events_simulation_started", "simulation_id", text("started_at DESC"), text("id DESC")),
@@ -277,6 +411,18 @@ class Event(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+
+class EventBatchResult(TimestampMixin, Base):
+    """Immutable Task 3 result used by REST and post-commit WS publication."""
+
+    __tablename__ = "event_batch_results"
+    __table_args__ = (CheckConstraint("tick_number >= 1", name="ck_event_batch_results_tick"),)
+
+    simulation_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), primary_key=True)
+    tick_number: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    input_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
 class EventParticipant(TimestampMixin, Base):

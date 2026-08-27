@@ -16,8 +16,10 @@ from app.simulation.agent_runtime import (
     AgentRuntimeResult,
     Block,
     EventSummary,
+    RelationshipSummary,
     ScheduleSummary,
 )
+from app.simulation.intent_conflict import resolve_talk_conflicts
 
 
 class AgentRuntimeExecutor(Protocol):
@@ -57,6 +59,7 @@ class RuntimeOrchestrator:
         events: Sequence[EventSummary],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        relationships: Sequence[RelationshipSummary] = (),
         memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         selected_agents = self._target_selector.select(
@@ -83,6 +86,8 @@ class RuntimeOrchestrator:
                 schedule=schedule,
                 valid_agent_ids=valid_agent_ids,
                 valid_location_ids=valid_location_ids,
+                agent_candidates=agent_candidates,
+                relationships=relationships,
                 memories=memories_by_agent.get(agent.agent_id, ()),
             )
             for agent in selected_agents
@@ -95,7 +100,8 @@ class RuntimeOrchestrator:
         with ThreadPoolExecutor(
             max_workers=self.MAX_CONCURRENT_RUNTIMES
         ) as executor:
-            results = tuple(executor.map(self._runtime.run, runtime_inputs))
+            proposed_results = tuple(executor.map(self._runtime.run, runtime_inputs))
+        results = resolve_talk_conflicts(proposed_results).runtime_results
         save_result = self._result_sink.save_batch(results)
         return RuntimeBatchExecutionResult(
             results=results,

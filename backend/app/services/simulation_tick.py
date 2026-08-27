@@ -9,6 +9,7 @@ from app.repositories.simulations import (
     list_active_runtime_location_ids,
     list_runtime_agent_states,
     list_runtime_agents,
+    list_runtime_relationships,
 )
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeBatchExecutionResult
@@ -45,6 +46,7 @@ class SimulationTickService:
         states = list_runtime_agent_states(db, agent_ids)
         agent_states = self._validate_agent_states(agent_ids, states)
         valid_location_ids = list_active_runtime_location_ids(db, simulation_id)
+        relationships = list_runtime_relationships(db, simulation_id)
         self._validate_events(
             simulation_id=simulation_id,
             events=events,
@@ -77,6 +79,7 @@ class SimulationTickService:
             event_participants=event_participants,
             valid_agent_ids=agent_ids,
             valid_location_ids=valid_location_ids,
+            relationships=relationships,
             memories_by_agent=memories_by_agent,
         )
 

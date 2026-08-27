@@ -13,8 +13,13 @@ from app.api.schemas import (
     StudentProfileResponse,
 )
 from app.domain.models import Simulation, User
-from app.repositories.simulations import get_simulation, list_agents_with_state
+from app.repositories.simulations import (
+    get_simulation,
+    list_agents_with_state,
+    list_simulation_locations,
+)
 from app.services.fixtures import seed_slice_zero
+from app.services.simulation_snapshots import SimulationSnapshotService
 
 
 class InvalidSimulationStatusTransitionError(Exception):
@@ -36,6 +41,7 @@ def create_simulation(db: Session, owner: User, name: str) -> Simulation:
     try:
         db.flush()
         seed_slice_zero(db, simulation.id)
+        SimulationSnapshotService().create_snapshot(db, simulation)
         db.commit()
     except Exception:
         db.rollback()
@@ -66,6 +72,16 @@ def update_simulation_status(
     return simulation
 
 
+def get_location_responses(
+    db: Session, simulation_id: UUID, owner: User
+) -> list[LocationResponse]:
+    require_owned_simulation(db, simulation_id, owner)
+    return [
+        LocationResponse(id=location.id, code=location.code, name=location.name)
+        for location in list_simulation_locations(db, simulation_id)
+    ]
+
+
 def get_agent_responses(db: Session, simulation_id: UUID, owner: User) -> list[AgentResponse]:
     require_owned_simulation(db, simulation_id, owner)
     responses = []
@@ -79,6 +95,7 @@ def get_agent_responses(db: Session, simulation_id: UUID, owner: User) -> list[A
                 fixture_version=agent.fixture_version,
                 name=agent.name,
                 agent_type=agent.agent_type,
+                active_status=agent.active_status,
                 mbti_type=agent.mbti_type,
                 profile=AgentProfileResponse(
                     openness=agent.openness,

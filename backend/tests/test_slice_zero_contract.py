@@ -6,7 +6,7 @@ import jwt
 from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.domain.models import User
-from app.services.fixtures import AGENT_FIXTURES, LOCATIONS
+from app.services.fixtures import AGENT_FIXTURES, LOCATIONS, MVP_MAJOR_NAME
 
 
 def test_fixture_contract_has_exactly_five_students_and_one_professor() -> None:
@@ -18,7 +18,17 @@ def test_fixture_contract_has_exactly_five_students_and_one_professor() -> None:
     assert [fixture.key for fixture in AGENT_FIXTURES] == [
         "student-01", "student-02", "student-03", "student-04", "student-05", "professor-01"
     ]
-    assert LOCATIONS == {"dormitory": "기숙사", "classroom": "교실"}
+    # MVP 공간 6종 (mvp-feature-spec.md §2.5). code는 소문자 snake_case 컨벤션.
+    assert LOCATIONS == {
+        "classroom": "교실",
+        "restaurant": "식당",
+        "library": "도서관",
+        "lab": "연구실",
+        "dormitory": "기숙사",
+        "central_square": "중앙광장",
+    }
+    # MVP 단일 전공.
+    assert MVP_MAJOR_NAME == "마법공학과"
 
 
 def test_each_fixture_matches_the_confluence_v02_contract() -> None:
