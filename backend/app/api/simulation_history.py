@@ -26,10 +26,12 @@ from app.services.simulation_replay import (
 from app.services.simulation_snapshots import (
     InitialSettingsLockedError,
     InvalidSimulationConfigError,
+    MagicOffNotEligibleError,
     SimulationConfigInput,
     SimulationSettingsLockedError,
     SimulationSnapshotService,
     UnsupportedSnapshotSchemaError,
+    magic_off_eligible,
 )
 
 
@@ -92,12 +94,17 @@ def _owned_simulation(db: Session, simulation_id: UUID, user: User) -> Simulatio
     return simulation
 
 
-def _config_data(config) -> dict[str, Any]:
+def _config_data(config, simulation: Simulation) -> dict[str, Any]:
     return {
         "event_frequency": config.event_frequency,
         "event_impact": config.event_impact,
+        "magic_layer_frequency": config.magic_layer_frequency,
+        "magic_layer_impact": config.magic_layer_impact,
         "magic_enabled": config.magic_enabled,
+        "magic_off_eligible": magic_off_eligible(config.magic_layer_impact),
         "config_version": config.version,
+        # 실행 중 PATCH 로 바뀐 값이 실제 적용되는 Tick (= 다음 Tick).
+        "effective_tick": simulation.current_tick + 1,
         "changed_at": config.created_at.isoformat(),
     }
 
@@ -111,16 +118,20 @@ def _save_config(
         config = snapshot_service.save_config(db, simulation, config_input)
         db.commit()
         db.refresh(config)
+        db.refresh(simulation)
     except SimulationSettingsLockedError as exc:
         db.rollback()
         raise Slice6APIError(409, "SIMULATION_SETTINGS_LOCKED", str(exc)) from exc
     except InitialSettingsLockedError as exc:
         db.rollback()
         raise Slice6APIError(409, "INITIAL_SETTINGS_LOCKED", str(exc)) from exc
+    except MagicOffNotEligibleError as exc:
+        db.rollback()
+        raise Slice6APIError(409, "CONFLICT", str(exc)) from exc
     except InvalidSimulationConfigError as exc:
         db.rollback()
         raise Slice6APIError(400, "INVALID_REPLAY_REQUEST", str(exc)) from exc
-    return JSONResponse(content={"data": _config_data(config)})
+    return JSONResponse(content={"data": _config_data(config, simulation)})
 
 
 @router.put("/{simulation_id}/parameters")
@@ -138,6 +149,8 @@ def put_parameters(
         SimulationConfigInput(
             event_frequency=request.event_frequency,
             event_impact=request.event_impact,
+            magic_layer_frequency=request.magic_layer_frequency,
+            magic_layer_impact=request.magic_layer_impact,
             magic_enabled=request.magic_enabled,
             user_persona_settings=(latest.user_persona_settings if latest else {}),
             policy_version=(latest.policy_version if latest else None),
@@ -163,6 +176,10 @@ def patch_parameters(
         SimulationConfigInput(
             event_frequency=request.event_frequency,
             event_impact=request.event_impact,
+            # Magic 파라미터는 PATCH 로 바꿀 수 없다 — 항상 최신 값을 그대로 이어간다
+            # (요청 본문에 Magic 필드가 오면 스키마 extra="forbid" 로 이미 거부됨).
+            magic_layer_frequency=latest.magic_layer_frequency,
+            magic_layer_impact=latest.magic_layer_impact,
             magic_enabled=latest.magic_enabled,
             user_persona_settings=latest.user_persona_settings,
             policy_version=latest.policy_version,

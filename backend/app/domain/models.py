@@ -83,6 +83,14 @@ class SimulationConfig(TimestampMixin, Base):
             "event_impact IN ('low', 'medium', 'high')",
             name="ck_simulation_configs_event_impact",
         ),
+        CheckConstraint(
+            "magic_layer_frequency IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_magic_layer_frequency",
+        ),
+        CheckConstraint(
+            "magic_layer_impact IN ('low', 'medium', 'high')",
+            name="ck_simulation_configs_magic_layer_impact",
+        ),
     )
 
     id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -92,6 +100,12 @@ class SimulationConfig(TimestampMixin, Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     event_frequency: Mapped[str] = mapped_column(String(10), nullable=False)
     event_impact: Mapped[str] = mapped_column(String(10), nullable=False)
+    magic_layer_frequency: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="medium"
+    )
+    magic_layer_impact: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="medium"
+    )
     magic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     policy_version: Mapped[str | None] = mapped_column(String(100))
     resolver_version: Mapped[str | None] = mapped_column(String(100))

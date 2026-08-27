@@ -23,6 +23,7 @@ from app.simulation.event_master import (
 from app.simulation.magic_layer import (
     AgentSnapshot as MagicAgentSnapshot,
     MagicLayer,
+    MagicLayerResult,
     SpecialEvent,
 )
 from app.simulation.policy.conflict import resolve_conflicts
@@ -39,6 +40,8 @@ class EventAndMagicResult:
     special_events: tuple[SpecialEvent, ...]
     resolved_effects: tuple[EffectCandidate, ...]
     reflection_eligible_event_keys: tuple[str, ...]
+    # 이 Tick에 적용된 Magic Layer 영향도 (특수 Event 기록용).
+    magic_impact: str = "medium"
 
 
 REFLECTION_IMPORTANCE_THRESHOLD = 70
@@ -53,9 +56,11 @@ IMPACT_MULTIPLIER_BY_NAME: dict[str, float] = {
 
 @dataclass(frozen=True)
 class EventParameters:
-    """이번 Tick에 고정된 Event 파라미터 스냅샷 (mvp-tick-event-policy.md §4.3–§4.5).
+    """이번 Tick에 고정된 Event/Magic 파라미터 스냅샷 (mvp-tick-event-policy.md
+    §4.3–§4.5, simulation-parameters.md §4).
 
-    ``frequency_seed``가 ``None``이면 Event Master는 빈도 정책 없이 기존처럼 동작한다.
+    ``frequency_seed``가 ``None``이면 Event Master는 빈도 정책 없이 기존처럼 동작하고,
+    ``magic_frequency_seed``가 ``None``이면 Magic Layer도 빈도 게이트 없이 동작한다.
     """
 
     event_frequency: str = "medium"
@@ -64,6 +69,12 @@ class EventParameters:
     daily_dynamic_count: int = 0
     cooldown_excluded_agent_ids: Mapping[str, frozenset[str]] = field(default_factory=dict)
     high_impact_agent_ids_today: frozenset[str] = frozenset()
+    # Magic Layer 파라미터 (실행 전 고정 — simulation-parameters.md §5).
+    magic_enabled: bool = True
+    magic_frequency: str = "medium"
+    magic_impact: str = "medium"
+    magic_frequency_seed: str | None = None
+    magic_daily_count: int = 0
 
 
 def run_event_and_magic_phase(
@@ -92,14 +103,25 @@ def run_event_and_magic_phase(
         cooldown_excluded_agent_ids=dict(params.cooldown_excluded_agent_ids),
         high_impact_agent_ids_today=params.high_impact_agent_ids_today,
     )
-    magic_result = MagicLayer().evaluate(
-        tick=tick,
-        regular_events=events,
-        agent_snapshots=magic_agent_snapshots,
-        relationship_snapshots=magic_relationship_snapshots,
-        lab_location_ids=lab_location_ids,
-    )
+    if params.magic_enabled:
+        magic_result = MagicLayer().evaluate(
+            tick=tick,
+            regular_events=events,
+            agent_snapshots=magic_agent_snapshots,
+            relationship_snapshots=magic_relationship_snapshots,
+            lab_location_ids=lab_location_ids,
+            magic_frequency=params.magic_frequency,
+            magic_frequency_seed=params.magic_frequency_seed,
+            magic_daily_count=params.magic_daily_count,
+        )
+    else:
+        # magic_enabled=false — 이 실행에서는 Magic Layer 특수 사건을 호출하지
+        # 않는다 (simulation-parameters.md §2). 일반 Event 변환은 그대로 통과.
+        magic_result = MagicLayerResult(
+            converted_events=tuple(events), special_events=()
+        )
     impact_multiplier = IMPACT_MULTIPLIER_BY_NAME.get(params.event_impact, 1.0)
+    magic_impact_multiplier = IMPACT_MULTIPLIER_BY_NAME.get(params.magic_impact, 1.0)
     event_candidates = [
         candidate
         for event in magic_result.converted_events
@@ -111,13 +133,17 @@ def run_event_and_magic_phase(
         )
     ]
     magic_candidates = build_magic_effect_candidates(
-        magic_result.special_events, run_id=run_id, agent_snapshots=agent_state_snapshots
+        magic_result.special_events,
+        run_id=run_id,
+        agent_snapshots=agent_state_snapshots,
+        impact_multiplier=magic_impact_multiplier,
     )
     resolved = resolve_conflicts([*event_candidates, *magic_candidates])
     return EventAndMagicResult(
         events=magic_result.converted_events,
         special_events=magic_result.special_events,
         resolved_effects=tuple(resolved),
+        magic_impact=params.magic_impact,
         reflection_eligible_event_keys=tuple(
             [
                 event.event_key

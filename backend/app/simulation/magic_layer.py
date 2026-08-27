@@ -14,11 +14,24 @@ EffectCandidates by the Event Policy Registry (app.simulation.policy.registries
 
 from __future__ import annotations
 
+import hashlib
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.simulation.event_master import Event
 from app.simulation.policy.models import RelationshipSnapshot
+
+# Magic Layer 빈도 파라미터 (simulation-parameters.md §4 / PR2 스펙 §2). 조건을
+# 충족한 후보에만 적용하며, 확률 판정 시드는 Event Master 와 동일하게
+# ``simulation_id:tick:config_version`` 구조를 재사용한다 (§5 Replay 재현성).
+MAGIC_FREQUENCY_PROBABILITY: dict[str, float] = {
+    "low": 0.25,
+    "medium": 0.50,
+    "high": 0.75,
+}
+MAGIC_DAILY_MAX: dict[str, int] = {"low": 1, "medium": 2, "high": 3}
+MAGIC_TICK_MAX = 1
 
 # magic-layer.md §3.2.1, §3.2.2 확정 우선순위.
 STUDENT_MISSING = "STUDENT_MISSING"
@@ -102,6 +115,15 @@ def _is_missing_candidate(snapshot: AgentSnapshot) -> bool:
     return hits >= STUDENT_MISSING_STREAK_REQUIRED
 
 
+def _frequency_allows(magic_frequency: str, frequency_seed: str) -> bool:
+    """빈도 확률 판정 — Event Master ``_dynamic_frequency_allows`` 와 동일한
+    seed → digest → ``random.Random`` 방식으로 Replay 시 결과가 재현된다."""
+    probability = MAGIC_FREQUENCY_PROBABILITY.get(magic_frequency, 0.50)
+    digest = hashlib.sha256(f"magic:{frequency_seed}".encode()).digest()
+    rng = random.Random(int.from_bytes(digest[:8], "big"))
+    return rng.random() < probability
+
+
 def _same_location_others(
     agent_id: str, location_id: str | None, snapshots: Sequence[AgentSnapshot]
 ) -> list[str]:
@@ -127,6 +149,9 @@ class MagicLayer:
         agent_snapshots: Sequence[AgentSnapshot],
         relationship_snapshots: Sequence[RelationshipSnapshot] = (),
         lab_location_ids: frozenset[str] = frozenset(),
+        magic_frequency: str = "medium",
+        magic_frequency_seed: str | None = None,
+        magic_daily_count: int = 0,
     ) -> MagicLayerResult:
         converted = tuple(self._convert(event) for event in regular_events)
         candidates = self._collect_candidates(
@@ -136,10 +161,41 @@ class MagicLayer:
             lab_location_ids=lab_location_ids,
         )
         selected = self._select_by_priority(candidates)
+        selected = self._apply_frequency_gate(
+            selected,
+            magic_frequency=magic_frequency,
+            magic_frequency_seed=magic_frequency_seed,
+            magic_daily_count=magic_daily_count,
+        )
         return MagicLayerResult(
             converted_events=converted,
-            special_events=tuple(selected) if selected is not None else (),
+            special_events=tuple(selected) if selected else (),
         )
+
+    @staticmethod
+    def _apply_frequency_gate(
+        selected: list[SpecialEvent] | None,
+        *,
+        magic_frequency: str,
+        magic_frequency_seed: str | None,
+        magic_daily_count: int,
+    ) -> list[SpecialEvent]:
+        """조건을 충족한 후보에 빈도 확률·일일 상한·Tick 상한을 적용한다.
+
+        ``magic_frequency_seed`` 가 ``None`` 이면(빈도 파라미터 미연결 경로)
+        기존처럼 조건 충족 후보를 그대로 통과시킨다.
+        """
+        if not selected:
+            return []
+        # Tick 당 최대 생성 수 (모든 수준 1개 — PR2 스펙 §2).
+        selected = selected[:MAGIC_TICK_MAX]
+        if magic_frequency_seed is None:
+            return selected
+        if magic_daily_count >= MAGIC_DAILY_MAX.get(magic_frequency, 2):
+            return []
+        if not _frequency_allows(magic_frequency, magic_frequency_seed):
+            return []
+        return selected
 
     @staticmethod
     def _convert(event: Event) -> Event:

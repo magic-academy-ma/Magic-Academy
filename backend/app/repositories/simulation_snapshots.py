@@ -70,6 +70,8 @@ class SimulationConfigRepository:
         user_persona_settings: dict[str, Any],
         policy_version: str | None,
         resolver_version: str | None,
+        magic_layer_frequency: str = "medium",
+        magic_layer_impact: str = "medium",
     ) -> SimulationConfig:
         session.execute(
             select(Simulation.id).where(Simulation.id == simulation.id).with_for_update()
@@ -88,6 +90,8 @@ class SimulationConfigRepository:
             version=version,
             event_frequency=event_frequency,
             event_impact=event_impact,
+            magic_layer_frequency=magic_layer_frequency,
+            magic_layer_impact=magic_layer_impact,
             magic_enabled=magic_enabled,
             policy_version=policy_version,
             resolver_version=resolver_version,

@@ -18,6 +18,14 @@ from app.services.event_magic_phase import EventParameters
 # events.event_type은 소문자로 저장된다 (persist_event_batch).
 _DYNAMIC_EVENT_TYPES: tuple[str, ...] = ("group_project", "meeting")
 _COOLDOWN_TICKS_BY_IMPACT: dict[str, int] = {"low": 0, "medium": 1, "high": 3}
+# Magic Layer 특수 사건 (magic_layer.py SPECIAL_EVENT_PRIORITY 와 동일, 소문자).
+_MAGIC_EVENT_TYPES: tuple[str, ...] = (
+    "student_missing",
+    "curse_spread",
+    "magic_explosion",
+    "ritual_failure",
+    "magical_discovery",
+)
 
 
 def build_event_parameters(
@@ -45,6 +53,19 @@ def build_event_parameters(
             .where(
                 Event.simulation_id == simulation_id,
                 Event.event_type.in_(_DYNAMIC_EVENT_TYPES),
+                Event.simulation_day == current_day,
+            )
+        )
+        or 0
+    )
+
+    magic_daily_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Event)
+            .where(
+                Event.simulation_id == simulation_id,
+                Event.event_type.in_(_MAGIC_EVENT_TYPES),
                 Event.simulation_day == current_day,
             )
         )
@@ -95,4 +116,9 @@ def build_event_parameters(
             key: frozenset(values) for key, values in cooldown_excluded.items()
         },
         high_impact_agent_ids_today=frozenset(high_impact_today),
+        magic_enabled=config.magic_enabled,
+        magic_frequency=config.magic_layer_frequency,
+        magic_impact=config.magic_layer_impact,
+        magic_frequency_seed=frequency_seed,
+        magic_daily_count=magic_daily_count,
     )

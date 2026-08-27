@@ -124,6 +124,7 @@ def _build_magic_signal_candidate(
     signal_type: StateSignalType,
     intensity: SignalIntensity,
     agent_snapshots: Mapping[str, AgentSnapshot],
+    impact_multiplier: float = 1.0,
 ) -> EffectCandidate | None:
     snapshot = agent_snapshots.get(agent_id)
     if snapshot is None:
@@ -137,7 +138,9 @@ def _build_magic_signal_candidate(
         StateSignalType.FATIGUE_UP: "fatigue",
     }[signal_type]
     current = _state_value(snapshot, metric)
-    delta = get_state_delta(signal_type, intensity)
+    # magic_layer_impact 효과 강도 배율 (low 0.5 / medium 1.0 / high 1.5 —
+    # simulation-parameters.md §4). event_impact 쪽과 동일하게 round 처리한다.
+    delta = round(get_state_delta(signal_type, intensity) * impact_multiplier)
     origin = special_event.participant_agent_ids[0] if special_event.participant_agent_ids else "-"
     return EffectCandidate(
         effect_id=(
@@ -161,6 +164,7 @@ def build_magic_effect_candidates(
     *,
     run_id: str,
     agent_snapshots: Mapping[str, AgentSnapshot],
+    impact_multiplier: float = 1.0,
 ) -> list[EffectCandidate]:
     """Magic Layer 특수 Event의 typed signal을 EffectCandidate로 변환한다.
 
@@ -181,6 +185,7 @@ def build_magic_effect_candidates(
                     signal_type=primary_rule[0],
                     intensity=primary_rule[1],
                     agent_snapshots=agent_snapshots,
+                    impact_multiplier=impact_multiplier,
                 )
                 if candidate is not None:
                     candidates.append(candidate)
@@ -192,6 +197,7 @@ def build_magic_effect_candidates(
                     signal_type=secondary_rule[0],
                     intensity=secondary_rule[1],
                     agent_snapshots=agent_snapshots,
+                    impact_multiplier=impact_multiplier,
                 )
                 if candidate is not None:
                     candidates.append(candidate)
