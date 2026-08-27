@@ -17,6 +17,7 @@ button:disabled { opacity: .6; cursor: wait; }.link-button { background: transpa
 .agent-list { display: grid; gap: 10px; }.agent { display: flex; justify-content: space-between; text-align: left; background: #f5f3ff; color: #211a2b; border: 1px solid transparent; }.agent.active { border-color: #7c3aed; background: #ede9fe; }.agent span { color: #6b7280; }
 .inspector dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.inspector dt { color: #6b7280; }.inspector dd { margin: 0; text-align: right; }
 .header-right { display: flex; align-items: center; gap: 12px; }
+.header-save { background: var(--c-primary); color: var(--c-text); }
 .tick-info { font-size: 14px; color: #6b7280; }
 .ws-indicator { font-size: 10px; }
 .ws-indicator.connected { color: #16a34a; }

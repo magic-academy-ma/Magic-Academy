@@ -1,0 +1,9 @@
+.save-page { min-height: 100vh; display: grid; place-items: center; padding: var(--s-6); background: var(--c-bg); color: var(--c-text); font-family: var(--f-ui); }
+.save-page__card { width: min(520px, 100%); padding: var(--s-10); border: 1px solid var(--c-border-hi); border-radius: var(--r-xl); background: var(--c-surface-card); box-shadow: var(--sh-lg); }
+.save-page__eyebrow { margin: 0; color: var(--c-cream); font-family: var(--f-serif-en); font-size: var(--t-sm); letter-spacing: .15em; }
+.save-page h1 { margin: var(--s-3) 0 var(--s-6); font-family: var(--f-serif-ko); }
+.save-page p { color: var(--c-text-2); }
+.save-page__notice { padding: var(--s-3); border-radius: var(--r-md); background: var(--c-primary-muted); }
+.save-page__actions { display: flex; gap: var(--s-3); margin-top: var(--s-8); }
+.save-page__actions button { flex: 1; background: var(--c-primary); }
+.save-page__actions .save-page__cancel { border: 1px solid var(--c-border); background: transparent; color: var(--c-text-2); }

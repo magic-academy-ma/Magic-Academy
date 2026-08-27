@@ -1,0 +1,28 @@
+.main-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--s-6);
+  background: radial-gradient(circle at top, var(--c-surface-hi), var(--c-bg) 58%);
+  color: var(--c-text);
+  font-family: var(--f-ui);
+}
+
+.main-page__card {
+  width: min(560px, 100%);
+  padding: var(--s-12);
+  border: 1px solid var(--c-border-hi);
+  border-radius: var(--r-xl);
+  background: var(--c-surface-card);
+  box-shadow: var(--sh-lg);
+  text-align: center;
+}
+
+.main-page__eyebrow { margin: 0 0 var(--s-4); color: var(--c-cream); font-family: var(--f-serif-en); letter-spacing: .15em; }
+.main-page h1 { margin: 0; font-family: var(--f-serif-ko); font-size: var(--t-2xl); }
+.main-page__description { margin: var(--s-4) 0 var(--s-8); color: var(--c-text-2); }
+.main-page__actions { display: grid; gap: var(--s-3); }
+.main-page__actions button { padding: var(--s-3) var(--s-6); border-radius: var(--r-md); }
+.main-page__primary { background: var(--c-primary); color: var(--c-text); }
+.main-page__primary:hover { background: var(--c-primary-hover); }
+.main-page__secondary { border: 1px solid var(--c-border-hi); background: transparent; color: var(--c-cream); }

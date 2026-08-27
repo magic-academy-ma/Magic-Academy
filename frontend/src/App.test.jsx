@@ -98,6 +98,7 @@ async function login() {
 }
 
 async function completeOnboarding() {
+  await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
   await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
   await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
   await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
@@ -108,7 +109,7 @@ describe('Slice 0 UI', () => {
     createFetchMock()
     render(<App />)
     await login()
-    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
     await completeOnboarding()
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
@@ -117,6 +118,64 @@ describe('Slice 0 UI', () => {
     expect(screen.getByText(/기숙사/)).toBeInTheDocument()
   }, 10000)
 
+  it('filters agents by name and agent type', async () => {
+    await setupSimulationWithAgents()
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Agent 검색' }), '아델')
+    expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /아델/ })).toBeInTheDocument()
+
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Agent 검색' }))
+    await userEvent.click(screen.getByRole('button', { name: '교수' }))
+    expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: /에단/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '학생' }))
+    expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(5)
+  })
+
+  it('toggles pause UI and opens the selected agent Inspector modal', async () => {
+    await setupSimulationWithAgents()
+
+    expect(screen.getByRole('button', { name: '일시정지' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '밤 스킵' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '일시정지' }))
+    expect(screen.getByRole('button', { name: '재개' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Inspector 열기' }))
+    expect(screen.getByRole('dialog', { name: 'Agent Inspector' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Inspector 닫기' }))
+    expect(screen.queryByRole('dialog', { name: 'Agent Inspector' })).not.toBeInTheDocument()
+  })
+
+  it('opens relationship modal, shows six metrics, and selects a clicked node', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    fetchMock.mockImplementationOnce(() => response([{
+      source_agent_id: agents[0].id,
+      target_agent_id: agents[1].id,
+      affection: 12,
+      closeness: 23,
+      trust: 34,
+      tension: 45,
+      rivalry: 56,
+      dependency: 67,
+    }]))
+
+    await userEvent.click(screen.getByRole('button', { name: '관계 보기' }))
+
+    expect(await screen.findByRole('dialog', { name: '관계 그래프' })).toBeInTheDocument()
+    expect(screen.getByText('호감도 12')).toBeInTheDocument()
+    expect(screen.getByText('친밀도 23')).toBeInTheDocument()
+    expect(screen.getByText('신뢰도 34')).toBeInTheDocument()
+    expect(screen.getByText('긴장도 45')).toBeInTheDocument()
+    expect(screen.getByText('경쟁 56')).toBeInTheDocument()
+    expect(screen.getByText('의존도 67')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '아델' }))
+    expect(screen.queryByRole('dialog', { name: '관계 그래프' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
+  })
+
   it('shows a disabled loading button while enrolling', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
@@ -124,6 +183,7 @@ describe('Slice 0 UI', () => {
 
     render(<App />)
     await login()
+    await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
     await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
 
     expect(screen.getByRole('button', { name: '입학 중...' })).toBeDisabled()
@@ -136,6 +196,7 @@ describe('Slice 0 UI', () => {
 
     render(<App />)
     await login()
+    await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
     await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.')
@@ -187,14 +248,37 @@ describe('Slice 0 UI', () => {
 
     render(<App />)
     await login()
+    await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
     await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
 
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     await login()
 
-    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner B님, 환영합니다.' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Magic Academy Simulation' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
+  })
+  it('opens MyPage from S1 and returns to S1', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
+      .mockImplementationOnce(() => response([simulation]))
+    render(<App />)
+    await login()
+    await userEvent.click(screen.getByRole('button', { name: '마이페이지' }))
+    expect(await screen.findByRole('heading', { name: '내 시뮬레이션' })).toBeInTheDocument()
+    expect(screen.getByText('Magic Academy Simulation')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '불러오기 · 준비 중' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: '뒤로가기' }))
+    expect(screen.getByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
+  })
+
+  it('opens SavePage from S5 and returns on cancel', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+    await userEvent.click(screen.getByRole('button', { name: '저장' }))
+    expect(screen.getByRole('heading', { name: '시뮬레이션 저장' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+    expect(screen.getByRole('heading', { name: 'Magic Academy Simulation' })).toBeInTheDocument()
   })
   it('shows loading state while a tick is running', async () => {
     const fetchMock = await setupSimulationWithAgents()

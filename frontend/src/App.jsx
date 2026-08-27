@@ -7,6 +7,7 @@ import SnapshotPanel from "./components/SnapshotPanel.jsx";
 import SharingPanel from "./components/SharingPanel.jsx";
 import SharedBrowser from "./components/SharedBrowser.jsx";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
+import RelationshipModal from "./components/RelationshipModal.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import InspectorPanel from "./components/InspectorPanel.jsx";
 import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
@@ -14,6 +15,9 @@ import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
 import BrandingPage from "./pages/BrandingPage.jsx";
+import MainPage from "./pages/MainPage.jsx";
+import SavePage from "./pages/SavePage.jsx";
+import MyPage from "./pages/MyPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -194,6 +198,7 @@ function classifyTickError(requestError) {
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [screen, setScreen] = useState("main");
   const [simulationId, setSimulationId] = useState(null);
   const [personaId, setPersonaId] = useState(null);
   const [personaSetupDone, setPersonaSetupDone] = useState(false);
@@ -214,6 +219,12 @@ export default function App() {
   const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
   const refreshAgentsSilentlyRef = useRef(null);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [agentTypeFilter, setAgentTypeFilter] = useState("전체");
+  const [isPaused, setIsPaused] = useState(false);
+  const [showInspectorModal, setShowInspectorModal] = useState(false);
+  const [showRelationshipModal, setShowRelationshipModal] = useState(false);
+
   const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
     simulation?.id,
     auth?.access_token,
@@ -222,6 +233,7 @@ export default function App() {
 
   function resetSession(notice = "") {
     setAuth(null);
+    setScreen("main");
     setSimulationId(null);
     setSimulation(null);
     setAgents([]);
@@ -243,6 +255,7 @@ export default function App() {
     setSimulation(newSimulation);
     setIsImported(false);
     loadAgents(newSimulation.id);
+    setScreen("persona-select");
   }
 
   // 공유 설정 가져오기 성공 시 호출된다. import는 요청자 소유의 새 Simulation을
@@ -327,14 +340,29 @@ export default function App() {
   }, [agents, selectedAgent]);
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
-  if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (screen === "main") return (
+    <MainPage
+      displayName={auth.user.display_name}
+      onStart={() => setScreen("branding")}
+      onMyPage={() => setScreen("my-page")}
+    />
+  );
+  if (screen === "my-page") return <MyPage auth={auth} onBack={() => setScreen("main")} />;
+  if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (screen === "save") return (
+    <SavePage
+      simulationName={simulation?.name ?? "시뮬레이션"}
+      onComplete={() => setScreen("simulation")}
+      onCancel={() => setScreen("simulation")}
+    />
+  );
   if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
   if (!personaSetupDone) return (
     <PersonaSetupPage
       simulationId={simulationId}
       charId={personaId}
       onBack={() => setPersonaId(null)}
-      onStart={async (_charId, _config) => setPersonaSetupDone(true)}
+      onStart={async (_charId, _config) => { setPersonaSetupDone(true); setScreen("simulation"); }}
     />
   );
 
@@ -372,6 +400,15 @@ export default function App() {
   const tickFailed = tickResult && !tickSucceeded;
 
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+
+  const filteredAgents = agents.filter((agent) => {
+    const matchesSearch = !searchQuery || agent.name.includes(searchQuery);
+    const matchesType =
+      agentTypeFilter === "전체" ||
+      (agentTypeFilter === "학생" && agent.agent_type === "student") ||
+      (agentTypeFilter === "교수" && agent.agent_type === "professor");
+    return matchesSearch && matchesType;
+  });
 
   // WS RELATIONSHIP_UPDATED가 유실 없이 들어오면 그 값을, 아니면 REST tick 결과를 사용한다.
   const effectiveRelationshipDeltas =
@@ -429,7 +466,16 @@ export default function App() {
         {simulation && lastTick && (
           <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
         )}
+        <div className="header-controls">
+          <button type="button" onClick={() => setIsPaused((p) => !p)}>
+            {isPaused ? "재개" : "일시정지"}
+          </button>
+          <button type="button" onClick={() => { /* TODO: 밤 스킵 API 미확정 */ }}>
+            밤 스킵
+          </button>
+        </div>
         <div className="header-right">
+          <button type="button" className="header-save" onClick={() => setScreen("save")}>저장</button>
           {simulation && (
             <span
               className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
@@ -458,19 +504,30 @@ export default function App() {
                 {isImported && <span className="imported-badge">가져온 Simulation</span>}
               </h1>
               <p>Agent {agents.length}명</p>
+              <input
+                type="search"
+                aria-label="Agent 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Agent 검색"
+              />
+              <div className="agent-type-filter">
+                <button type="button" onClick={() => setAgentTypeFilter("전체")}>전체</button>
+                <button type="button" onClick={() => setAgentTypeFilter("학생")}>학생</button>
+                <button type="button" onClick={() => setAgentTypeFilter("교수")}>교수</button>
+              </div>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
               {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
-              {agents.map((agent) => (
+              {filteredAgents.map((agent) => (
                 <button
                   data-agent-id={agent.id}
                   className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
                   key={agent.id}
                   onClick={() => setSelectedAgent(agent)}
                 >
-                  <b>{agent.name}</b>
-                  <span>{agent.agent_type} · {agent.mbti_type}</span>
+                  <span>{agent.name} · {agent.agent_type} · {agent.mbti_type}</span>
                   {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
                 </button>
               ))}
@@ -490,6 +547,9 @@ export default function App() {
               currentTick={lastTick?.current_tick}
               onClose={() => setSelectedAgent(null)}
             />
+            {selectedAgent && (
+              <button type="button" className="relationship-modal-btn" onClick={() => setShowRelationshipModal(true)}>관계 보기</button>
+            )}
 
             {/* Tick 실행 및 결과 */}
             <div className="panel tick-panel">
@@ -660,6 +720,28 @@ export default function App() {
         </>
         )}
       </main>
+      {showInspectorModal && selectedAgent && (
+        <div role="dialog" aria-label="Agent Inspector" className="inspector-modal-backdrop" onClick={() => setShowInspectorModal(false)}>
+          <div className="inspector-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Agent Inspector</h2>
+            <button type="button" onClick={() => setShowInspectorModal(false)}>Inspector 닫기</button>
+            <dl>
+              <dt>이름</dt><dd>{selectedAgent.name}</dd>
+              <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+              <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+            </dl>
+          </div>
+        </div>
+      )}
+      {showRelationshipModal && selectedAgent && (
+        <RelationshipModal
+          selectedAgent={selectedAgent}
+          agents={agents}
+          auth={auth}
+          onSelectAgent={(agent) => setSelectedAgent(agent)}
+          onClose={() => setShowRelationshipModal(false)}
+        />
+      )}
     </div>
   );
 }
