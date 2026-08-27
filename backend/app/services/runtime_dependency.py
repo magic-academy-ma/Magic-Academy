@@ -4,6 +4,7 @@ from app.core.config import Settings, get_settings
 from app.repositories.memory_repository import MemoryRepository
 from app.simulation.agent_runtime import AgentRuntime
 from app.simulation.anthropic_llm_client import AnthropicLLMClient
+from app.simulation.llm_quota import LLMQuota
 from app.simulation.policy import engine as policy_engine
 from app.simulation.policy.models import PolicyEvaluationInput, PolicyEvaluationResult
 
@@ -23,7 +24,11 @@ def create_agent_runtime(settings: Settings) -> AgentRuntime:
         model=settings.agent_runtime_model,
         max_tokens=settings.agent_runtime_max_tokens,
     )
-    return AgentRuntime(client, model=settings.agent_runtime_model)
+    return AgentRuntime(
+        client,
+        model=settings.agent_runtime_model,
+        llm_quota=LLMQuota(settings.agent_tick_llm_quota),
+    )
 
 
 def get_agent_runtime() -> AgentRuntime:

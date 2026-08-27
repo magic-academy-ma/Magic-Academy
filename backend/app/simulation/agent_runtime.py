@@ -4,6 +4,8 @@ from typing import Any, Literal, Protocol, TypedDict
 from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
+
+from app.simulation.llm_quota import LLM_QUOTA_EXCEEDED_REASON, LLMQuota
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -496,6 +498,7 @@ class RuntimeGraphState(TypedDict):
     last_validation_failure: str | None
     candidate: IntentCandidate | None
     final_result: AgentRuntimeResult | None
+    quota_exceeded: bool
 
 
 class AgentRuntime:
@@ -505,11 +508,25 @@ class AgentRuntime:
         *,
         model: str = "mock-llm",
         prompt_version: str = "agent-runtime-10.1",
+        llm_quota: LLMQuota | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._model = model
         self._prompt_version = prompt_version
+        self._llm_quota = llm_quota
         self._graph = self._build_graph()
+
+    @property
+    def llm_quota(self) -> LLMQuota | None:
+        return self._llm_quota
+
+    def reset_llm_quota(self) -> None:
+        """새 활동 Tick 시작 시 이 Runtime의 LLM 실행 쿼터를 초기화한다.
+
+        쿼터가 설정되지 않았으면 아무 것도 하지 않는다.
+        """
+        if self._llm_quota is not None:
+            self._llm_quota.reset()
 
     def run(self, runtime_input: AgentRuntimeInput) -> AgentRuntimeResult:
         state = self.run_state(runtime_input)
@@ -526,6 +543,7 @@ class AgentRuntime:
             "last_validation_failure": None,
             "candidate": None,
             "final_result": None,
+            "quota_exceeded": False,
         }
         return self._graph.invoke(initial_state)
 
@@ -560,6 +578,17 @@ class AgentRuntime:
 
     def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
         attempt_count = state["attempt_count"] + 1
+        # 실제 LLM 호출 직전에 활동 Tick 쿼터를 원자적으로 차감한다. retry도
+        # 이 노드를 다시 통과하므로 별도 호출로 1회 추가 차감된다. 소진 시에는
+        # LLM을 호출하지 않고 quota exceeded 상태로 fallback 경로로 보낸다.
+        if self._llm_quota is not None and not self._llm_quota.try_consume():
+            return {
+                "attempt_count": attempt_count,
+                "current_llm_response": None,
+                "candidate": None,
+                "last_validation_failure": LLM_QUOTA_EXCEEDED_REASON,
+                "quota_exceeded": True,
+            }
         try:
             # Block LLM invocation during replay mode and instrument the call
             from app.simulation.replay_guard import assert_not_replay
@@ -601,6 +630,9 @@ class AgentRuntime:
     def _route_after_validation(state: RuntimeGraphState) -> str:
         if state["candidate"] is not None:
             return "success"
+        if state.get("quota_exceeded"):
+            # 쿼터가 소진됐으면 retry도 LLM을 호출할 수 없으므로 곧바로 fallback.
+            return "fallback"
         if state["attempt_count"] < 2:
             return "retry"
         return "fallback"
