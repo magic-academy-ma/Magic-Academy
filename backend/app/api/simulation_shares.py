@@ -1,10 +1,6 @@
-from collections.abc import Callable
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -13,60 +9,16 @@ from app.api.schemas import (
     SimulationShareDetailResponse,
     SimulationShareSummaryResponse,
 )
+from app.api.slice7_errors import Slice7ErrorRoute
 from app.core.database import get_db
 from app.core.security import get_current_user, require_user_role
 from app.domain.models import User
 from app.services.simulation_shares import (
-    ShareAccessDeniedError,
-    ShareNotFoundError,
-    SimulationNotReadyForShareError,
     cancel_simulation_share,
     create_simulation_share,
     get_public_simulation_shares,
     get_simulation_share_detail,
 )
-
-
-class Slice7APIError(Exception):
-    def __init__(self, status_code: int, code: str, message: str) -> None:
-        self.status_code = status_code
-        self.code = code
-        self.message = message
-
-
-def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"error": {"code": code, "message": message}})
-
-
-class Slice7ErrorRoute(APIRoute):
-    def get_route_handler(self) -> Callable:
-        original_handler = super().get_route_handler()
-
-        async def handler(request: Request):
-            try:
-                return await original_handler(request)
-            except Slice7APIError as exc:
-                return _error_response(exc.status_code, exc.code, exc.message)
-            except ShareNotFoundError as exc:
-                return _error_response(404, "SHARE_NOT_FOUND", str(exc))
-            except ShareAccessDeniedError as exc:
-                return _error_response(403, "SHARE_ACCESS_DENIED", str(exc))
-            except SimulationNotReadyForShareError as exc:
-                return _error_response(409, "SIMULATION_SHARE_NOT_READY", str(exc))
-            except RequestValidationError:
-                return _error_response(422, "INVALID_SHARE_REQUEST", "Invalid request")
-            except HTTPException as exc:
-                codes = {
-                    401: "AUTHENTICATION_REQUIRED",
-                    403: "SHARE_ACCESS_DENIED",
-                    404: "SHARE_NOT_FOUND",
-                }
-                return _error_response(
-                    exc.status_code, codes.get(exc.status_code, "INVALID_SHARE_REQUEST"), str(exc.detail)
-                )
-
-        return handler
-
 
 router = APIRouter(tags=["simulation-shares"], route_class=Slice7ErrorRoute)
 optional_bearer_scheme = HTTPBearer(auto_error=False)
