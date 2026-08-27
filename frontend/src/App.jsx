@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import { apiRequest } from "./api/client.js";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import ReplayPanel from "./components/ReplayPanel.jsx";
@@ -14,15 +15,19 @@ import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ username: "", display_name: "", password: "" });
+  const [form, setForm] = useState({
+    username: "",
+    display_name: "",
+    password: "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [authNotice, setAuthNotice] = useState("");
 
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
     setError("");
+
     try {
       if (mode === "register") {
         await apiRequest("/v1/auth/register", {
@@ -30,10 +35,15 @@ function AuthPanel({ onLogin, notice }) {
           body: JSON.stringify(form),
         });
       }
+
       const result = await apiRequest("/v1/auth/login", {
         method: "POST",
-        body: JSON.stringify({ username: form.username, password: form.password }),
+        body: JSON.stringify({
+          username: form.username,
+          password: form.password,
+        }),
       });
+
       onLogin(result);
     } catch (requestError) {
       setError(requestError.message);
@@ -47,13 +57,73 @@ function AuthPanel({ onLogin, notice }) {
       <form className="panel auth-panel" onSubmit={submit}>
         <h1>Magic Academy</h1>
         <p>Slice 0 통합 환경</p>
-        {notice && <p className="message error" role="alert">{notice}</p>}
-        <label>아이디<input required minLength="3" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label>
-        {mode === "register" && <label>표시 이름<input required value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>}
-        <label>비밀번호<input required minLength="8" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
-        {error && <p className="message error" role="alert">{error}</p>}
-        <button disabled={loading}>{loading ? "처리 중..." : mode === "login" ? "로그인" : "가입하고 로그인"}</button>
-        <button className="link-button" type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>
+
+        {notice && (
+          <p className="message error" role="alert">
+            {notice}
+          </p>
+        )}
+
+        <label>
+          아이디
+          <input
+            required
+            minLength="3"
+            value={form.username}
+            onChange={(e) =>
+              setForm({ ...form, username: e.target.value })
+            }
+          />
+        </label>
+
+        {mode === "register" && (
+          <label>
+            표시 이름
+            <input
+              required
+              value={form.display_name}
+              onChange={(e) =>
+                setForm({ ...form, display_name: e.target.value })
+              }
+            />
+          </label>
+        )}
+
+        <label>
+          비밀번호
+          <input
+            required
+            minLength="8"
+            type="password"
+            value={form.password}
+            onChange={(e) =>
+              setForm({ ...form, password: e.target.value })
+            }
+          />
+        </label>
+
+        {error && (
+          <p className="message error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <button disabled={loading}>
+          {loading
+            ? "처리 중..."
+            : mode === "login"
+              ? "로그인"
+              : "가입하고 로그인"}
+        </button>
+
+        <button
+          className="link-button"
+          type="button"
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setError("");
+          }}
+        >
           {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
         </button>
       </form>
@@ -67,24 +137,39 @@ function classifyTickError(requestError) {
   const code = requestError?.code;
 
   if (status === 401) {
-    return { type: "AUTH", message: requestError.message };
+    return {
+      type: "AUTH",
+      message: requestError.message,
+    };
   }
+
   if (status === 404 || code === "RESOURCE_NOT_FOUND") {
-    return { type: "NOT_FOUND", message: "Simulation을 찾을 수 없습니다." };
+    return {
+      type: "NOT_FOUND",
+      message: "Simulation을 찾을 수 없습니다.",
+    };
   }
+
   if (code === "TICK_ALREADY_RUNNING") {
     return {
       type: "TICK_ALREADY_RUNNING",
       message: "이미 진행 중인 Tick이 있습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
+
   if (status >= 500) {
     return {
       type: "RUNTIME",
-      message: "Tick 실행 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      message:
+        "Tick 실행 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
     };
   }
-  return { type: "GENERIC", message: requestError?.message || "알 수 없는 오류가 발생했습니다." };
+
+  return {
+    type: "GENERIC",
+    message:
+      requestError?.message || "알 수 없는 오류가 발생했습니다.",
+  };
 }
 
 export default function App() {
@@ -101,15 +186,18 @@ export default function App() {
 
   const [tickLoading, setTickLoading] = useState(false);
   const [tickResult, setTickResult] = useState(null);
-  const [tickError, setTickError] = useState(null); // { type, message }
-  const [sessionNotice, setSessionNotice] = useState("");
+  const [tickError, setTickError] = useState(null);
+
   const [authNotice, setAuthNotice] = useState("");
   const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
+  const refreshAgentsSilentlyRef = useRef(null);
 
   const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
     simulation?.id,
-    auth?.access_token
+    auth?.access_token,
+    { onReconnect: () => refreshAgentsSilentlyRef.current?.() }
   );
+
   function resetSession(notice = "") {
     setAuth(null);
     setSimulationId(null);
@@ -132,6 +220,75 @@ export default function App() {
     loadAgents(newSimulation.id);
   }
 
+  async function fetchAgents(simulationId) {
+    const agentList = await apiRequest(
+      `/v1/simulations/${simulationId}/agents`,
+      {
+        token: auth.access_token,
+      }
+    );
+
+    setAgents(agentList);
+
+    return agentList;
+  }
+
+  async function loadAgents(simulationId) {
+    setLoading(true);
+    setError("");
+
+    try {
+      const agentList = await fetchAgents(simulationId);
+      setSelectedAgent(agentList[0] ?? null);
+    } catch (requestError) {
+      if (requestError.status === 401) {
+        resetSession();
+        return;
+      }
+
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // loadAgents와 달리 loading/error 상태를 건드리지 않는 조용한 재조회
+  const refreshAgentsSilently = useCallback(
+    async (simulationId) => {
+      if (!auth) return;
+
+      try {
+        await fetchAgents(simulationId);
+      } catch (requestError) {
+        if (requestError.status === 401) {
+          resetSession();
+          return;
+        }
+
+        console.error("[App] Agent 상태 재조회 실패", requestError);
+      }
+    },
+    [auth]
+  );
+  refreshAgentsSilentlyRef.current = refreshAgentsSilently;
+
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "student");
+
+  // agents 목록이 갱신되면 selectedAgent도 최신 상태로 동기화
+  useEffect(() => {
+    if (!selectedAgent) return;
+
+    const updated = agents.find(
+      (agent) => agent.id === selectedAgent.id
+    );
+
+    if (updated && updated !== selectedAgent) {
+      setSelectedAgent(updated);
+    }
+  }, [agents, selectedAgent]);
+
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
   if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
   if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
@@ -143,30 +300,6 @@ export default function App() {
       onStart={async (_charId, _config) => setPersonaSetupDone(true)}
     />
   );
-
-  async function loadAgents(simulationId) {
-    setLoading(true);
-    setError("");
-    try {
-      const agentList = await apiRequest(`/v1/simulations/${simulationId}/agents`, {
-        token: auth.access_token,
-      });
-      setAgents(agentList);
-      setSelectedAgent(agentList[0] ?? null);
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        resetSession();
-        return;
-      }
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
-  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
-  const students = agents.filter((agent) => agent.agent_type === "student");
 
   async function runTick() {
     setTickLoading(true);
@@ -185,10 +318,12 @@ export default function App() {
       setTickResult(result.data ?? result);
     } catch (requestError) {
       const classified = classifyTickError(requestError);
+
       if (classified.type === "AUTH") {
         resetSession(classified.message);
         return;
       }
+
       setTickError(classified);
     } finally {
       setTickLoading(false);
@@ -201,41 +336,48 @@ export default function App() {
 
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
-  // WS RELATIONSHIP_UPDATED 메시지를 flat delta 배열로 변환 (REST relationship_deltas 형식 호환)
-  const wsDeltas = wsRelationshipDeltas.flatMap((msg) =>
-    (msg.deltas ?? []).map((d) => ({
-      ...d,
-      source_agent_id: msg.source_agent_id,
-      target_agent_id: msg.target_agent_id,
-    }))
-  );
+  // WS RELATIONSHIP_UPDATED가 유실 없이 들어오면 그 값을, 아니면 REST tick 결과를 사용한다.
   const effectiveRelationshipDeltas =
-    wsDeltas.length > 0 ? wsDeltas : (tickResult?.relationship_deltas ?? []);
+    wsRelationshipDeltas.length > 0
+      ? wsRelationshipDeltas
+      : (tickResult?.relationship_deltas ?? []);
 
   const relationshipAgentIds = [
     ...new Set(
       effectiveRelationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
     ),
   ];
+
   const flowNodes = relationshipAgentIds.map((id, index) => ({
     id: String(id),
-    position: { x: (index % 4) * 200, y: Math.floor(index / 4) * 150 },
-    data: { label: agentNameById[id] ?? String(id) },
+    position: {
+      x: (index % 4) * 200,
+      y: Math.floor(index / 4) * 150,
+    },
+    data: {
+      label: agentNameById[id] ?? String(id),
+    },
   }));
+
   const edgesByPair = new Map();
   for (const delta of effectiveRelationshipDeltas) {
     const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
+
     if (!edgesByPair.has(key)) {
       edgesByPair.set(key, {
         id: `e-${key}`,
         source: String(delta.source_agent_id),
         target: String(delta.target_agent_id),
         type: "delta",
-        data: { effects: [] },
+        data: {
+          effects: [],
+        },
       });
     }
+
     edgesByPair.get(key).data.effects.push(delta);
   }
+
   const flowEdges = [...edgesByPair.values()];
 
   function handleEventAgentSelect(agentId) {
@@ -307,43 +449,60 @@ export default function App() {
                 </dl>
               </>}
             </aside>
+
+            {/* Tick 실행 및 결과 */}
             <div className="panel tick-panel">
               <h2>Tick</h2>
 
-              <button type="button" onClick={runTick} disabled={tickLoading}>
+              <button
+                type="button"
+                onClick={runTick}
+                disabled={tickLoading}
+              >
                 {tickLoading ? "Tick 실행 중..." : "Tick 실행"}
               </button>
 
               {tickError && (
-                <p className={`message error tick-error-${tickError.type.toLowerCase()}`} role="alert">
+                <p
+                  className={`message error tick-error-${tickError.type.toLowerCase()}`}
+                  role="alert"
+                >
                   {tickError.message}
                 </p>
               )}
 
               {tickError && tickError.type !== "AUTH" && (
-                <button type="button" onClick={runTick} disabled={tickLoading}>
+                <button
+                  type="button"
+                  onClick={runTick}
+                  disabled={tickLoading}
+                >
                   다시 시도
                 </button>
               )}
 
               {tickFailed && (
                 <p className="message error" role="alert">
-                  Tick이 완료되지 않았습니다 (상태: {tickResult.status}).
+                  Tick이 완료되지 않았습니다 (상태:{" "}
+                  {tickResult.status}).
                 </p>
               )}
 
               {tickSucceeded && (
                 <div className="tick-result">
                   <h3>실행 결과</h3>
+
                   <p>이전 Tick: {tickResult.previous_tick}</p>
                   <p>현재 Tick: {tickResult.current_tick}</p>
                   <p>현재 Day: {tickResult.current_day}</p>
                   <p>상태: {tickResult.status}</p>
 
                   <h4>Agent 행동</h4>
+
                   {agentResults.length === 0 ? (
                     <p className="message">
-                      이번 Tick에서 표시할 Agent 행동 결과가 없습니다.
+                      이번 Tick에서 표시할 Agent 행동 결과가
+                      없습니다.
                     </p>
                   ) : (
                     <ul className="agent-result-list">

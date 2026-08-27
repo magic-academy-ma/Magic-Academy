@@ -153,6 +153,7 @@ class Agent(TimestampMixin, Base):
         CheckConstraint("agreeableness BETWEEN -50 AND 50 AND agreeableness % 5 = 0", name="ck_agents_agreeableness"),
         CheckConstraint("emotional_stability BETWEEN -50 AND 50 AND emotional_stability % 5 = 0", name="ck_agents_emotional_stability"),
         CheckConstraint("inactive_until_tick IS NULL OR inactive_until_tick >= 0", name="ck_agents_inactive_until_tick"),
+        CheckConstraint("cursed_until_tick IS NULL OR cursed_until_tick >= 0", name="ck_agents_cursed_until_tick"),
         Index("uq_agents_active_user_persona", "simulation_id", unique=True, postgresql_where=text("agent_type = 'user_persona' AND deleted_at IS NULL")),
         Index("idx_agents_simulation_id", "simulation_id", "id"),
         Index("idx_agents_runtime_active", "simulation_id", "active_status", "inactive_until_tick"),
@@ -175,6 +176,7 @@ class Agent(TimestampMixin, Base):
     role_description: Mapped[str | None] = mapped_column(Text)
     active_status: Mapped[str] = mapped_column(String(30), nullable=False, server_default="active")
     inactive_until_tick: Mapped[int | None] = mapped_column(BigInteger)
+    cursed_until_tick: Mapped[int | None] = mapped_column(BigInteger)
     persona_locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -312,7 +314,7 @@ class Event(TimestampMixin, Base):
     __tablename__ = "events"
     __table_args__ = (
         ForeignKeyConstraint(["simulation_id", "location_id"], ["locations.simulation_id", "locations.id"], ondelete="SET NULL (location_id)", onupdate="RESTRICT", name="fk_events_location"),
-        CheckConstraint("event_type IN ('class', 'group_project', 'exam', 'meeting', 'mt', 'festival', 'student_council', 'random_incident')", name="ck_events_type"),
+        CheckConstraint("event_type IN ('class', 'group_project', 'exam', 'meeting', 'mt', 'festival', 'student_council', 'random_incident', 'student_missing', 'curse_spread', 'magic_explosion', 'ritual_failure', 'magical_discovery')", name="ck_events_type"),
         CheckConstraint("status IN ('scheduled', 'ongoing', 'completed', 'cancelled')", name="ck_events_status"),
         CheckConstraint("simulation_day >= 1", name="ck_events_simulation_day"),
         Index("idx_events_simulation_started", "simulation_id", text("started_at DESC"), text("id DESC")),
@@ -329,6 +331,18 @@ class Event(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+
+
+class EventBatchResult(TimestampMixin, Base):
+    """Immutable Task 3 result used by REST and post-commit WS publication."""
+
+    __tablename__ = "event_batch_results"
+    __table_args__ = (CheckConstraint("tick_number >= 1", name="ck_event_batch_results_tick"),)
+
+    simulation_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT"), primary_key=True)
+    tick_number: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    input_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
 class EventParticipant(TimestampMixin, Base):

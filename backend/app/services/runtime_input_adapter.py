@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 from uuid import UUID
 
-from app.domain.models import Agent, AgentState, Event, EventParticipant
+from app.domain.models import Agent, AgentState, Event, EventParticipant, Relationship
 from app.services.runtime_orchestrator import (
     RuntimeBatchExecutionResult,
     RuntimeOrchestrator,
@@ -15,6 +15,7 @@ from app.simulation.agent_runtime import (
     Block,
     EventSummary,
     EventType,
+    RelationshipSummary,
     ScheduleSummary,
 )
 
@@ -98,6 +99,24 @@ class RuntimeInputAdapter:
             )
         return tuple(summaries)
 
+    @staticmethod
+    def to_relationship_summaries(
+        relationships: Sequence[Relationship],
+    ) -> tuple[RelationshipSummary, ...]:
+        return tuple(
+            RelationshipSummary(
+                source_agent_id=relationship.source_agent_id,
+                target_agent_id=relationship.target_agent_id,
+                affection=relationship.affection,
+                closeness=relationship.closeness,
+                trust=relationship.trust,
+                tension=relationship.tension,
+                rivalry=relationship.rivalry,
+                dependency=relationship.dependency,
+            )
+            for relationship in relationships
+        )
+
     def run(
         self,
         *,
@@ -113,6 +132,7 @@ class RuntimeInputAdapter:
         event_participants: Mapping[UUID, Sequence[EventParticipant]],
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
+        relationships: Sequence[Relationship] = (),
         memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         self._validate_uuid_sequence("preselected_agent_ids", preselected_agent_ids)
@@ -124,6 +144,7 @@ class RuntimeInputAdapter:
             for agent in agents
         )
         event_summaries = self.to_event_summaries(events, event_participants)
+        relationship_summaries = self.to_relationship_summaries(relationships)
         return self._orchestrator.run_preselected(
             run_id=run_id,
             tick_number=tick_number,
@@ -135,6 +156,7 @@ class RuntimeInputAdapter:
             events=event_summaries,
             valid_agent_ids=valid_agent_ids,
             valid_location_ids=valid_location_ids,
+            relationships=relationship_summaries,
             memories_by_agent=memories_by_agent,
         )
 
