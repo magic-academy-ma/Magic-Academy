@@ -473,6 +473,7 @@ export default function App() {
           <button type="button" onClick={() => { /* TODO: 밤 스킵 API 미확정 */ }}>
             밤 스킵
           </button>
+          <button type="button" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
         </div>
         <div className="header-right">
           <button type="button" className="header-save" onClick={() => setScreen("save")}>저장</button>
