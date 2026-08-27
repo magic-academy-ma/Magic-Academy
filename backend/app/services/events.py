@@ -4,10 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.domain.models import Event, EventParticipant, Location
+from app.domain.models import AgentMemory, Event, EventParticipant, Location
 
 
 class InvalidEventLocationError(Exception):
+    pass
+
+
+class EventNotFoundError(Exception):
     pass
 
 
@@ -68,6 +72,34 @@ def latest_event(db: Session, simulation_id: UUID) -> Event | None:
         _events_for_simulation(simulation_id)
         .order_by(Event.created_at.desc(), Event.id.desc())
         .limit(1)
+    )
+
+
+def get_event(db: Session, simulation_id: UUID, event_id: UUID) -> Event:
+    """Return a single Event scoped to its Simulation.
+
+    The ``simulation_id`` filter is part of the lookup, not a post-check, so an
+    Event that belongs to another Simulation is indistinguishable from a missing
+    one and raises :class:`EventNotFoundError`.
+    """
+    event = db.scalar(_events_for_simulation(simulation_id).where(Event.id == event_id))
+    if event is None:
+        raise EventNotFoundError
+    return event
+
+
+def event_related_memories(db: Session, event_id: UUID) -> list[AgentMemory]:
+    """Return agent_memories rows whose ``event_id`` FK points at this Event.
+
+    Ordering reuses the ``agent_memories`` index key (``occurred_at``, ``id``)
+    used by the agent memories API; no new priority rule is introduced.
+    """
+    return list(
+        db.scalars(
+            select(AgentMemory)
+            .where(AgentMemory.event_id == event_id)
+            .order_by(AgentMemory.occurred_at.desc(), AgentMemory.id.desc())
+        )
     )
 
 

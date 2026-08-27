@@ -146,6 +146,32 @@ class LatestEventResponse(EventResponse):
     target_agent_ids: list[UUID]
 
 
+class EventRelatedMemoryResponse(BaseModel):
+    # agent_memories 행 그대로. agent_memories.event_id FK 가 이 Event 를 가리키는 기억이다.
+    id: UUID
+    agent_id: UUID
+    content: str
+    memory_type: str
+    importance: int
+    created_tick: int
+    occurred_at: datetime
+
+
+class EventDetailResponse(EventResponse):
+    # tick / importance / impact_level / source / event_subtype 는 events 테이블
+    # 컬럼이 아니라 event engine(persist_event_batch)이 events.metadata(JSONB)에
+    # 남긴 값이다. 수동 생성 Event 에는 없으므로 nullable 이다.
+    tick: int | None
+    importance: int | None
+    impact_level: str | None
+    source: str | None
+    event_subtype: str | None
+    # 참여(대상) Agent 는 event_participants 테이블에서 조회한다.
+    target_agent_ids: list[UUID]
+    # 이 Event 를 참조하는 agent_memories 행.
+    related_memories: list[EventRelatedMemoryResponse]
+
+
 class SimulationShareCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

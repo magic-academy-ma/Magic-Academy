@@ -3,14 +3,23 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.schemas import EventCreateRequest, EventResponse, LatestEventResponse
+from app.api.schemas import (
+    EventCreateRequest,
+    EventDetailResponse,
+    EventRelatedMemoryResponse,
+    EventResponse,
+    LatestEventResponse,
+)
 from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
 from app.services.events import (
+    EventNotFoundError,
     InvalidEventLocationError,
     create_event,
     event_participant_agent_ids,
+    event_related_memories,
+    get_event,
     latest_event,
     list_events,
 )
@@ -101,4 +110,50 @@ def get_latest(
         tick=_metadata_int(metadata, "tick"),
         importance=_metadata_int(metadata, "importance"),
         target_agent_ids=event_participant_agent_ids(db, event.id),
+    )
+
+
+@router.get("/{event_id}", response_model=EventDetailResponse)
+def get_one(
+    simulation_id: UUID,
+    event_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+) -> EventDetailResponse:
+    require_owned_simulation(db, simulation_id, current_user)
+    try:
+        event = get_event(db, simulation_id, event_id)
+    except EventNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        ) from exc
+    metadata = event.event_metadata or {}
+    return EventDetailResponse(
+        id=event.id,
+        simulation_id=event.simulation_id,
+        location_id=event.location_id,
+        event_type=event.event_type,
+        title=event.title,
+        description=event.description,
+        status=event.status,
+        simulation_day=event.simulation_day,
+        created_at=event.created_at,
+        tick=_metadata_int(metadata, "tick"),
+        importance=_metadata_int(metadata, "importance"),
+        impact_level=metadata.get("impact_level"),
+        source=metadata.get("source"),
+        event_subtype=metadata.get("event_subtype"),
+        target_agent_ids=event_participant_agent_ids(db, event.id),
+        related_memories=[
+            EventRelatedMemoryResponse(
+                id=memory.id,
+                agent_id=memory.agent_id,
+                content=memory.content,
+                memory_type=memory.memory_type,
+                importance=memory.importance,
+                created_tick=memory.created_tick,
+                occurred_at=memory.occurred_at,
+            )
+            for memory in event_related_memories(db, event.id)
+        ],
     )
