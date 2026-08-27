@@ -352,7 +352,18 @@ export default function App() {
     <MyPage
       auth={auth}
       onBack={() => setScreen("main")}
-      onRestore={(sim) => { setSimulationId(sim.id); setSimulation(sim); loadAgents(sim.id); setScreen("simulation"); }}
+      onRestore={(restoredSimulation) => {
+        const restoredPersona = restoredSimulation.user_persona;
+        setSimulationId(restoredSimulation.id);
+        setSimulation(restoredSimulation);
+        setPersonaId(restoredPersona.agent_id);
+        setPersonaAgentId(restoredPersona.agent_id);
+        setPersonaSetupDone(
+          restoredPersona.status === "APPLIED" && restoredPersona.locked
+        );
+        loadAgents(restoredSimulation.id);
+        setScreen("simulation");
+      }}
     />
   );
   if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
