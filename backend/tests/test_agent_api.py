@@ -53,7 +53,10 @@ def test_agent_detail_state_and_query_validation(client):
     headers = register_and_login(test_client, "agent-api-owner")
     simulation = create_simulation(test_client, headers)
     agents = test_client.get(f"/v1/simulations/{simulation['id']}/agents", headers=headers).json()
-    agent_id = agents[0]["id"]
+    # 에이전트 목록은 fixture_key 오름차순 정렬이라 agents[0]는 professor-01이다.
+    # MVP 단일 전공(마법공학과)에는 학생만 소속되므로 student-01을 명시적으로 고른다.
+    student = next(agent for agent in agents if agent["fixture_key"] == "student-01")
+    agent_id = student["id"]
 
     detail = test_client.get(f"/v1/agents/{agent_id}", headers=headers)
     state = test_client.get(f"/v1/agents/{agent_id}/state", headers=headers)
@@ -61,9 +64,15 @@ def test_agent_detail_state_and_query_validation(client):
 
     assert detail.status_code == 200
     assert detail.json()["id"] == agent_id
-    assert "organizations" in detail.json()
+    # student-01은 MVP 단일 전공(마법공학과)에 소속된다.
+    majors = [
+        org
+        for org in detail.json()["organizations"]
+        if org["organization_type"] == "major"
+    ]
+    assert [org["name"] for org in majors] == ["마법공학과"]
     assert state.status_code == 200
-    assert state.json()["current_location"]["id"] == agents[0]["location"]["id"]
+    assert state.json()["current_location"]["id"] == student["location"]["id"]
     assert invalid_limit.status_code == 422
 
 

@@ -133,6 +133,23 @@ function AuthPanel({ onLogin, notice }) {
   );
 }
 
+// MVP 공간 6종. 백엔드는 location code/name만 제공하고, 배경 표현은 프론트가
+// code로 매핑한다 (별도 배경 asset이 아직 없어 이모지로 간단히 표시).
+const LOCATION_BACKDROP = {
+  classroom: "🏫",
+  restaurant: "🍽️",
+  library: "📚",
+  lab: "⚗️",
+  dormitory: "🛏️",
+  central_square: "⛲",
+};
+
+function locationLabel(location) {
+  if (!location) return "-";
+  const backdrop = LOCATION_BACKDROP[location.code];
+  return backdrop ? `${backdrop} ${location.name}` : location.name;
+}
+
 // 서버 응답의 code/HTTP status를 프론트에서 보여줄 오류 종류로 분류한다.
 function classifyTickError(requestError) {
   const status = requestError?.status;
@@ -474,7 +491,7 @@ export default function App() {
                   <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
                   <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
                   <dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd>
-                  <dt>위치</dt><dd>{selectedAgent.location.name}</dd>
+                  <dt>위치</dt><dd>{locationLabel(selectedAgent.location)}</dd>
                   <dt>기분</dt><dd>{selectedAgent.state.mood}</dd>
                   <dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd>
                   <dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd>

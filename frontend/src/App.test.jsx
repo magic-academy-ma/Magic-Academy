@@ -114,7 +114,7 @@ describe('Slice 0 UI', () => {
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
     await userEvent.click(screen.getByRole('button', { name: /아델/ }))
     expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
-    expect(screen.getByText('기숙사')).toBeInTheDocument()
+    expect(screen.getByText(/기숙사/)).toBeInTheDocument()
   }, 10000)
 
   it('shows a disabled loading button while enrolling', async () => {

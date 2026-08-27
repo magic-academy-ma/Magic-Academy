@@ -42,7 +42,7 @@ describe('Mock 모드 통합 흐름', () => {
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
     expect(screen.getByRole('heading', { name: 'Inspector' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '에단' })).toBeInTheDocument()
-    expect(screen.getByText('교실')).toBeInTheDocument()
+    expect(screen.getByText(/교실/)).toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
   }, 10000)
 })

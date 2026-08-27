@@ -20,6 +20,16 @@ def get_simulation(db: Session, simulation_id: UUID) -> Simulation | None:
     )
 
 
+def list_simulation_locations(db: Session, simulation_id: UUID) -> list[Location]:
+    return list(
+        db.scalars(
+            select(Location)
+            .where(Location.simulation_id == simulation_id)
+            .order_by(Location.code.asc())
+        ).all()
+    )
+
+
 def list_agents_with_state(db: Session, simulation_id: UUID):
     return db.execute(
         select(Agent, AgentState, Location, StudentProfile, ProfessorProfile)

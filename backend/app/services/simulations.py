@@ -13,7 +13,11 @@ from app.api.schemas import (
     StudentProfileResponse,
 )
 from app.domain.models import Simulation, User
-from app.repositories.simulations import get_simulation, list_agents_with_state
+from app.repositories.simulations import (
+    get_simulation,
+    list_agents_with_state,
+    list_simulation_locations,
+)
 from app.services.fixtures import seed_slice_zero
 from app.services.simulation_snapshots import SimulationSnapshotService
 
@@ -66,6 +70,16 @@ def update_simulation_status(
     simulation.status = new_status
     db.flush()
     return simulation
+
+
+def get_location_responses(
+    db: Session, simulation_id: UUID, owner: User
+) -> list[LocationResponse]:
+    require_owned_simulation(db, simulation_id, owner)
+    return [
+        LocationResponse(id=location.id, code=location.code, name=location.name)
+        for location in list_simulation_locations(db, simulation_id)
+    ]
 
 
 def get_agent_responses(db: Session, simulation_id: UUID, owner: User) -> list[AgentResponse]:

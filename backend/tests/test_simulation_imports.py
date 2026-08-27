@@ -176,16 +176,17 @@ def test_import_creates_owned_simulation_with_full_roster(client) -> None:
             {"id": new_simulation_id},
         ).scalar_one()
         assert professor_count == 1
+        # 시드된 MVP 전공(마법공학과, 학생 5명 소속) + 테스트가 추가한 club 1개/멤버십 1개.
         org_count = db.execute(
             text("SELECT count(*) FROM organizations WHERE simulation_id = :id"),
             {"id": new_simulation_id},
         ).scalar_one()
-        assert org_count == 1
+        assert org_count == 2
         membership_count = db.execute(
             text("SELECT count(*) FROM organization_memberships WHERE simulation_id = :id"),
             {"id": new_simulation_id},
         ).scalar_one()
-        assert membership_count == 1
+        assert membership_count == 6
         relationship_count = db.execute(
             text("SELECT count(*) FROM relationships WHERE simulation_id = :id"),
             {"id": new_simulation_id},

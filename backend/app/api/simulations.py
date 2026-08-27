@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import (
     AgentResponse,
+    LocationResponse,
     SimulationCreateRequest,
     SimulationResponse,
     SimulationStatusUpdateRequest,
@@ -23,6 +24,7 @@ from app.services.simulations import (
     InvalidSimulationStatusTransitionError,
     create_simulation,
     get_agent_responses,
+    get_location_responses,
     require_owned_simulation,
     update_simulation_status,
 )
@@ -114,3 +116,12 @@ def get_agents(
     current_user: User = Depends(require_user_role),
 ) -> list[AgentResponse]:
     return get_agent_responses(db, simulation_id, current_user)
+
+
+@router.get("/{simulation_id}/locations", response_model=list[LocationResponse])
+def get_locations(
+    simulation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+) -> list[LocationResponse]:
+    return get_location_responses(db, simulation_id, current_user)
