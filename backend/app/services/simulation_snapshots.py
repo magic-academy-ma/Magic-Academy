@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.domain.models import Simulation, SimulationSnapshot
+from app.domain.models import Simulation, SimulationConfig, SimulationSnapshot
 from app.repositories.simulation_snapshots import (
     SimulationConfigRepository,
     SimulationSnapshotRepository,
@@ -91,9 +91,17 @@ class SimulationSnapshotService:
         )
 
     def create_snapshot(
-        self, session: Session, simulation: Simulation
+        self,
+        session: Session,
+        simulation: Simulation,
+        config: SimulationConfig | None = None,
     ) -> SimulationSnapshot:
-        config = self.configs.latest(session, simulation.id)
+        """``config``이 주어지면 그 버전을 스냅샷에 고정한다 (Tick 시작 시 고정한
+        파라미터가 진행 중 변경분에 오염되지 않도록 — mvp-tick-event-policy.md §4.5).
+        주어지지 않으면 최신 config를 사용하고, 없으면 기본값으로 생성한다.
+        """
+        if config is None:
+            config = self.configs.latest(session, simulation.id)
         if config is None:
             config = self.save_config(
                 session,

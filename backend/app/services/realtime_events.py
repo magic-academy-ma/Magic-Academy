@@ -71,10 +71,18 @@ def build_event_created_event(event: Event) -> RealtimeEvent:
 def build_simulation_status_event(
     simulation_id: UUID,
     status: str,
+    *,
+    current_day: int | None = None,
+    current_tick: int | None = None,
 ) -> RealtimeEvent:
+    data: dict[str, Any] = {"simulation_id": simulation_id, "status": status}
+    if current_day is not None:
+        data["current_day"] = current_day
+    if current_tick is not None:
+        data["current_tick"] = current_tick
     return RealtimeEvent(
         type="SIMULATION_STATUS_UPDATED",
-        data={"simulation_id": simulation_id, "status": status},
+        data=data,
     )
 
 

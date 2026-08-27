@@ -73,8 +73,14 @@ def build_event_effect_candidates(
     *,
     run_id: str,
     agent_snapshots: Mapping[str, AgentSnapshot],
+    impact_multiplier: float = 1.0,
 ) -> list[EffectCandidate]:
-    """일반 Event(및 RANDOM_INCIDENT)의 참여 Agent 기본 효과를 EffectCandidate로 변환한다."""
+    """일반 Event(및 RANDOM_INCIDENT)의 참여 Agent 기본 효과를 EffectCandidate로 변환한다.
+
+    ``impact_multiplier``는 ``event_impact``의 효과 강도 배율(low 0.5 / medium 1.0 /
+    high 1.5, mvp-tick-event-policy.md §4.4)이다. 기본 delta에 배율을 곱한 뒤
+    ``round``로 정수화하며, 최종 범위 clamp는 기존 Conflict Resolver 단계가 담당한다.
+    """
     if event.event_type == "RANDOM_INCIDENT":
         rules = RANDOM_INCIDENT_EFFECTS.get(event.event_subtype or "", ())
     else:
@@ -89,6 +95,7 @@ def build_event_effect_candidates(
             continue
         for metric, delta in rules:
             current = _state_value(snapshot, metric)
+            scaled_delta = round(delta * impact_multiplier)
             candidates.append(
                 EffectCandidate(
                     effect_id=(
@@ -99,7 +106,7 @@ def build_event_effect_candidates(
                     source_agent_id=agent_id,
                     target_agent_id=None,
                     metric=metric,
-                    delta=delta,
+                    delta=scaled_delta,
                     before=current,
                     after_preview=current,
                     rule_id=f"EVENT_{event.event_type}",

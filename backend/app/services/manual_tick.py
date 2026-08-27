@@ -30,8 +30,14 @@ from app.repositories.memory_repository import (
     MemoryCreateInput,
     MemoryRepository,
 )
+from app.repositories.simulation_snapshots import SimulationConfigRepository
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
-from app.services.event_magic_phase import EventAndMagicResult, run_event_and_magic_phase
+from app.services.event_frequency_history import build_event_parameters
+from app.services.event_magic_phase import (
+    EventAndMagicResult,
+    EventParameters,
+    run_event_and_magic_phase,
+)
 from app.services.event_persistence import persist_event_batch
 from app.services.execution_metadata import (
     ExecutionMetadataInput,
@@ -43,6 +49,7 @@ from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_po
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
 from app.services.runtime_target_selection import select_tick_participant_ids
+from app.services.night_transition import apply_night_transition
 from app.services.simulation_tick import SimulationTickService
 from app.services.simulation_snapshots import SimulationSnapshotService
 from app.simulation.agent_runtime import (
@@ -256,6 +263,7 @@ def _run_event_and_magic_phase(
     tick: int,
     agents: list[Agent],
     scheduled_events: Sequence[ScheduledEventInput] = (),
+    event_parameters: EventParameters | None = None,
 ) -> EventAndMagicResult:
     """Event Master -> Magic Layer -> Policy/Resolver 최소 wiring (Issue #101).
 
@@ -372,6 +380,7 @@ def _run_event_and_magic_phase(
         scheduled_events=scheduled_events,
         event_master_relationship_summaries=event_master_relationship_summaries,
         magic_relationship_snapshots=magic_relationship_snapshots,
+        event_parameters=event_parameters,
     )
 
 
@@ -489,9 +498,22 @@ async def advance_manual_tick(
         raise TickAlreadyRunningError
 
     db.refresh(simulation, with_for_update=True)
+    # EVENING 이후 야간 대기 상태였다면 다음 날 MORNING으로 먼저 전환한다
+    # (수동 night/skip과 동일한 서비스 — mvp-tick-event-policy.md §4.2).
+    if simulation.night_waiting:
+        apply_night_transition(db, simulation)
     previous_tick = simulation.current_tick
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
+    # 이 Tick에 적용할 Event 파라미터를 시작 시점에 고정한다 (§4.5).
+    pinned_config = SimulationConfigRepository().latest(db, simulation.id)
+    event_parameters = build_event_parameters(
+        db,
+        simulation_id=simulation.id,
+        current_tick=current_tick,
+        current_day=current_day,
+        config=pinned_config,
+    )
     run_id = uuid7()
     execution_seed = seed if seed is not None else secrets.randbits(63)
     if memory_adapter is None and memory_retriever is None and memory_store is None:
@@ -539,6 +561,7 @@ async def advance_manual_tick(
         scheduled_events=(
             (scheduled_event_input,) if scheduled_event_input is not None else ()
         ),
+        event_parameters=event_parameters,
     )
     participant_ids = {participant.agent_id for participant in participants}
     selected_ids = select_tick_participant_ids(
@@ -684,8 +707,10 @@ async def advance_manual_tick(
     )
     simulation.current_tick = current_tick
     simulation.current_day = current_day
+    # EVENING Tick commit 후 야간 대기 상태로 들어간다 (§4.2 불변식).
+    simulation.night_waiting = block == Block.EVENING
     db.flush()
-    SimulationSnapshotService().create_snapshot(db, simulation)
+    SimulationSnapshotService().create_snapshot(db, simulation, pinned_config)
     return ManualTickResult(
         previous_tick=previous_tick,
         current_tick=current_tick,

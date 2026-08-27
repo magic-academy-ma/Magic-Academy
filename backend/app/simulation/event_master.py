@@ -14,7 +14,9 @@ per-observer visibility subset.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import hashlib
+import random
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -23,6 +25,8 @@ from enum import StrEnum
 SCHEDULED_EVENT_TYPES: frozenset[str] = frozenset(
     {"CLASS", "EXAM", "MT", "FESTIVAL", "STUDENT_COUNCIL"}
 )
+
+DYNAMIC_EVENT_TYPES: frozenset[str] = frozenset({"GROUP_PROJECT", "MEETING"})
 
 
 class ImpactLevel(StrEnum):
@@ -37,6 +41,22 @@ IMPACT_LEVEL_TO_IMPORTANCE: dict[ImpactLevel, int] = {
     ImpactLevel.MEDIUM: 50,
     ImpactLevel.HIGH: 80,
 }
+
+# event_impact / event_frequency 정책 (mvp-tick-event-policy.md §4.3, §4.4).
+IMPACT_LEVEL_BY_NAME: dict[str, ImpactLevel] = {
+    "low": ImpactLevel.LOW,
+    "medium": ImpactLevel.MEDIUM,
+    "high": ImpactLevel.HIGH,
+}
+DYNAMIC_FREQUENCY_PROBABILITY: dict[str, float] = {
+    "low": 0.25,
+    "medium": 0.50,
+    "high": 0.75,
+}
+DYNAMIC_DAILY_MAX: dict[str, int] = {"low": 1, "medium": 2, "high": 2}
+DYNAMIC_PARTICIPANT_CAP_BY_IMPACT: dict[str, int] = {"low": 2, "medium": 4, "high": 5}
+_LEGACY_GROUP_PROJECT_CAP = 4
+_LEGACY_MEETING_CAP = 5
 
 
 @dataclass(frozen=True)
@@ -107,6 +127,28 @@ def _importance_for(impact_level: ImpactLevel) -> int:
     return IMPACT_LEVEL_TO_IMPORTANCE[impact_level]
 
 
+def _dynamic_frequency_allows(
+    *,
+    scheduled_count: int,
+    event_frequency: str,
+    frequency_seed: str,
+    daily_dynamic_count: int,
+) -> bool:
+    """동적 Event 후보를 이번 Tick에 생성할지 결정론적으로 판정한다 (§4.3).
+
+    시드는 ``f"{simulation_id}:{tick_number}:{config_version}"``이며, 같은 시드는
+    항상 같은 결과를 낸다 (프로세스 간 불안정한 내장 ``hash()``는 쓰지 않는다).
+    """
+    if scheduled_count >= 3:
+        return False
+    if daily_dynamic_count >= DYNAMIC_DAILY_MAX.get(event_frequency, 2):
+        return False
+    probability = DYNAMIC_FREQUENCY_PROBABILITY.get(event_frequency, 0.50)
+    digest = hashlib.sha256(frequency_seed.encode("utf-8")).digest()
+    rng = random.Random(int.from_bytes(digest[:8], "big"))
+    return rng.random() < probability
+
+
 class EventMaster:
     """Tick당 예정/동적 일반 Event를 결정론적으로 생성한다."""
 
@@ -117,15 +159,67 @@ class EventMaster:
         agent_summaries: Sequence[AgentSummary],
         scheduled_events: Sequence[ScheduledEventInput] = (),
         relationship_summaries: Sequence[RelationshipSummary] = (),
+        event_frequency: str = "medium",
+        event_impact: str = "medium",
+        frequency_seed: str | None = None,
+        daily_dynamic_count: int = 0,
+        cooldown_excluded_agent_ids: Mapping[str, frozenset[str]] | None = None,
+        high_impact_agent_ids_today: frozenset[str] = frozenset(),
     ) -> list[Event]:
+        """예정 Event를 변환하고 동적 Event 후보를 생성한다.
+
+        ``frequency_seed``가 ``None``이면 빈도 정책 없이 모든 동적 후보를 생성한다
+        (Slice 5 기존 동작). ``frequency_seed``가 주어지면
+        ``docs/04-feature-specs/mvp-tick-event-policy.md`` §4.3 · §4.4 정책을 적용한다:
+        확률 판정 · Tick당 동적 Event 1개 상한 · 참여 Agent 상한 · 쿨다운 ·
+        당일 high 참여 제외.
+        """
         active_by_id = {
             summary.agent_id: summary for summary in agent_summaries if summary.active_status
         }
 
-        events: list[Event] = []
-        events.extend(self._convert_scheduled(tick, active_by_id, scheduled_events))
-        events.extend(self._generate_group_project(tick, active_by_id))
-        events.extend(self._generate_meeting(tick, active_by_id, relationship_summaries))
+        events: list[Event] = list(
+            self._convert_scheduled(tick, active_by_id, scheduled_events)
+        )
+
+        if frequency_seed is None:
+            events.extend(self._generate_group_project(tick, active_by_id))
+            events.extend(
+                self._generate_meeting(tick, active_by_id, relationship_summaries)
+            )
+            return events
+
+        if not _dynamic_frequency_allows(
+            scheduled_count=len(events),
+            event_frequency=event_frequency,
+            frequency_seed=frequency_seed,
+            daily_dynamic_count=daily_dynamic_count,
+        ):
+            return events
+
+        impact_level = IMPACT_LEVEL_BY_NAME.get(event_impact, ImpactLevel.MEDIUM)
+        participant_cap = DYNAMIC_PARTICIPANT_CAP_BY_IMPACT.get(event_impact, 4)
+        excluded = cooldown_excluded_agent_ids or {}
+        dynamic = self._generate_group_project(
+            tick,
+            active_by_id,
+            impact_level=impact_level,
+            participant_cap=participant_cap,
+            excluded_agent_ids=excluded.get("GROUP_PROJECT", frozenset()),
+            high_impact_agent_ids_today=high_impact_agent_ids_today,
+        )
+        if not dynamic:
+            dynamic = self._generate_meeting(
+                tick,
+                active_by_id,
+                relationship_summaries,
+                impact_level=impact_level,
+                participant_cap=participant_cap,
+                excluded_agent_ids=excluded.get("MEETING", frozenset()),
+                high_impact_agent_ids_today=high_impact_agent_ids_today,
+            )
+        # Tick당 동적 Event는 최대 1개 (§4.3).
+        events.extend(dynamic[:1])
         return events
 
     def build_random_incident(
@@ -200,14 +294,27 @@ class EventMaster:
         return events
 
     # ------------------------------------------------------------------
-    # 동적 Event: GROUP_PROJECT (같은 major_id 수강 Agent 우선, 2~4명)
+    # 동적 Event: GROUP_PROJECT (같은 major_id 수강 Agent 우선)
     # ------------------------------------------------------------------
     def _generate_group_project(
-        self, tick: int, active_by_id: dict[str, AgentSummary]
+        self,
+        tick: int,
+        active_by_id: dict[str, AgentSummary],
+        *,
+        impact_level: ImpactLevel = ImpactLevel.MEDIUM,
+        participant_cap: int | None = None,
+        excluded_agent_ids: frozenset[str] = frozenset(),
+        high_impact_agent_ids_today: frozenset[str] = frozenset(),
     ) -> list[Event]:
+        cap = participant_cap if participant_cap is not None else _LEGACY_GROUP_PROJECT_CAP
+        exclude_high = impact_level == ImpactLevel.HIGH
         groups: dict[tuple[str, str], list[AgentSummary]] = {}
         for summary in active_by_id.values():
             if summary.role != "student" or not summary.major_id or not summary.current_location_id:
+                continue
+            if summary.agent_id in excluded_agent_ids:
+                continue
+            if exclude_high and summary.agent_id in high_impact_agent_ids_today:
                 continue
             key = (summary.major_id, summary.current_location_id)
             groups.setdefault(key, []).append(summary)
@@ -217,7 +324,7 @@ class EventMaster:
             if len(members) < 2:
                 continue
             participant_ids = tuple(
-                sorted(member.agent_id for member in members)[:4]
+                sorted(member.agent_id for member in members)[:cap]
             )
             events.append(
                 Event(
@@ -226,8 +333,8 @@ class EventMaster:
                     participant_agent_ids=participant_ids,
                     location_id=location_id,
                     tick=tick,
-                    impact_level=ImpactLevel.MEDIUM,
-                    importance=_importance_for(ImpactLevel.MEDIUM),
+                    impact_level=impact_level,
+                    importance=_importance_for(impact_level),
                     title="조별 과제",
                     description=f"{major_id} 전공 Student들이 조별 과제를 진행한다.",
                 )
@@ -235,14 +342,27 @@ class EventMaster:
         return events
 
     # ------------------------------------------------------------------
-    # 동적 Event: MEETING (같은 위치 + 기존 우호 관계, 2~5명)
+    # 동적 Event: MEETING (같은 위치 + 기존 우호 관계)
     # ------------------------------------------------------------------
     def _generate_meeting(
         self,
         tick: int,
         active_by_id: dict[str, AgentSummary],
         relationship_summaries: Sequence[RelationshipSummary],
+        *,
+        impact_level: ImpactLevel = ImpactLevel.MEDIUM,
+        participant_cap: int | None = None,
+        excluded_agent_ids: frozenset[str] = frozenset(),
+        high_impact_agent_ids_today: frozenset[str] = frozenset(),
     ) -> list[Event]:
+        cap = participant_cap if participant_cap is not None else _LEGACY_MEETING_CAP
+        exclude_high = impact_level == ImpactLevel.HIGH
+
+        def _blocked(agent_id: str) -> bool:
+            if agent_id in excluded_agent_ids:
+                return True
+            return exclude_high and agent_id in high_impact_agent_ids_today
+
         # 우호적인 관계(affection+closeness 평균 > 0)만 MEETING 후보로 인정한다.
         friendly_pairs = {
             (rel.source_agent_id, rel.target_agent_id)
@@ -250,6 +370,8 @@ class EventMaster:
             if (rel.affection + rel.closeness) / 2 > 0
             and rel.source_agent_id in active_by_id
             and rel.target_agent_id in active_by_id
+            and not _blocked(rel.source_agent_id)
+            and not _blocked(rel.target_agent_id)
         }
         if not friendly_pairs:
             return []
@@ -271,7 +393,7 @@ class EventMaster:
         for location_id, members in sorted(groups.items()):
             if len(members) < 2:
                 continue
-            participant_ids = tuple(sorted(members)[:5])
+            participant_ids = tuple(sorted(members)[:cap])
             events.append(
                 Event(
                     event_key=f"meeting:{location_id}:{tick}",
@@ -279,8 +401,8 @@ class EventMaster:
                     participant_agent_ids=participant_ids,
                     location_id=location_id,
                     tick=tick,
-                    impact_level=ImpactLevel.MEDIUM,
-                    importance=_importance_for(ImpactLevel.MEDIUM),
+                    impact_level=impact_level,
+                    importance=_importance_for(impact_level),
                     title="친목 모임",
                     description="친한 Agent들이 함께 모인다.",
                 )
