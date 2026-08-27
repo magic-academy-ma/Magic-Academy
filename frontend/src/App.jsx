@@ -347,11 +347,19 @@ export default function App() {
       onMyPage={() => setScreen("my-page")}
     />
   );
-  if (screen === "my-page") return <MyPage auth={auth} onBack={() => setScreen("main")} />;
+  if (screen === "my-page") return (
+    <MyPage
+      auth={auth}
+      onBack={() => setScreen("main")}
+      onRestore={(sim) => { setSimulationId(sim.id); setSimulation(sim); loadAgents(sim.id); setScreen("simulation"); }}
+    />
+  );
   if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
   if (screen === "save") return (
     <SavePage
       simulationName={simulation?.name ?? "시뮬레이션"}
+      simulationId={simulationId}
+      token={auth.access_token}
       onComplete={() => setScreen("simulation")}
       onCancel={() => setScreen("simulation")}
     />

@@ -267,7 +267,7 @@ describe('Slice 0 UI', () => {
     await userEvent.click(screen.getByRole('button', { name: '마이페이지' }))
     expect(await screen.findByRole('heading', { name: '내 시뮬레이션' })).toBeInTheDocument()
     expect(screen.getByText('Magic Academy Simulation')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '불러오기 · 준비 중' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '불러오기' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: '뒤로가기' }))
     expect(screen.getByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
   })
