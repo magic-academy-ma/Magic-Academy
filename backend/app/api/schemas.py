@@ -63,6 +63,7 @@ class SimulationResponse(BaseModel):
     current_day: int
     current_tick: int
     magic_enabled: bool
+    night_waiting: bool
     created_at: datetime
     # 최신 simulation_config 파라미터 (없으면 None — 별도 GET /parameters 를 만들지
     # 않고 기존 Simulation 조회 응답을 확장한다, simulation-parameters.md §10).
@@ -204,6 +205,7 @@ class AgentResponse(BaseModel):
     fixture_version: str
     name: str
     agent_type: str
+    active_status: str
     mbti_type: str
     profile: AgentProfileResponse
     student_profile: StudentProfileResponse | None
