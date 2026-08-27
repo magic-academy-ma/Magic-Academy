@@ -20,7 +20,7 @@ export default function MyPage({ auth, onBack, onRestore }) {
     let active = true;
     apiRequest('/v1/simulations', { token: auth.access_token })
       .then((result) => {
-        if (active) setSimulations(Array.isArray(result) ? result : (result.data ?? []));
+        if (active) setSimulations(result.data);
       })
       .catch((requestError) => { if (active) setError(requestError.message); })
       .finally(() => { if (active) setLoading(false); });
@@ -31,11 +31,12 @@ export default function MyPage({ auth, onBack, onRestore }) {
     setRestoringId(id);
     setRestoreError('');
     try {
-      const simulation = await apiRequest(`/v1/simulations/${id}/restore`, {
+      const result = await apiRequest(`/v1/simulations/${id}/restore`, {
         method: 'POST',
         token: auth.access_token,
+        body: JSON.stringify({}),
       });
-      onRestore(simulation);
+      onRestore(result.data);
     } catch (requestError) {
       setRestoreError(requestError.message);
     } finally {
