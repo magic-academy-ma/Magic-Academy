@@ -96,20 +96,20 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
         action_type = runtime_result.intent.action_type
         seen_effect_source_keys: set[tuple[str, ...]] = set()
 
-        for metric, delta in ACTION_STATE_EFFECTS.get(str(action_type), ()):
-            current = state_index.get(source_agent_id, {}).get(metric, 0)
+        for action_metric, delta in ACTION_STATE_EFFECTS.get(str(action_type), ()):
+            current = state_index.get(source_agent_id, {}).get(action_metric, 0)
             effect_candidates.append(EffectCandidate(
                 effect_id=(
                     f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:"
-                    f"action:{action_type}:{metric}"
+                    f"action:{action_type}:{action_metric}"
                 ),
                 target_type=EffectTargetType.AGENT_STATE,
                 source_agent_id=source_agent_id,
                 target_agent_id=None,
-                metric=metric,
+                metric=action_metric,
                 delta=delta,
                 before=current,
-                after_preview=_clamp_preview(current, delta, metric),
+                after_preview=_clamp_preview(current, delta, action_metric),
                 rule_id=f"ACTION_{action_type}",
                 reason=f"{action_type} 기본 효과",
             ))

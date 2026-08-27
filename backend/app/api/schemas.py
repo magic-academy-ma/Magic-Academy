@@ -125,6 +125,36 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
+class SimulationShareCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    visibility: Literal["private", "unlisted", "public"] = "private"
+    title: str = Field(default="", max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_be_trimmed(cls, value: str) -> str:
+        return value.strip()
+
+
+class SimulationShareSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    simulation_id: UUID
+    owner_id: UUID
+    title: str
+    description: str | None
+    visibility: str
+    export_schema_version: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SimulationShareDetailResponse(SimulationShareSummaryResponse):
+    export_payload: dict[str, object]
+
+
 class AgentProfileResponse(BaseModel):
     openness: int
     conscientiousness: int

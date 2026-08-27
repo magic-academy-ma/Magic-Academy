@@ -8,6 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 MAGIC_TYPES = {"STUDENT_MISSING", "CURSE_SPREAD", "MAGIC_EXPLOSION", "RITUAL_FAILURE", "MAGICAL_DISCOVERY"}
 
+# Exported so callers that build an EventWrite/StateDelta from a more loosely
+# typed upstream `str` (e.g. app/services/manual_tick.py) can `cast()` to the
+# exact literal instead of widening these fields back to `str`.
+EventTypeLiteral = Literal[
+    "CLASS", "GROUP_PROJECT", "EXAM", "MEETING", "MT", "FESTIVAL", "STUDENT_COUNCIL",
+    "RANDOM_INCIDENT", "STUDENT_MISSING", "CURSE_SPREAD", "MAGIC_EXPLOSION",
+    "RITUAL_FAILURE", "MAGICAL_DISCOVERY",
+]
+StateMetricLiteral = Literal["hunger", "fatigue", "stress", "satisfaction", "mood"]
+
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -15,7 +25,7 @@ class Contract(BaseModel):
 
 class EventWrite(Contract):
     id: UUID
-    event_type: Literal["CLASS", "GROUP_PROJECT", "EXAM", "MEETING", "MT", "FESTIVAL", "STUDENT_COUNCIL", "RANDOM_INCIDENT", "STUDENT_MISSING", "CURSE_SPREAD", "MAGIC_EXPLOSION", "RITUAL_FAILURE", "MAGICAL_DISCOVERY"]
+    event_type: EventTypeLiteral
     event_subtype: str | None = None
     title: str = Field(min_length=1, max_length=100)
     description: str
@@ -44,7 +54,7 @@ class StateDelta(Contract):
     target_type: Literal["AGENT_STATE"] = "AGENT_STATE"
     source_agent_id: UUID
     target_agent_id: None = None
-    metric: Literal["hunger", "fatigue", "stress", "satisfaction", "mood"]
+    metric: StateMetricLiteral
     before: int = Field(strict=True)
     requested_total: int = Field(strict=True)
     applied_delta: int = Field(strict=True)

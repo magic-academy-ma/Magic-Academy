@@ -123,6 +123,71 @@ class SimulationSnapshot(TimestampMixin, Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
+class SimulationShare(TimestampMixin, Base):
+    __tablename__ = "simulation_shares"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('private', 'unlisted', 'public')", name="ck_simulation_shares_visibility"),
+        Index(
+            "uq_simulation_shares_active_simulation",
+            "simulation_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+        Index(
+            "idx_simulation_shares_public_listing",
+            "visibility",
+            "created_at",
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False, server_default="")
+    description: Mapped[str | None] = mapped_column(Text)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False, server_default="private")
+    export_schema_version: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="slice7-share-v1"
+    )
+    export_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ShareImport(TimestampMixin, Base):
+    """Idempotency ledger and provenance record for Slice 7 imports.
+
+    Identity is `(request_user_id, idempotency_key)`; `fingerprint` is the
+    canonical `share_id` fingerprint the request must match on retry.
+    """
+
+    __tablename__ = "share_imports"
+    __table_args__ = (
+        UniqueConstraint("request_user_id", "idempotency_key", name="uq_share_imports_user_key"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    request_user_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    share_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulation_shares.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"), nullable=False
+    )
+
+
 class Location(TimestampMixin, Base):
     __tablename__ = "locations"
     __table_args__ = (
