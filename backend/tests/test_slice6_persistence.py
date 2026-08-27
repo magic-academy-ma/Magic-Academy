@@ -92,6 +92,8 @@ def test_config_versions_are_monotonic_and_flush_without_commit(
                 {"agent_id": "student-03"},
                 policy_version="policy-mvp-0.1",
                 resolver_version="resolver-mvp-0.1",
+                # magic_enabled=false 는 magic_layer_impact=high 에서만 허용된다.
+                magic_layer_impact="high",
             ),
         )
         assert (first.version, second.version) == (1, 2)

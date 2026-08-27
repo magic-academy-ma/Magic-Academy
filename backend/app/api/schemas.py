@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -64,6 +64,14 @@ class SimulationResponse(BaseModel):
     current_tick: int
     magic_enabled: bool
     created_at: datetime
+    # 최신 simulation_config 파라미터 (없으면 None — 별도 GET /parameters 를 만들지
+    # 않고 기존 Simulation 조회 응답을 확장한다, simulation-parameters.md §10).
+    event_frequency: str | None = None
+    event_impact: str | None = None
+    magic_layer_frequency: str | None = None
+    magic_layer_impact: str | None = None
+    magic_off_eligible: bool | None = None
+    config_version: int | None = None
 
 
 class SimulationConfigPutRequest(BaseModel):
@@ -71,7 +79,9 @@ class SimulationConfigPutRequest(BaseModel):
 
     event_frequency: str
     event_impact: str
-    magic_enabled: bool
+    magic_layer_frequency: str = "medium"
+    magic_layer_impact: str = "medium"
+    magic_enabled: StrictBool
 
 
 class SimulationConfigPatchRequest(BaseModel):

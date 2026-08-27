@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import secrets
-from typing import cast
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -411,6 +411,13 @@ def _build_event_batch(
         )
         for event in result.events
     ]
+    # Magic Layer 특수 Event 의 impact_level / importance 는 이 Tick 에 고정된
+    # magic_layer_impact 를 따른다 (simulation-parameters.md §4 영향도 기준).
+    magic_importance_by_impact = {"low": 30, "medium": 50, "high": 80}
+    magic_impact_level = cast(
+        Literal["low", "medium", "high"], result.magic_impact
+    )
+    magic_importance = magic_importance_by_impact.get(magic_impact_level, 80)
     event_writes.extend(
         EventWrite(
             id=uuid7(),
@@ -422,8 +429,8 @@ def _build_event_batch(
             ),
             location_id=UUID(event.location_id),
             source="magic_layer",
-            impact_level="high",
-            importance=80,
+            impact_level=magic_impact_level,
+            importance=magic_importance,
         )
         for event in result.special_events
         if event.location_id is not None

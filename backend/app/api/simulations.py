@@ -13,10 +13,12 @@ from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
 from app.repositories.event_results import get_event_result
+from app.repositories.simulation_snapshots import SimulationConfigRepository
 from app.services.realtime_events import (
     build_simulation_status_event,
     connection_manager,
 )
+from app.services.simulation_snapshots import magic_off_eligible
 from app.services.simulations import (
     InvalidSimulationStatusTransitionError,
     create_simulation,
@@ -58,7 +60,20 @@ def get_one(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
 ) -> SimulationResponse:
-    return SimulationResponse.model_validate(require_owned_simulation(db, simulation_id, current_user))
+    simulation = require_owned_simulation(db, simulation_id, current_user)
+    response = SimulationResponse.model_validate(simulation)
+    # 별도 GET /parameters 를 만들지 않고 기존 Simulation 조회 응답에 최신
+    # simulation_config 파라미터를 실어 준다 (PR2 스펙 §10).
+    config = SimulationConfigRepository().latest(db, simulation.id)
+    if config is not None:
+        response.event_frequency = config.event_frequency
+        response.event_impact = config.event_impact
+        response.magic_layer_frequency = config.magic_layer_frequency
+        response.magic_layer_impact = config.magic_layer_impact
+        response.magic_enabled = config.magic_enabled
+        response.magic_off_eligible = magic_off_eligible(config.magic_layer_impact)
+        response.config_version = config.version
+    return response
 
 
 @router.patch("/{simulation_id}/status", response_model=SimulationResponse)

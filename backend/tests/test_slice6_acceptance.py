@@ -130,6 +130,8 @@ def test_settings_snapshot_replay_restore_http_golden_path(acceptance_context) -
         json={
             "event_frequency": "high",
             "event_impact": "low",
+            # magic_enabled=false 는 magic_layer_impact=high 에서만 허용된다.
+            "magic_layer_impact": "high",
             "magic_enabled": False,
         },
     )

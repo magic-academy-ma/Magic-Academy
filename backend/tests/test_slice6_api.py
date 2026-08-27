@@ -122,6 +122,9 @@ def test_parameters_routes_and_error_contract(api_context) -> None:
         json={
             "event_frequency": "high",
             "event_impact": "low",
+            # magic_enabled=false 는 magic_layer_impact 가 OFF threshold(0.7) 를
+            # 만족할 때만 허용된다 (simulation-parameters.md §6).
+            "magic_layer_impact": "high",
             "magic_enabled": False,
         },
     )
@@ -132,8 +135,12 @@ def test_parameters_routes_and_error_contract(api_context) -> None:
     } == {
         "event_frequency": "high",
         "event_impact": "low",
+        "magic_layer_frequency": "medium",
+        "magic_layer_impact": "high",
         "magic_enabled": False,
+        "magic_off_eligible": True,
         "config_version": 2,
+        "effective_tick": 1,
     }
     assert put_data["changed_at"]
 
@@ -202,6 +209,159 @@ def test_parameters_routes_and_error_contract(api_context) -> None:
     )
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "REPLAY_RESOURCE_NOT_FOUND"
+
+
+def test_magic_parameters_draft_validation_and_lock(api_context) -> None:
+    """PR2 §13·§14 — Magic 파라미터 저장/검증/실행 전 잠금."""
+    client, session_factory, _ = api_context
+    owner_headers = _register(client, "magic-param-owner")
+    simulation_id = _create_simulation(client, owner_headers, "Magic Params")
+
+    # 기본값 조회 — 부트스트랩 config v1 이 medium/medium/true 다.
+    default_get = client.get(
+        f"/v1/simulations/{simulation_id}", headers=owner_headers
+    )
+    assert default_get.status_code == 200
+    default_body = default_get.json()
+    assert default_body["magic_layer_frequency"] == "medium"
+    assert default_body["magic_layer_impact"] == "medium"
+    assert default_body["magic_enabled"] is True
+    assert default_body["magic_off_eligible"] is False
+
+    # Draft 에서 Magic 파라미터 저장.
+    saved = client.put(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={
+            "event_frequency": "medium",
+            "event_impact": "medium",
+            "magic_layer_frequency": "high",
+            "magic_layer_impact": "low",
+            "magic_enabled": True,
+        },
+    )
+    assert saved.status_code == 200
+    saved_data = saved.json()["data"]
+    assert saved_data["magic_layer_frequency"] == "high"
+    assert saved_data["magic_layer_impact"] == "low"
+    assert saved_data["magic_off_eligible"] is False
+
+    # 저장값을 다시 조회할 수 있다 (기존 Simulation 응답 확장).
+    reread = client.get(f"/v1/simulations/{simulation_id}", headers=owner_headers)
+    assert reread.json()["magic_layer_frequency"] == "high"
+    assert reread.json()["magic_layer_impact"] == "low"
+    assert reread.json()["config_version"] == saved_data["config_version"]
+
+    # Validation — 잘못된 frequency / impact / boolean 타입.
+    for bad in (
+        {"magic_layer_frequency": "invalid"},
+        {"magic_layer_impact": "invalid"},
+    ):
+        resp = client.put(
+            f"/v1/simulations/{simulation_id}/parameters",
+            headers=owner_headers,
+            json={
+                "event_frequency": "medium",
+                "event_impact": "medium",
+                "magic_enabled": True,
+                **bad,
+            },
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "INVALID_REPLAY_REQUEST"
+
+    bad_bool = client.put(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={
+            "event_frequency": "medium",
+            "event_impact": "medium",
+            "magic_enabled": "true",
+        },
+    )
+    assert bad_bool.status_code == 400
+
+    # magic_enabled=false OFF 조건 위반 (impact 가 threshold 0.7 미만) -> 409 CONFLICT.
+    off_violation = client.put(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={
+            "event_frequency": "medium",
+            "event_impact": "medium",
+            "magic_layer_impact": "low",
+            "magic_enabled": False,
+        },
+    )
+    assert off_violation.status_code == 409
+    assert off_violation.json()["error"]["code"] == "CONFLICT"
+
+    # magic_enabled=false + impact=high 는 허용.
+    off_ok = client.put(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={
+            "event_frequency": "medium",
+            "event_impact": "medium",
+            "magic_layer_frequency": "high",
+            "magic_layer_impact": "high",
+            "magic_enabled": False,
+        },
+    )
+    assert off_ok.status_code == 200
+    assert off_ok.json()["data"]["magic_off_eligible"] is True
+
+    # ---- Simulation Start (running) 이후 Magic 잠금 ----
+    with session_factory.begin() as session:
+        session.get(Simulation, simulation_id).status = "running"
+
+    for locked_field in (
+        {"magic_layer_frequency": "low"},
+        {"magic_layer_impact": "medium"},
+        {"magic_enabled": True},
+    ):
+        resp = client.put(
+            f"/v1/simulations/{simulation_id}/parameters",
+            headers=owner_headers,
+            json={
+                "event_frequency": "medium",
+                "event_impact": "medium",
+                "magic_layer_frequency": "high",
+                "magic_layer_impact": "high",
+                "magic_enabled": False,
+                **locked_field,
+            },
+        )
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "INITIAL_SETTINGS_LOCKED"
+
+    # 실행 중 일반 Event 파라미터 PATCH 는 성공한다.
+    patched = client.patch(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={"event_frequency": "high", "event_impact": "high"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["data"]["effective_tick"] == 1
+    assert patched.json()["data"]["magic_layer_frequency"] == "high"
+    assert patched.json()["data"]["magic_enabled"] is False
+
+    # 실행 중 PATCH 요청에 Magic 필드가 포함되면 거부한다 (extra="forbid").
+    patch_magic = client.patch(
+        f"/v1/simulations/{simulation_id}/parameters",
+        headers=owner_headers,
+        json={
+            "event_frequency": "low",
+            "event_impact": "low",
+            "magic_layer_frequency": "low",
+        },
+    )
+    assert patch_magic.status_code == 400
+
+    # 잠금 실패 후에도 기존 Magic 값이 유지된다.
+    after = client.get(f"/v1/simulations/{simulation_id}", headers=owner_headers)
+    assert after.json()["magic_layer_frequency"] == "high"
+    assert after.json()["magic_layer_impact"] == "high"
+    assert after.json()["magic_enabled"] is False
 
 
 def test_snapshot_restore_and_mismatch_are_read_only(api_context) -> None:

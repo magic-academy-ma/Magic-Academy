@@ -24,6 +24,11 @@ class InitialSettingsLockedError(InvalidSimulationConfigError):
     pass
 
 
+class MagicOffNotEligibleError(InvalidSimulationConfigError):
+    """``magic_enabled=false`` 요청이 OFF 조건(정규화 impact >= threshold)을
+    만족하지 못한 경우 (simulation-parameters.md §6, threshold=0.7)."""
+
+
 class SnapshotAccessDeniedError(PermissionError):
     pass
 
@@ -39,6 +44,19 @@ class UnsupportedSnapshotSchemaError(ValueError):
 ALLOWED_LEVELS = {"low", "medium", "high"}
 EVENT_CONFIGURABLE_STATUSES = {"ready", "running", "paused"}
 
+# Magic OFF 조건 (simulation-parameters.md §6 / PR2 스펙 §1·§6). threshold 는
+# 0.7 로 확정되어 있으며 임의로 바꾸지 않는다.
+MAGIC_OFF_IMPACT_THRESHOLD = 0.7
+NORMALIZED_MAGIC_IMPACT: dict[str, float] = {"low": 0.3, "medium": 0.5, "high": 0.8}
+
+
+def magic_off_eligible(magic_layer_impact: str) -> bool:
+    """해당 impact 수준에서 ``magic_enabled=false`` 를 허용할 수 있는지."""
+    return (
+        NORMALIZED_MAGIC_IMPACT.get(magic_layer_impact, 0.0)
+        >= MAGIC_OFF_IMPACT_THRESHOLD
+    )
+
 
 @dataclass(frozen=True)
 class SimulationConfigInput:
@@ -48,6 +66,8 @@ class SimulationConfigInput:
     user_persona_settings: dict[str, Any]
     policy_version: str | None = None
     resolver_version: str | None = None
+    magic_layer_frequency: str = "medium"
+    magic_layer_impact: str = "medium"
 
 
 class SimulationSnapshotService:
@@ -69,21 +89,40 @@ class SimulationSnapshotService:
             raise InvalidSimulationConfigError("invalid event_frequency")
         if config_input.event_impact not in ALLOWED_LEVELS:
             raise InvalidSimulationConfigError("invalid event_impact")
+        if config_input.magic_layer_frequency not in ALLOWED_LEVELS:
+            raise InvalidSimulationConfigError("invalid magic_layer_frequency")
+        if config_input.magic_layer_impact not in ALLOWED_LEVELS:
+            raise InvalidSimulationConfigError("invalid magic_layer_impact")
         latest = self.configs.latest(session, simulation.id)
         if simulation.status != "ready":
+            # Simulation Start 이후에는 Magic 파라미터(빈도·영향도·ON/OFF)와
+            # persona 설정을 잠근다 (simulation-parameters.md §5, PR2 스펙 §5).
+            # 잠금은 값 검증(OFF 조건)보다 우선한다 — 실행 후 어떤 Magic 변경도
+            # 거부한다.
             if latest is None or (
                 config_input.magic_enabled != latest.magic_enabled
+                or config_input.magic_layer_frequency != latest.magic_layer_frequency
+                or config_input.magic_layer_impact != latest.magic_layer_impact
                 or config_input.user_persona_settings
                 != latest.user_persona_settings
             ):
                 raise InitialSettingsLockedError(
                     "initial settings are locked after simulation start"
                 )
+        if not config_input.magic_enabled and not magic_off_eligible(
+            config_input.magic_layer_impact
+        ):
+            raise MagicOffNotEligibleError(
+                "magic_enabled=false requires magic_layer_impact to meet the "
+                f"OFF threshold ({MAGIC_OFF_IMPACT_THRESHOLD})"
+            )
         return self.configs.create_version(
             session,
             simulation,
             event_frequency=config_input.event_frequency,
             event_impact=config_input.event_impact,
+            magic_layer_frequency=config_input.magic_layer_frequency,
+            magic_layer_impact=config_input.magic_layer_impact,
             magic_enabled=config_input.magic_enabled,
             user_persona_settings=config_input.user_persona_settings,
             policy_version=config_input.policy_version,
