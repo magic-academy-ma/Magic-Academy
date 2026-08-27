@@ -5,6 +5,7 @@ from app.api.auth import router as auth_router
 from app.api.events import router as events_router
 from app.api.simulation_history import router as simulation_history_router
 from app.api.simulation_imports import router as simulation_imports_router
+from app.api.simulation_logs import router as simulation_logs_router
 from app.api.simulation_shares import router as simulation_shares_router
 from app.api.simulations import router as simulations_router
 from app.api.ticks import router as ticks_router
@@ -19,6 +20,7 @@ api_router.include_router(simulations_router)
 api_router.include_router(simulation_history_router)
 api_router.include_router(simulation_shares_router)
 api_router.include_router(simulation_imports_router)
+api_router.include_router(simulation_logs_router)
 api_router.include_router(ticks_router)
 api_router.include_router(user_persona_router)
 api_router.include_router(websockets_router)
