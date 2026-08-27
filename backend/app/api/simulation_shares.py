@@ -1,21 +1,74 @@
+from collections.abc import Callable
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.api.schemas import SimulationShareCreateRequest, SimulationShareResponse
+from app.api.schemas import (
+    SimulationShareCreateRequest,
+    SimulationShareDetailResponse,
+    SimulationShareSummaryResponse,
+)
 from app.core.database import get_db
 from app.core.security import get_current_user, require_user_role
 from app.domain.models import User
 from app.services.simulation_shares import (
+    ShareAccessDeniedError,
+    ShareNotFoundError,
+    SimulationNotReadyForShareError,
     cancel_simulation_share,
     create_simulation_share,
     get_public_simulation_shares,
     get_simulation_share_detail,
 )
 
-router = APIRouter(tags=["simulation-shares"])
+
+class Slice7APIError(Exception):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"error": {"code": code, "message": message}})
+
+
+class Slice7ErrorRoute(APIRoute):
+    def get_route_handler(self) -> Callable:
+        original_handler = super().get_route_handler()
+
+        async def handler(request: Request):
+            try:
+                return await original_handler(request)
+            except Slice7APIError as exc:
+                return _error_response(exc.status_code, exc.code, exc.message)
+            except ShareNotFoundError as exc:
+                return _error_response(404, "SHARE_NOT_FOUND", str(exc))
+            except ShareAccessDeniedError as exc:
+                return _error_response(403, "SHARE_ACCESS_DENIED", str(exc))
+            except SimulationNotReadyForShareError as exc:
+                return _error_response(409, "SIMULATION_SHARE_NOT_READY", str(exc))
+            except RequestValidationError:
+                return _error_response(422, "INVALID_SHARE_REQUEST", "Invalid request")
+            except HTTPException as exc:
+                codes = {
+                    401: "AUTHENTICATION_REQUIRED",
+                    403: "SHARE_ACCESS_DENIED",
+                    404: "SHARE_NOT_FOUND",
+                }
+                return _error_response(
+                    exc.status_code, codes.get(exc.status_code, "INVALID_SHARE_REQUEST"), str(exc.detail)
+                )
+
+        return handler
+
+
+router = APIRouter(tags=["simulation-shares"], route_class=Slice7ErrorRoute)
 optional_bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -31,83 +84,54 @@ def optional_current_user(
         return None
 
 
-@router.post("/simulations/{simulation_id}/share", response_model=SimulationShareResponse, status_code=status.HTTP_201_CREATED)
-def create_share_v1(
+@router.post(
+    "/simulations/{simulation_id}/shares",
+    response_model=SimulationShareDetailResponse,
+    status_code=201,
+)
+def create_share(
     simulation_id: UUID,
     request: SimulationShareCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
-) -> SimulationShareResponse:
-    return SimulationShareResponse.model_validate(
-        create_simulation_share(
-            db,
-            current_user,
-            simulation_id,
-            visibility=request.visibility,
-            export_payload=request.export_payload,
-        )
+) -> SimulationShareDetailResponse:
+    share = create_simulation_share(
+        db,
+        current_user,
+        simulation_id,
+        visibility=request.visibility,
+        title=request.title,
+        description=request.description,
     )
+    return SimulationShareDetailResponse.model_validate(share)
 
 
-@router.post("/simulations/{simulation_id}/shares", response_model=SimulationShareResponse, status_code=status.HTTP_201_CREATED)
-def create_share_v2(
-    simulation_id: UUID,
-    request: SimulationShareCreateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_user_role),
-) -> SimulationShareResponse:
-    return create_share_v1(simulation_id, request, db, current_user)
-
-
-@router.delete("/simulations/{simulation_id}/share", status_code=status.HTTP_204_NO_CONTENT)
-def delete_share_v1(
-    simulation_id: UUID,
+@router.delete("/shares/{share_id}", status_code=204)
+def cancel_share(
+    share_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
 ) -> None:
-    cancel_simulation_share(db, current_user, simulation_id)
+    cancel_simulation_share(db, current_user, share_id)
     return None
 
 
-@router.delete("/simulations/{simulation_id}/shares", status_code=status.HTTP_204_NO_CONTENT)
-def delete_share_v2(
-    simulation_id: UUID,
+@router.get("/shares", response_model=list[SimulationShareSummaryResponse])
+def list_shares(
+    q: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_user_role),
-) -> None:
-    return delete_share_v1(simulation_id, db, current_user)
+) -> list[SimulationShareSummaryResponse]:
+    shares = get_public_simulation_shares(db, query=q, limit=limit, offset=offset)
+    return [SimulationShareSummaryResponse.model_validate(share) for share in shares]
 
 
-@router.get("/shared", response_model=list[SimulationShareResponse])
-def list_public_shares_v1(
-    db: Session = Depends(get_db),
-    current_user: User | None = Depends(optional_current_user),
-) -> list[SimulationShareResponse]:
-    del current_user
-    return [SimulationShareResponse.model_validate(share) for share in get_public_simulation_shares(db)]
-
-
-@router.get("/shares", response_model=list[SimulationShareResponse])
-def list_public_shares_v2(
-    db: Session = Depends(get_db),
-    current_user: User | None = Depends(optional_current_user),
-) -> list[SimulationShareResponse]:
-    return list_public_shares_v1(db, current_user)
-
-
-@router.get("/shared/{share_id}", response_model=SimulationShareResponse)
-def get_share_detail_v1(
+@router.get("/shares/{share_id}", response_model=SimulationShareDetailResponse)
+def get_share_detail(
     share_id: UUID,
     db: Session = Depends(get_db),
     current_user: User | None = Depends(optional_current_user),
-) -> SimulationShareResponse:
-    return SimulationShareResponse.model_validate(get_simulation_share_detail(db, share_id, current_user))
-
-
-@router.get("/shares/{share_id}", response_model=SimulationShareResponse)
-def get_share_detail_v2(
-    share_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User | None = Depends(optional_current_user),
-) -> SimulationShareResponse:
-    return get_share_detail_v1(share_id, db, current_user)
+) -> SimulationShareDetailResponse:
+    share = get_simulation_share_detail(db, share_id, current_user)
+    return SimulationShareDetailResponse.model_validate(share)

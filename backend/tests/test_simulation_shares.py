@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from uuid6 import uuid7
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required")
@@ -20,7 +21,10 @@ def client(monkeypatch):
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE users, simulations, locations, agents, agent_states, simulation_shares RESTART IDENTITY CASCADE"
+                "TRUNCATE users, simulations, locations, agents, agent_states, "
+                "student_profiles, professor_profiles, organizations, "
+                "organization_memberships, relationships, simulation_configs, "
+                "simulation_snapshots, simulation_shares RESTART IDENTITY CASCADE"
             )
         )
 
@@ -52,122 +56,292 @@ def create_simulation(client: TestClient, headers: dict[str, str], name: str = "
     return response.json()["id"]
 
 
-def test_share_owner_and_visibility_rules(client) -> None:
+def create_share(
+    client: TestClient,
+    headers: dict[str, str],
+    simulation_id: str,
+    *,
+    visibility: str = "public",
+    title: str = "My share",
+    description: str | None = "desc",
+):
+    return client.post(
+        f"/v1/simulations/{simulation_id}/shares",
+        headers=headers,
+        json={"visibility": visibility, "title": title, "description": description},
+    )
+
+
+def test_owner_can_create_share_from_ready_simulation(client) -> None:
     test_client, _ = client
-    owner_headers = register_and_login(test_client, "owner-share")
-    viewer_headers = register_and_login(test_client, "viewer-share")
+    owner_headers = register_and_login(test_client, "owner-create")
+    simulation_id = create_simulation(test_client, owner_headers)
 
-    simulation_id = create_simulation(test_client, owner_headers, "Public share")
-    create_response = test_client.post(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=owner_headers,
-        json={"visibility": "public", "export_payload": {"schema_version": "1", "name": "initial"}},
-    )
-    assert create_response.status_code == 201
-    share_id = create_response.json()["id"]
+    response = create_share(test_client, owner_headers, simulation_id, visibility="public")
 
-    list_response = test_client.get("/v1/shares", headers=viewer_headers)
-    assert list_response.status_code == 200
-    assert [item["id"] for item in list_response.json()] == [share_id]
-
-    private_response = test_client.post(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=owner_headers,
-        json={"visibility": "private", "export_payload": {"schema_version": "1", "name": "hidden"}},
-    )
-    assert private_response.status_code == 409
-
-    unlisted_response = test_client.post(
-        f"/v1/simulations/{uuid4()}/share",
-        headers=owner_headers,
-        json={"visibility": "unlisted", "export_payload": {"schema_version": "1", "name": "secret"}},
-    )
-    assert unlisted_response.status_code == 201
-    unlisted_id = unlisted_response.json()["id"]
-
-    list_response = test_client.get("/v1/shares", headers=viewer_headers)
-    assert list_response.status_code == 200
-    listed_ids = [item["id"] for item in list_response.json()]
-    assert share_id in listed_ids
-    assert unlisted_id not in listed_ids
-
-    detail_response = test_client.get(f"/v1/shares/{unlisted_id}", headers=viewer_headers)
-    assert detail_response.status_code == 200
-    assert detail_response.json()["id"] == str(unlisted_id)
-
-    private_simulation_id = create_simulation(test_client, owner_headers, "Private share")
-    create_private = test_client.post(
-        f"/v1/simulations/{private_simulation_id}/share",
-        headers=owner_headers,
-        json={"visibility": "private", "export_payload": {"schema_version": "1", "name": "private"}},
-    )
-    private_share_id = create_private.json()["id"]
-
-    private_list = test_client.get("/v1/shares", headers=viewer_headers)
-    assert private_share_id not in [item["id"] for item in private_list.json()]
-
-    private_detail = test_client.get(f"/v1/shares/{private_share_id}", headers=viewer_headers)
-    assert private_detail.status_code == 404
+    assert response.status_code == 201
+    body = response.json()
+    assert body["visibility"] == "public"
+    assert body["export_schema_version"] == "slice7-share-v1"
+    assert body["title"] == "My share"
 
 
-def test_share_snapshot_is_frozen_after_simulation_changes(client) -> None:
-    test_client, session_factory = client
-    owner_headers = register_and_login(test_client, "snapshot-owner")
-    simulation_id = create_simulation(test_client, owner_headers, "Snapshot sim")
-
-    creation = test_client.post(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=owner_headers,
-        json={"visibility": "public", "export_payload": {"schema_version": "1", "name": "snapshot-name"}},
-    )
-    assert creation.status_code == 201
-    share_id = creation.json()["id"]
-
-    with session_factory() as db:
-        simulation = db.execute(text("SELECT id, name FROM simulations WHERE id = :simulation_id")).fetchone()
-        assert simulation is not None
-        db.execute(text("UPDATE simulations SET name = :new_name WHERE id = :simulation_id"), {"simulation_id": simulation[0], "new_name": "mutated-name"})
-        db.commit()
-
-    detail = test_client.get(f"/v1/shares/{share_id}", headers=owner_headers)
-    assert detail.status_code == 200
-    payload = detail.json()["export_payload"]
-    assert payload["simulation"]["name"] == "snapshot-name"
-
-
-def test_owner_only_create_and_cancel_share(client) -> None:
+def test_non_owner_cannot_create_or_cancel_share(client) -> None:
     test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-perm")
+    other_headers = register_and_login(test_client, "other-perm")
+    simulation_id = create_simulation(test_client, owner_headers)
 
-    owner_headers = register_and_login(test_client, "share-owner")
-    viewer_headers = register_and_login(test_client, "share-viewer")
-    simulation_id = create_simulation(test_client, owner_headers, "Owner only")
-
-    forbidden_create = test_client.post(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=viewer_headers,
-        json={"visibility": "public", "export_payload": {"schema_version": "1", "owner": "other"}},
-    )
+    forbidden_create = create_share(test_client, other_headers, simulation_id)
     assert forbidden_create.status_code == 403
+    assert forbidden_create.json()["error"]["code"] == "SHARE_ACCESS_DENIED"
 
-    valid_create = test_client.post(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=owner_headers,
-        json={"visibility": "public", "export_payload": {"schema_version": "1", "owner": "me"}},
-    )
-    assert valid_create.status_code == 201
-    share_id = valid_create.json()["id"]
-
-    forbidden_cancel = test_client.delete(
-        f"/v1/simulations/{simulation_id}/share",
-        headers=viewer_headers,
-    )
+    share_id = create_share(test_client, owner_headers, simulation_id).json()["id"]
+    forbidden_cancel = test_client.delete(f"/v1/shares/{share_id}", headers=other_headers)
     assert forbidden_cancel.status_code == 403
 
-    cancel_response = test_client.delete(
-        f"/v1/simulations/{simulation_id}/share",
+
+def test_invalid_visibility_is_rejected(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-invalid-vis")
+    simulation_id = create_simulation(test_client, owner_headers)
+
+    response = test_client.post(
+        f"/v1/simulations/{simulation_id}/shares",
         headers=owner_headers,
+        json={"visibility": "hidden"},
     )
+    assert response.status_code == 422
+
+
+def test_running_simulation_cannot_be_shared(client) -> None:
+    test_client, session_factory = client
+    owner_headers = register_and_login(test_client, "owner-running")
+    simulation_id = create_simulation(test_client, owner_headers)
+
+    with session_factory() as db:
+        db.execute(
+            text(
+                "UPDATE simulations SET status = 'running', started_at = now(), "
+                "current_tick = 1 WHERE id = :id"
+            ),
+            {"id": simulation_id},
+        )
+        db.commit()
+
+    response = create_share(test_client, owner_headers, simulation_id)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "SIMULATION_SHARE_NOT_READY"
+
+
+def test_public_list_and_search(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-search")
+    sim_a = create_simulation(test_client, owner_headers, "Sim A")
+    sim_b = create_simulation(test_client, owner_headers, "Sim B")
+    share_a = create_share(
+        test_client, owner_headers, sim_a, visibility="public", title="Magic Academy Alpha"
+    ).json()
+    share_b = create_share(
+        test_client, owner_headers, sim_b, visibility="public", title="Something else"
+    ).json()
+
+    listing = test_client.get("/v1/shares")
+    assert listing.status_code == 200
+    ids = [item["id"] for item in listing.json()]
+    assert share_a["id"] in ids
+    assert share_b["id"] in ids
+    # list items must not leak the full export payload
+    assert "export_payload" not in listing.json()[0]
+
+    filtered = test_client.get("/v1/shares", params={"q": "Alpha"})
+    assert filtered.status_code == 200
+    filtered_ids = [item["id"] for item in filtered.json()]
+    assert share_a["id"] in filtered_ids
+    assert share_b["id"] not in filtered_ids
+
+
+def test_unlisted_hidden_from_list_but_reachable_by_id(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-unlisted")
+    viewer_headers = register_and_login(test_client, "viewer-unlisted")
+    simulation_id = create_simulation(test_client, owner_headers)
+    share = create_share(test_client, owner_headers, simulation_id, visibility="unlisted").json()
+
+    listing = test_client.get("/v1/shares")
+    assert share["id"] not in [item["id"] for item in listing.json()]
+
+    detail = test_client.get(f"/v1/shares/{share['id']}", headers=viewer_headers)
+    assert detail.status_code == 200
+    assert detail.json()["id"] == share["id"]
+
+    anonymous_detail = test_client.get(f"/v1/shares/{share['id']}")
+    assert anonymous_detail.status_code == 200
+
+
+def test_private_hidden_from_others_but_visible_to_owner(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-private")
+    viewer_headers = register_and_login(test_client, "viewer-private")
+    simulation_id = create_simulation(test_client, owner_headers)
+    share = create_share(test_client, owner_headers, simulation_id, visibility="private").json()
+
+    assert share["id"] not in [item["id"] for item in test_client.get("/v1/shares").json()]
+
+    forbidden = test_client.get(f"/v1/shares/{share['id']}", headers=viewer_headers)
+    assert forbidden.status_code == 404
+
+    anonymous = test_client.get(f"/v1/shares/{share['id']}")
+    assert anonymous.status_code == 404
+
+    owner_detail = test_client.get(f"/v1/shares/{share['id']}", headers=owner_headers)
+    assert owner_detail.status_code == 200
+
+
+def test_revoked_share_is_404_for_detail_and_cancel_is_idempotent_failure(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-revoke")
+    simulation_id = create_simulation(test_client, owner_headers)
+    share = create_share(test_client, owner_headers, simulation_id, visibility="public").json()
+
+    cancel_response = test_client.delete(f"/v1/shares/{share['id']}", headers=owner_headers)
     assert cancel_response.status_code == 204
 
-    detail_response = test_client.get(f"/v1/shares/{share_id}", headers=viewer_headers)
-    assert detail_response.status_code == 404
+    detail_after_cancel = test_client.get(f"/v1/shares/{share['id']}", headers=owner_headers)
+    assert detail_after_cancel.status_code == 404
+
+    listing = test_client.get("/v1/shares")
+    assert share["id"] not in [item["id"] for item in listing.json()]
+
+    second_cancel = test_client.delete(f"/v1/shares/{share['id']}", headers=owner_headers)
+    assert second_cancel.status_code == 404
+
+
+def test_simulation_can_be_re_shared_after_cancellation(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-reshare")
+    simulation_id = create_simulation(test_client, owner_headers)
+
+    first = create_share(test_client, owner_headers, simulation_id)
+    assert first.status_code == 201
+    test_client.delete(f"/v1/shares/{first.json()['id']}", headers=owner_headers)
+
+    second = create_share(test_client, owner_headers, simulation_id)
+    assert second.status_code == 201
+    assert second.json()["id"] != first.json()["id"]
+
+
+def test_export_payload_is_immutable_after_source_simulation_changes(client) -> None:
+    test_client, session_factory = client
+    owner_headers = register_and_login(test_client, "owner-immutable")
+    simulation_id = create_simulation(test_client, owner_headers, "Snapshot sim")
+
+    share = create_share(test_client, owner_headers, simulation_id, title="frozen-name").json()
+
+    with session_factory() as db:
+        db.execute(
+            text("UPDATE simulations SET name = :new_name WHERE id = :id"),
+            {"id": simulation_id, "new_name": "mutated-name"},
+        )
+        db.commit()
+
+    detail = test_client.get(f"/v1/shares/{share['id']}", headers=owner_headers).json()
+    assert detail["export_payload"]["simulation"]["name"] == "Snapshot sim"
+
+
+def test_export_payload_roster_and_no_sensitive_fields(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-roster")
+    simulation_id = create_simulation(test_client, owner_headers)
+
+    share = create_share(test_client, owner_headers, simulation_id).json()
+    payload = share["export_payload"]
+
+    assert payload["schema_version"] == "slice7-share-v1"
+    agents = payload["agents"]
+    assert len(agents) == 6
+    student_count = sum(1 for agent in agents if agent["role_profile"]["profile_type"] == "student")
+    professor_count = sum(1 for agent in agents if agent["role_profile"]["profile_type"] == "professor")
+    assert student_count == 5
+    assert professor_count == 1
+    for agent in agents:
+        assert set(agent["fixture_key"] for agent in agents) == {a["fixture_key"] for a in agents}
+        assert "traits" in agent and "state" in agent
+
+    serialized = str(payload)
+    for forbidden in ("password", "jwt", "secret", "Authorization", "access_token"):
+        assert forbidden not in serialized
+
+
+def test_export_payload_maps_organizations_and_relationships_by_fixture_key(client) -> None:
+    test_client, session_factory = client
+    owner_headers = register_and_login(test_client, "owner-org")
+    simulation_id = create_simulation(test_client, owner_headers)
+
+    with session_factory() as db:
+        agent_rows = db.execute(
+            text(
+                "SELECT id, fixture_key FROM agents WHERE simulation_id = :sid ORDER BY fixture_key"
+            ),
+            {"sid": simulation_id},
+        ).fetchall()
+        student_a_id, student_a_key = agent_rows[0]
+        student_b_id, student_b_key = agent_rows[1]
+
+        org_id = uuid7()
+        db.execute(
+            text(
+                "INSERT INTO organizations (id, simulation_id, organization_type, name, "
+                "description, is_active, created_at, updated_at) VALUES "
+                "(:id, :sid, 'club', 'Magic Club', 'desc', true, now(), now())"
+            ),
+            {"id": org_id, "sid": simulation_id},
+        )
+        db.execute(
+            text(
+                "INSERT INTO organization_memberships (id, simulation_id, organization_id, "
+                "agent_id, membership_role, joined_at, created_at, updated_at) VALUES "
+                "(:id, :sid, :org_id, :agent_id, 'member', now(), now(), now())"
+            ),
+            {"id": uuid7(), "sid": simulation_id, "org_id": org_id, "agent_id": student_a_id},
+        )
+        db.execute(
+            text(
+                "INSERT INTO relationships (id, simulation_id, source_agent_id, target_agent_id, "
+                "affection, closeness, trust, tension, rivalry, dependency, created_at, updated_at) "
+                "VALUES (:id, :sid, :src, :dst, 10, 5, 0, 0, 0, 0, now(), now())"
+            ),
+            {"id": uuid7(), "sid": simulation_id, "src": student_a_id, "dst": student_b_id},
+        )
+        db.commit()
+
+    share = create_share(test_client, owner_headers, simulation_id).json()
+    payload = share["export_payload"]
+
+    assert len(payload["organizations"]) == 1
+    org_fixture_key = payload["organizations"][0]["fixture_key"]
+    assert org_fixture_key
+
+    assert len(payload["organization_memberships"]) == 1
+    membership = payload["organization_memberships"][0]
+    assert membership["organization_fixture_key"] == org_fixture_key
+    assert membership["agent_fixture_key"] == student_a_key
+
+    assert len(payload["relationships"]) == 1
+    relationship = payload["relationships"][0]
+    assert relationship["source_agent_fixture_key"] == student_a_key
+    assert relationship["target_agent_fixture_key"] == student_b_key
+
+
+def test_share_not_found_for_unknown_id(client) -> None:
+    test_client, _ = client
+    response = test_client.get(f"/v1/shares/{uuid4()}")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "SHARE_NOT_FOUND"
+
+
+def test_create_share_for_missing_simulation_is_404(client) -> None:
+    test_client, _ = client
+    owner_headers = register_and_login(test_client, "owner-missing-sim")
+    response = create_share(test_client, owner_headers, str(uuid4()))
+    assert response.status_code == 404
