@@ -318,14 +318,19 @@ def test_export_payload_maps_organizations_and_relationships_by_fixture_key(clie
     share = create_share(test_client, owner_headers, simulation_id).json()
     payload = share["export_payload"]
 
-    assert len(payload["organizations"]) == 1
-    org_fixture_key = payload["organizations"][0]["fixture_key"]
+    # 시드된 MVP 전공(major) + 테스트가 추가한 club "Magic Club".
+    orgs_by_type = {org["organization_type"]: org for org in payload["organizations"]}
+    assert orgs_by_type["major"]["name"] == "마법공학과"
+    org_fixture_key = orgs_by_type["club"]["fixture_key"]
     assert org_fixture_key
 
-    assert len(payload["organization_memberships"]) == 1
-    membership = payload["organization_memberships"][0]
-    assert membership["organization_fixture_key"] == org_fixture_key
-    assert membership["agent_fixture_key"] == student_a_key
+    club_memberships = [
+        membership
+        for membership in payload["organization_memberships"]
+        if membership["organization_fixture_key"] == org_fixture_key
+    ]
+    assert len(club_memberships) == 1
+    assert club_memberships[0]["agent_fixture_key"] == student_a_key
 
     assert len(payload["relationships"]) == 1
     relationship = payload["relationships"][0]

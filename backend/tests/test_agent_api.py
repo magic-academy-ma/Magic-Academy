@@ -61,7 +61,13 @@ def test_agent_detail_state_and_query_validation(client):
 
     assert detail.status_code == 200
     assert detail.json()["id"] == agent_id
-    assert "organizations" in detail.json()
+    # agents[0]는 student-01 — MVP 단일 전공(마법공학과)에 소속된다.
+    majors = [
+        org
+        for org in detail.json()["organizations"]
+        if org["organization_type"] == "major"
+    ]
+    assert [org["name"] for org in majors] == ["마법공학과"]
     assert state.status_code == 200
     assert state.json()["current_location"]["id"] == agents[0]["location"]["id"]
     assert invalid_limit.status_code == 422
