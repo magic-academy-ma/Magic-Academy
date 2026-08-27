@@ -135,7 +135,7 @@ async def test_memory_store_uses_session_on_caller_thread():
 
 @pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is required")
 async def test_memory_store_enforces_cap_end_to_end_via_real_db() -> None:
-    """build_memory_store로 11번째 저장 시 실제 DB에서 enforce_cap(10)까지 적용된다"""
+    """11번째 저장 시 최신 2개를 보존하고 나머지 최저 중요도를 제거한다."""
     engine = create_engine(TEST_DATABASE_URL)
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with engine.begin() as connection:
@@ -202,8 +202,10 @@ async def test_memory_store_enforces_cap_end_to_end_via_real_db() -> None:
             rows = session.scalars(
                 select(AgentMemory).where(AgentMemory.agent_id == agent_id)
             ).all()
+            contents = {row.content for row in rows}
             assert len(rows) == 10
-            assert not any(row.content == "memory-lowest-importance" for row in rows)
+            assert "memory-lowest-importance" in contents
+            assert "memory-1" not in contents
     finally:
         engine.dispose()
 class FakeRepository:

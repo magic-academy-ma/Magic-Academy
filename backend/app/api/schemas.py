@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -63,7 +63,39 @@ class SimulationResponse(BaseModel):
     current_day: int
     current_tick: int
     magic_enabled: bool
+    night_waiting: bool
     created_at: datetime
+    # 최신 simulation_config 파라미터 (없으면 None — 별도 GET /parameters 를 만들지
+    # 않고 기존 Simulation 조회 응답을 확장한다, simulation-parameters.md §10).
+    event_frequency: str | None = None
+    event_impact: str | None = None
+    magic_layer_frequency: str | None = None
+    magic_layer_impact: str | None = None
+    magic_off_eligible: bool | None = None
+    config_version: int | None = None
+
+
+class SimulationConfigPutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_frequency: str
+    event_impact: str
+    magic_layer_frequency: str = "medium"
+    magic_layer_impact: str = "medium"
+    magic_enabled: StrictBool
+
+
+class SimulationConfigPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_frequency: str
+    event_impact: str
+
+
+class RestoreSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
 
 
 class EventCreateRequest(BaseModel):
@@ -102,6 +134,72 @@ class EventResponse(BaseModel):
     status: str
     simulation_day: int
     created_at: datetime
+
+
+class LatestEventResponse(EventResponse):
+    # tick / importance 는 events 테이블 컬럼이 아니라 event engine 이
+    # events.metadata(JSONB)에 남긴 값이다 (persist_event_batch). 수동 생성
+    # Event 에는 없으므로 nullable 이다.
+    tick: int | None
+    importance: int | None
+    # 참여(대상) Agent 는 event_participants 테이블에서 조회한다.
+    target_agent_ids: list[UUID]
+
+
+class EventRelatedMemoryResponse(BaseModel):
+    # agent_memories 행 그대로. agent_memories.event_id FK 가 이 Event 를 가리키는 기억이다.
+    id: UUID
+    agent_id: UUID
+    content: str
+    memory_type: str
+    importance: int
+    created_tick: int
+    occurred_at: datetime
+
+
+class EventDetailResponse(EventResponse):
+    # tick / importance / impact_level / source / event_subtype 는 events 테이블
+    # 컬럼이 아니라 event engine(persist_event_batch)이 events.metadata(JSONB)에
+    # 남긴 값이다. 수동 생성 Event 에는 없으므로 nullable 이다.
+    tick: int | None
+    importance: int | None
+    impact_level: str | None
+    source: str | None
+    event_subtype: str | None
+    # 참여(대상) Agent 는 event_participants 테이블에서 조회한다.
+    target_agent_ids: list[UUID]
+    # 이 Event 를 참조하는 agent_memories 행.
+    related_memories: list[EventRelatedMemoryResponse]
+
+
+class SimulationShareCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    visibility: Literal["private", "unlisted", "public"] = "private"
+    title: str = Field(default="", max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_be_trimmed(cls, value: str) -> str:
+        return value.strip()
+
+
+class SimulationShareSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    simulation_id: UUID
+    owner_id: UUID
+    title: str
+    description: str | None
+    visibility: str
+    export_schema_version: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SimulationShareDetailResponse(SimulationShareSummaryResponse):
+    export_payload: dict[str, object]
 
 
 class AgentProfileResponse(BaseModel):
@@ -143,6 +241,7 @@ class AgentResponse(BaseModel):
     fixture_version: str
     name: str
     agent_type: str
+    active_status: str
     mbti_type: str
     profile: AgentProfileResponse
     student_profile: StudentProfileResponse | None

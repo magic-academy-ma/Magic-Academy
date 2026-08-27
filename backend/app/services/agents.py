@@ -61,6 +61,7 @@ def _agent_response(db: Session, agent: Agent) -> AgentResponse:
         fixture_version=agent.fixture_version,
         name=agent.name,
         agent_type=agent.agent_type,
+        active_status=agent.active_status,
         mbti_type=agent.mbti_type,
         profile=AgentProfileResponse(
             openness=agent.openness,

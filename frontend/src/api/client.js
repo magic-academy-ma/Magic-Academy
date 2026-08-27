@@ -22,6 +22,7 @@ export async function apiRequest(path, { token, ...options } = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const response = await fetch(`${API_URL}${path}`, {
+    token,
     ...options,
     headers,
   });

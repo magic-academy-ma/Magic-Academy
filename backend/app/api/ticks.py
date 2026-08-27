@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends
@@ -16,10 +17,27 @@ from app.services.manual_tick import (
     create_memory_callbacks,
 )
 from app.services.memory_dependency import get_memory_hooks
-from app.services.realtime_events import build_tick_events, connection_manager
+from app.services.night_transition import (
+    NightSkipConflictError,
+    NightSkipNotAllowedError,
+    skip_night,
+)
+from app.services.realtime_events import (
+    build_simulation_status_event,
+    build_tick_events,
+    connection_manager,
+)
 from app.services.runtime_dependency import get_agent_runtime, get_memory_repository
 from app.services.simulations import require_owned_simulation
+from app.services.simulation_events import (
+    TickResultPublisher,
+    build_tick_result_messages,
+    get_tick_result_publisher,
+)
 from app.simulation.agent_runtime import AgentRuntime
+
+
+logger = logging.getLogger(__name__)
 
 
 class DecisionExplanationResponse(BaseModel):
@@ -97,12 +115,13 @@ router = APIRouter(tags=["ticks"])
     "/simulations/{simulation_id}/ticks/advance",
     response_model=TickAdvanceResponse,
 )
-def advance_tick(
+async def advance_tick(
     simulation_id: UUID,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user_role),
     runtime: AgentRuntime = Depends(get_agent_runtime),
+    publisher: TickResultPublisher = Depends(get_tick_result_publisher),
     memory_repository: MemoryRepository = Depends(get_memory_repository),
     memory_hooks: tuple = Depends(get_memory_hooks),
 ):
@@ -113,19 +132,21 @@ def advance_tick(
             db, memory_repository
         )
     try:
-        result = asyncio.run(
-            advance_manual_tick(
-                db,
-                simulation,
-                runtime=runtime,
-                memory_retriever=memory_retriever,
-                memory_store=memory_store,
+        result = await asyncio.to_thread(
+            lambda: asyncio.run(
+                advance_manual_tick(
+                    db,
+                    simulation,
+                    runtime=runtime,
+                    memory_retriever=memory_retriever,
+                    memory_store=memory_store,
+                )
             )
         )
         realtime_events = build_tick_events(db, simulation.id, result)
-        db.commit()
+        await asyncio.to_thread(db.commit)
     except TickAlreadyRunningError:
-        db.rollback()
+        await asyncio.to_thread(db.rollback)
         return JSONResponse(
             status_code=409,
             content={
@@ -136,8 +157,40 @@ def advance_tick(
             },
         )
     except Exception:
-        db.rollback()
+        await asyncio.to_thread(db.rollback)
         raise
+
+    relationship_deltas = [
+        {
+            "effect_id": effect.effect_id,
+            "rule_id": effect.rule_id,
+            "source_agent_id": str(effect.source_agent_id),
+            "target_agent_id": str(effect.target_agent_id),
+            "metric": effect.metric,
+            "before": effect.before,
+            "applied_delta": effect.after_preview - effect.before,
+            "after": effect.after_preview,
+            "reason": effect.reason,
+        }
+        for effect in result.policy_result.relationship_effects
+        if effect.target_agent_id is not None
+    ]
+    try:
+        await publisher.publish(
+            build_tick_result_messages(
+                simulation.id,
+                result.event_batch_result,
+                relationship_deltas,
+            )
+        )
+    except Exception:
+        # WebSocket은 알림 채널일 뿐이다. Tick은 이미 commit되었으므로
+        # push 실패가 REST 응답을 오염시키지 않는다 (REST가 단일 진실 소스).
+        logger.exception(
+            "tick result publish failed after commit (simulation_id=%s, tick_number=%s)",
+            simulation.id,
+            result.current_tick,
+        )
 
     background_tasks.add_task(
         connection_manager.broadcast,
@@ -213,3 +266,54 @@ def advance_tick(
             for agent_id, memory_ids in result.retrieval_traces.items()
         ],
     )
+
+
+@router.post("/simulations/{simulation_id}/night/skip")
+def skip_night_endpoint(
+    simulation_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+):
+    simulation = require_owned_simulation(db, simulation_id, current_user)
+    try:
+        outcome = skip_night(db, simulation)
+        db.commit()
+    except NightSkipConflictError as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=409,
+            content={"error": {"code": "CONFLICT", "message": str(exc)}},
+        )
+    except NightSkipNotAllowedError as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"code": "BUSINESS_RULE_VIOLATION", "message": str(exc)}},
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(simulation)
+    if outcome.transitioned:
+        background_tasks.add_task(
+            connection_manager.broadcast,
+            simulation.id,
+            [
+                build_simulation_status_event(
+                    simulation.id,
+                    simulation.status,
+                    current_day=simulation.current_day,
+                    current_tick=simulation.current_tick,
+                )
+            ],
+        )
+    return {
+        "data": {
+            "id": str(simulation.id),
+            "status": simulation.status,
+            "current_day": simulation.current_day,
+            "current_tick": simulation.current_tick,
+        }
+    }

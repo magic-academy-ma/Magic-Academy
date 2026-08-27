@@ -71,10 +71,18 @@ def build_event_created_event(event: Event) -> RealtimeEvent:
 def build_simulation_status_event(
     simulation_id: UUID,
     status: str,
+    *,
+    current_day: int | None = None,
+    current_tick: int | None = None,
 ) -> RealtimeEvent:
+    data: dict[str, Any] = {"simulation_id": simulation_id, "status": status}
+    if current_day is not None:
+        data["current_day"] = current_day
+    if current_tick is not None:
+        data["current_tick"] = current_tick
     return RealtimeEvent(
         type="SIMULATION_STATUS_UPDATED",
-        data={"simulation_id": simulation_id, "status": status},
+        data=data,
     )
 
 
@@ -93,6 +101,18 @@ def build_tick_events(
             },
         )
     ]
+    events.extend(
+        RealtimeEvent(
+            type="EVENT_CREATED",
+            data={
+                "simulation_id": simulation_id,
+                "tick_number": result.current_tick,
+                "event_id": event["id"],
+                **event,
+            },
+        )
+        for event in result.event_batch_result["events"]
+    )
     events.extend(
         RealtimeEvent(
             type="AGENT_ACTION_UPDATED",
