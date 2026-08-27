@@ -23,6 +23,8 @@ class SchemaModelTests(unittest.TestCase):
                 "professor_profiles",
                 "agent_states",
                 "agent_memories",
+                "dialogues",
+                "dialogue_messages",
                 "relationships",
                 "runtime_results",
                 "runtime_executions",

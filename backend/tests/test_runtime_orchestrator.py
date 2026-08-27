@@ -154,6 +154,27 @@ def test_multiple_results_are_sent_with_one_save_batch_call() -> None:
     assert len(sink.calls[0]) == 2
 
 
+def test_dialogue_sink_receives_the_resolved_talk_resolution() -> None:
+    from app.simulation.intent_conflict import TalkConflictResolution
+
+    class SpyDialogueSink:
+        def __init__(self) -> None:
+            self.calls: list[TalkConflictResolution] = []
+
+        def save_batch(self, resolution):
+            self.calls.append(resolution)
+
+    dialogue_sink = SpyDialogueSink()
+    batch = RuntimeOrchestrator(
+        SpyRuntime(), SpySink(), dialogue_sink=dialogue_sink
+    ).run_batch([make_input(0), make_input(1)])
+
+    assert len(dialogue_sink.calls) == 1
+    resolution = dialogue_sink.calls[0]
+    assert isinstance(resolution, TalkConflictResolution)
+    assert resolution.runtime_results == batch.results
+
+
 def test_proposed_fallback_and_skipped_are_saved_together() -> None:
     inputs = [make_input(0), make_input(1), make_input(2, active=False)]
     statuses = {

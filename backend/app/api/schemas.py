@@ -196,6 +196,23 @@ class SimulationLogEntryResponse(BaseModel):
     event_id: UUID | None
 
 
+class DialogueMessageResponse(BaseModel):
+    # 한 발화. order 는 dialogue 내 안정적 순서(0부터)이며 실제 turn-taking 이
+    # 아니라 Runtime 배치 선정 순서를 따른다. Runtime 이 발화를 비우면 utterance 는 None.
+    speaker: UUID
+    utterance: str | None
+    order: int
+
+
+class DialogueDetailResponse(BaseModel):
+    # 같은 tick 안에서 성립한 mutual TALK pair 하나 = dialogue 하나.
+    dialogue_id: UUID
+    simulation_id: UUID
+    tick: int
+    participants: list[UUID]
+    messages: list[DialogueMessageResponse]
+
+
 class SimulationShareCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
