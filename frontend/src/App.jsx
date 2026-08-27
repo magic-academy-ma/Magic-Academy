@@ -3,6 +3,8 @@ import { apiRequest } from "./api/client.js";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import ReplayPanel from "./components/ReplayPanel.jsx";
 import SnapshotPanel from "./components/SnapshotPanel.jsx";
+import SharingPanel from "./components/SharingPanel.jsx";
+import SharedBrowser from "./components/SharedBrowser.jsx";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
@@ -104,7 +106,9 @@ export default function App() {
   const [tickError, setTickError] = useState(null); // { type, message }
   const [sessionNotice, setSessionNotice] = useState("");
   const [authNotice, setAuthNotice] = useState("");
-  const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
+  const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot" | "sharing"
+  const [isImported, setIsImported] = useState(false); // 이 Simulation이 공유 설정을 가져와 생성됐는지
+  const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
 
   const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
     simulation?.id,
@@ -124,11 +128,26 @@ export default function App() {
     setTickError(null);
     setAuthNotice(notice);
     setManagementView(null);
+    setIsImported(false);
+    setSharedBrowserOpen(false);
   }
 
   function handleEnroll(newSimulation) {
     setSimulationId(newSimulation.id);
     setSimulation(newSimulation);
+    setIsImported(false);
+    loadAgents(newSimulation.id);
+  }
+
+  // 공유 설정 가져오기 성공 시 호출된다. import는 요청자 소유의 새 Simulation을
+  // 정확히 하나 생성할 뿐 Runtime/LLM/Tick을 실행하지 않으므로, 응답으로 받은
+  // Simulation으로 그대로 이동한다(원본과는 무관한 새 Simulation).
+  function handleImported(newSimulation) {
+    setSimulationId(newSimulation.id);
+    setSimulation(newSimulation);
+    setIsImported(true);
+    setSharedBrowserOpen(false);
+    setManagementView(null);
     loadAgents(newSimulation.id);
   }
 
@@ -257,13 +276,28 @@ export default function App() {
               title={connected ? "실시간 연결됨" : "연결 끊김"}
             >●</span>
           )}
+          <button type="button" onClick={() => setSharedBrowserOpen(true)}>
+            공유 설정 둘러보기
+          </button>
           <div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div>
         </div>
       </header>
       <main>
+        {sharedBrowserOpen ? (
+          <SharedBrowser
+            token={auth.access_token}
+            onImported={handleImported}
+            onClose={() => setSharedBrowserOpen(false)}
+          />
+        ) : (
+        <>
         <section className="workspace">
             <div className="panel agent-list">
-              <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
+              <h1>
+                {simulation.name}
+                {isImported && <span className="imported-badge">가져온 Simulation</span>}
+              </h1>
+              <p>Agent {agents.length}명</p>
               {loading && <p className="message">Agent를 불러오는 중...</p>}
               {error && <p className="message error" role="alert">{error}</p>}
               {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
@@ -416,6 +450,13 @@ export default function App() {
                 >
                   Snapshot
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "sharing"}
+                  onClick={() => setManagementView("sharing")}
+                >
+                  공유
+                </button>
               </div>
 
               {managementView === "settings" && (
@@ -431,6 +472,13 @@ export default function App() {
               {managementView === "snapshot" && (
                 <SnapshotPanel token={auth.access_token} simulationId={simulation.id} />
               )}
+              {managementView === "sharing" && (
+                <SharingPanel
+                  token={auth.access_token}
+                  simulationId={simulation.id}
+                  simulationStatus={simulation.status}
+                />
+              )}
             </div>
 
             <div className="panel relationship-panel">
@@ -443,6 +491,8 @@ export default function App() {
             agentNames={agentNameById}
             onAgentSelect={handleEventAgentSelect}
           />
+        </>
+        )}
       </main>
     </div>
   );

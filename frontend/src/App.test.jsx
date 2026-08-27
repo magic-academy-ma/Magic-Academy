@@ -81,6 +81,7 @@ function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {
     if (url.endsWith('/agents')) return agentsHandler()
     if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
     if (url.includes('/user-persona')) return response({}, 404) // 아직 미설정 (정상 상태)
+    if (url.includes('/v1/shares') && (!options.method || options.method === 'GET')) return response([])
     return response({}, 404)
   })
 }
@@ -423,5 +424,28 @@ describe('Slice 6 설정·Replay·Snapshot 진입점', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
 
     expect(await screen.findByText('이번 Tick에서 표시할 Agent 행동 결과가 없습니다.')).toBeInTheDocument()
+  })
+})
+
+describe('Slice 7 공유·가져오기 진입점', () => {
+  it('관리 탭에 공유 탭이 있고 SharingPanel로 전환된다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    await userEvent.click(screen.getByRole('button', { name: '공유' }))
+    expect(screen.getByRole('heading', { name: '설정 공유' })).toBeInTheDocument()
+  })
+
+  it('헤더의 공유 설정 둘러보기 버튼을 누르면 SharedBrowser가 열리고 닫을 수 있다', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await setupSimulationWithAgents(fetchMock)
+
+    await userEvent.click(screen.getByRole('button', { name: '공유 설정 둘러보기' }))
+    expect(await screen.findByRole('heading', { name: '공유 설정 둘러보기' })).toBeInTheDocument()
+    expect(await screen.findByText('공개된 공유 설정이 없습니다.')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }))
+    expect(screen.queryByRole('heading', { name: '공유 설정 둘러보기' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: simulation.name })).toBeInTheDocument()
   })
 })
