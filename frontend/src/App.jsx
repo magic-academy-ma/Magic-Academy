@@ -23,7 +23,7 @@ import "./App.css";
 function AuthPanel({ onLogin, notice }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({
-    username: "",
+    email: "",
     display_name: "",
     password: "",
   });
@@ -39,14 +39,18 @@ function AuthPanel({ onLogin, notice }) {
       if (mode === "register") {
         await apiRequest("/v1/auth/register", {
           method: "POST",
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            username: form.email,
+            display_name: form.display_name,
+            password: form.password,
+          }),
         });
       }
 
       const result = await apiRequest("/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          username: form.username,
+          username: form.email,
           password: form.password,
         }),
       });
@@ -61,9 +65,17 @@ function AuthPanel({ onLogin, notice }) {
 
   return (
     <main className="auth-shell">
-      <form className="panel auth-panel" onSubmit={submit}>
-        <h1>Magic Academy</h1>
-        <p>Slice 0 통합 환경</p>
+      <form className="auth-panel" onSubmit={submit}>
+        <div className="login-top">
+          <div className="login-brand">
+            <img src="/assets/concept/logo.png" alt="" width="40" height="40" />
+            Magic Academy
+          </div>
+          <h1 className="login-title">마법학교에<br />입학하세요.</h1>
+          <p className="login-sub">
+            계정으로 로그인하여 시뮬레이션을 시작하거나 이어서 관찰합니다.
+          </p>
+        </div>
 
         {notice && (
           <p className="message error" role="alert">
@@ -71,68 +83,102 @@ function AuthPanel({ onLogin, notice }) {
           </p>
         )}
 
-        <label>
-          아이디
-          <input
-            required
-            minLength="3"
-            value={form.username}
-            onChange={(e) =>
-              setForm({ ...form, username: e.target.value })
-            }
-          />
-        </label>
-
-        {mode === "register" && (
-          <label>
-            표시 이름
+        <div className="login-form">
+          <div className="field-group">
+            <label className="field-label" htmlFor="auth-email">이메일</label>
             <input
+              id="auth-email"
+              className="field-input"
+              aria-label="아이디"
               required
-              value={form.display_name}
-              onChange={(e) =>
-                setForm({ ...form, display_name: e.target.value })
-              }
+              type="text"
+              placeholder="아이디 또는 이메일"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
-          </label>
-        )}
+          </div>
 
-        <label>
-          비밀번호
-          <input
-            required
-            minLength="8"
-            type="password"
-            value={form.password}
-            onChange={(e) =>
-              setForm({ ...form, password: e.target.value })
-            }
-          />
-        </label>
+          {mode === "register" && (
+            <div className="field-group">
+              <label className="field-label" htmlFor="auth-display-name">표시 이름</label>
+              <input
+                id="auth-display-name"
+                className="field-input"
+                required
+                value={form.display_name}
+                onChange={(e) =>
+                  setForm({ ...form, display_name: e.target.value })
+                }
+              />
+            </div>
+          )}
 
-        {error && (
-          <p className="message error" role="alert">
-            {error}
+          <div className="field-group">
+            <label className="field-label" htmlFor="auth-password">비밀번호</label>
+            <input
+              id="auth-password"
+              className="field-input"
+              required
+              minLength="8"
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+
+          {error && (
+            <p className="message error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <button className="login-submit" disabled={loading}>
+            {loading
+              ? "처리 중..."
+              : mode === "login"
+                ? "로그인"
+                : "가입하고 로그인"}
+          </button>
+
+          {mode === "login" && (
+            <>
+              <div className="login-divider">
+                <span className="login-divider-text">OR</span>
+              </div>
+
+              <button
+                className="oauth-btn"
+                type="button"
+                onClick={() => console.log("TODO: Google OAuth")}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                  <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                Google로 계속하기
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="login-bottom">
+          <p className="login-note">
+            {mode === "login" ? "계정이 없으신가요?" : "이미 계정이 있으신가요?"}{" "}
+            <button
+              className="login-signup"
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setError("");
+              }}
+            >
+              {mode === "login" ? "회원가입" : "로그인으로 돌아가기"}
+            </button>
           </p>
-        )}
-
-        <button disabled={loading}>
-          {loading
-            ? "처리 중..."
-            : mode === "login"
-              ? "로그인"
-              : "가입하고 로그인"}
-        </button>
-
-        <button
-          className="link-button"
-          type="button"
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError("");
-          }}
-        >
-          {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
-        </button>
+        </div>
       </form>
     </main>
   );
