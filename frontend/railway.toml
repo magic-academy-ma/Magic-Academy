@@ -1,0 +1,21 @@
+# Railway service config for the frontend (React + Vite).
+#
+# Root Directory for this Railway service must be set to `frontend/` so this
+# file and ./Dockerfile are used. VITE_API_URL and VITE_WS_URL are baked in
+# at BUILD time (Vite inlines `import.meta.env.VITE_*`), so they must be set
+# as Railway service Variables pointing at the deployed backend's public
+# URL(s) before the build step runs — Railway exposes service Variables to
+# both build and runtime by default.
+#
+# The Dockerfile's default CMD runs the Vite dev server, which is not meant
+# for production; this overrides it to build once and serve the static
+# output.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "npm run build && npm run preview -- --host 0.0.0.0 --port ${PORT:-4173}"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
