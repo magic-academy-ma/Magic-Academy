@@ -49,12 +49,14 @@ def runtime_db():
         db.flush()
         seed_slice_zero(db, simulation.id)
         seed_slice_zero(db, other_simulation.id)
-        extra_location = Location(
-            id=uuid4(),
-            simulation_id=simulation.id,
-            code="library",
-            name="도서관",
-            is_active=True,
+        # seed_slice_zero already creates the 6 MVP locations (fixtures.LOCATIONS);
+        # reuse the seeded "library" as the extra active location instead of
+        # inserting a duplicate that violates uq_locations_simulation_code.
+        extra_location = db.scalar(
+            select(Location).where(
+                Location.simulation_id == simulation.id,
+                Location.code == "library",
+            )
         )
         inactive_location = Location(
             id=uuid4(),
@@ -63,7 +65,7 @@ def runtime_db():
             name="폐쇄된 탑",
             is_active=False,
         )
-        db.add_all([extra_location, inactive_location])
+        db.add(inactive_location)
         db.commit()
         yield db, simulation, other_simulation, extra_location, inactive_location
 
