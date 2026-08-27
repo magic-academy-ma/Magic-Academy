@@ -261,12 +261,23 @@ def test_events_list_and_latest_endpoints_still_work(client) -> None:
     headers = register_and_login(test_client, "detail-regression")
     simulation_id = create_simulation(test_client, headers, "regression")
 
+    # 새 simulation 에는 seed 된 CLASS Event 1건이 이미 있다 (seed_slice_zero).
+    seeded = test_client.get(
+        f"/v1/simulations/{simulation_id}/events", headers=headers
+    ).json()
+    assert len(seeded) == 1
+
     first = post_event(test_client, headers, simulation_id, "사건 1")
     second = post_event(test_client, headers, simulation_id, "사건 2")
 
     listed = test_client.get(f"/v1/simulations/{simulation_id}/events", headers=headers)
     assert listed.status_code == 200, listed.text
-    assert [item["id"] for item in listed.json()] == [first["id"], second["id"]]
+    # 기존 list 엔드포인트는 그대로: seed + 새 Event 2건을 created_at, id 순으로 반환.
+    assert [item["id"] for item in listed.json()] == [
+        seeded[0]["id"],
+        first["id"],
+        second["id"],
+    ]
 
     latest = test_client.get(
         f"/v1/simulations/{simulation_id}/events/latest", headers=headers
