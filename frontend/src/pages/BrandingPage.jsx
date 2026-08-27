@@ -15,7 +15,7 @@ export default function BrandingPage({ auth, onEnroll }) {
         method: 'POST',
         body: JSON.stringify({ name: 'Magic Academy Simulation' }),
       });
-      onEnroll(simulation.id);
+      onEnroll(simulation);
     } catch (err) {
       setError(err.message);
     } finally {

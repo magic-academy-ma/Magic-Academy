@@ -1,0 +1,24 @@
+# Railway service config for the backend (FastAPI + PostgreSQL/pgvector).
+#
+# Root Directory for this Railway service must be set to `backend/` so this
+# file and ./Dockerfile are used. Required Railway service Variables (set via
+# the Railway dashboard, never committed here):
+#   DATABASE_URL (or DB_HOST/POSTGRES_*), JWT_SECRET, CORS_ORIGINS
+#   (the deployed frontend's public URL), ANTHROPIC_API_KEY/OPENAI_API_KEY
+#   as applicable, ENVIRONMENT=production.
+#
+# Migrations run once, before the app starts serving traffic — if
+# `alembic upgrade head` fails, the deploy fails and the previous version
+# keeps serving (fail-closed; see docs/04-feature-specs/
+# slice-7-config-sharing-import-deployment.md §6.1).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

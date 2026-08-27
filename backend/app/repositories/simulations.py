@@ -8,6 +8,7 @@ from app.domain.models import (
     AgentState,
     Location,
     ProfessorProfile,
+    Relationship,
     Simulation,
     StudentProfile,
 )
@@ -16,6 +17,16 @@ from app.domain.models import (
 def get_simulation(db: Session, simulation_id: UUID) -> Simulation | None:
     return db.scalar(
         select(Simulation).where(Simulation.id == simulation_id, Simulation.deleted_at.is_(None))
+    )
+
+
+def list_simulation_locations(db: Session, simulation_id: UUID) -> list[Location]:
+    return list(
+        db.scalars(
+            select(Location)
+            .where(Location.simulation_id == simulation_id)
+            .order_by(Location.code.asc())
+        ).all()
     )
 
 
@@ -72,5 +83,18 @@ def list_active_runtime_location_ids(db: Session, simulation_id: UUID) -> list[U
                 Location.is_active.is_(True),
             )
             .order_by(Location.id.asc())
+        ).all()
+    )
+
+
+def list_runtime_relationships(db: Session, simulation_id: UUID) -> list[Relationship]:
+    return list(
+        db.scalars(
+            select(Relationship)
+            .where(Relationship.simulation_id == simulation_id)
+            .order_by(
+                Relationship.source_agent_id.asc(),
+                Relationship.target_agent_id.asc(),
+            )
         ).all()
     )

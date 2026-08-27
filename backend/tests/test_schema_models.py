@@ -1,6 +1,6 @@
 import unittest
 
-from sqlalchemy import CheckConstraint
+from sqlalchemy import BigInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 
@@ -15,6 +15,8 @@ class SchemaModelTests(unittest.TestCase):
             {
                 "users",
                 "simulations",
+                "simulation_shares",
+                "share_imports",
                 "locations",
                 "agents",
                 "student_profiles",
@@ -29,15 +31,24 @@ class SchemaModelTests(unittest.TestCase):
                 "organization_memberships",
                 "events",
                 "event_participants",
+                "event_batch_results",
+                "simulation_configs",
+                "simulation_snapshots",
             },
         )
 
-    def test_primary_and_foreign_keys_use_postgresql_uuid(self) -> None:
+    def test_primary_keys_use_uuid_and_foreign_key_types_match(self) -> None:
         for table in Base.metadata.tables.values():
             for primary_key in table.primary_key.columns:
+                if table.name == "event_batch_results" and primary_key.name == "tick_number":
+                    self.assertIsInstance(primary_key.type, BigInteger)
+                    continue
                 self.assertIsInstance(primary_key.type, UUID)
             for foreign_key in table.foreign_keys:
-                self.assertIsInstance(foreign_key.parent.type, UUID)
+                self.assertIsInstance(
+                    foreign_key.parent.type,
+                    type(foreign_key.column.type),
+                )
 
     def test_required_unique_constraints_and_indexes_exist(self) -> None:
         expected_names = {
@@ -66,6 +77,9 @@ class SchemaModelTests(unittest.TestCase):
             "idx_relationships_source_updated",
             "idx_events_simulation_started",
             "idx_organizations_simulation_id",
+            "uq_simulation_configs_version",
+            "uq_simulation_snapshots_tick",
+            "idx_simulation_snapshots_timeline",
         }
         actual_names = {
             item.name
@@ -101,6 +115,8 @@ class SchemaModelTests(unittest.TestCase):
         simulations = Base.metadata.tables["simulations"]
         agents = Base.metadata.tables["agents"]
         self.assertFalse(simulations.c.owner_id.nullable)
+        self.assertNotIn("origin_simulation_id", simulations.c)
+        self.assertNotIn("origin_snapshot_id", simulations.c)
         self.assertTrue({"fixture_key", "fixture_version"} <= set(agents.c.keys()))
         self.assertFalse(agents.c.fixture_key.nullable)
         self.assertFalse(agents.c.fixture_version.nullable)
