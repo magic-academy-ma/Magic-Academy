@@ -103,15 +103,21 @@ class SimulationSnapshotService:
         if config is None:
             config = self.configs.latest(session, simulation.id)
         if config is None:
-            config = self.save_config(
+            # 아직 config가 없는 시뮬레이션(예: Tick 시작 시점 §4.5)에는 기본값
+            # v1을 부트스트랩한다. 이는 시스템이 확정된 기본 설정을 물질화하는
+            # 것이지 사용자가 초기 설정을 바꾸는 것이 아니므로, save_config의 초기
+            # 설정 잠금(InitialSettingsLockedError, status != "ready" 이면서
+            # latest is None)에 걸려서는 안 된다. 잠금 정책은 사용자 경로
+            # (app/api/simulation_history.py → save_config)에서 그대로 유지된다.
+            config = self.configs.create_version(
                 session,
                 simulation,
-                SimulationConfigInput(
-                    event_frequency="medium",
-                    event_impact="medium",
-                    magic_enabled=simulation.magic_enabled,
-                    user_persona_settings={},
-                ),
+                event_frequency="medium",
+                event_impact="medium",
+                magic_enabled=simulation.magic_enabled,
+                user_persona_settings={},
+                policy_version=None,
+                resolver_version=None,
             )
         return self.snapshots.create(session, simulation, config)
 

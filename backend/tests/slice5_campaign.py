@@ -18,6 +18,13 @@ from app.services.fixtures import seed_slice_zero
 from app.services.manual_tick import advance_manual_tick
 from app.simulation.agent_runtime import AgentRuntime, AgentRuntimeInput
 
+# Canonical 캠페인은 재현 가능해야 한다 (test_..._is_semantically_deterministic_twice).
+# Tick 시작 시 고정되는 Event 빈도 시드는 f"{simulation_id}:{tick}:{config_version}"
+# 이므로 (event_frequency_history.build_event_parameters), simulation.id가 매 실행
+# 랜덤(uuid4)이면 동적 Event(GROUP_PROJECT/MEETING) 발생 여부가 실행마다 흔들린다.
+# 캠페인 fixture는 항상 같은 시뮬레이션을 재구성하므로 id도 고정한다.
+CANONICAL_CAMPAIGN_SIMULATION_ID = UUID("50000000-0000-0000-0000-000000000001")
+
 
 @dataclass(frozen=True)
 class CampaignTick:
@@ -122,7 +129,7 @@ def prepare_canonical_campaign(db: Session) -> tuple[Simulation, dict[str, Agent
     db.add(user)
     db.flush()
     simulation = Simulation(
-        id=uuid4(),
+        id=CANONICAL_CAMPAIGN_SIMULATION_ID,
         owner_id=user.id,
         name="Canonical Tick 10 campaign",
         current_tick=9,
