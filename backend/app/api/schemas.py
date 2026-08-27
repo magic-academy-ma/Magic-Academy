@@ -172,6 +172,30 @@ class EventDetailResponse(EventResponse):
     related_memories: list[EventRelatedMemoryResponse]
 
 
+class SimulationLogEntryResponse(BaseModel):
+    # 통합 로그 타임라인 한 줄. 새 저장소 없이 기존에 영속화된 데이터만 모은다:
+    #   - events 테이블 (엔진 Event + 수동 Event)
+    #   - agent_memories 테이블 중 memory_type == 'conversation' (대화 기록)
+    id: UUID
+    # 엔진 Event 는 events.metadata(JSONB).tick, 대화 기록은 agent_memories.created_tick.
+    # 수동 생성 Event 에는 tick 이 없어 None 이다.
+    tick: int | None
+    # system : Magic Layer 가 남긴 Event (events.metadata.source == 'magic_layer')
+    # event  : 그 밖의 Event
+    # dialogue : memory_type == 'conversation' 인 agent_memories 행
+    type: Literal["system", "event", "dialogue"]
+    # Event 는 title, 대화 기록은 content. 요약을 새로 생성하지 않고 원문을 그대로 쓴다.
+    summary: str
+    # Event 는 event_participants, 대화 기록은 해당 기억의 agent_id.
+    target_agent_ids: list[UUID]
+    # 엔진 Event 는 events.metadata.importance, 대화 기록은 agent_memories.importance.
+    importance: int | None
+    # Event Detail API 로 연결하기 위한 참조. Event 행은 자기 id, 대화 기록은
+    # agent_memories.event_id FK (없으면 None). Dialogue 상세(dialogue_id)는
+    # 아직 Dialogue 영속화가 없어 제공하지 않는다.
+    event_id: UUID | None
+
+
 class SimulationShareCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
