@@ -14,6 +14,11 @@ from app.simulation.policy.registries.signal_policy import (
 
 SUPPORTED_POLICY_VERSIONS = {"policy-mvp-0.1"}
 
+ACTION_STATE_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {
+    "TALK": (("fatigue", 1),),
+    "WAIT": (("hunger", 2), ("fatigue", 1)),
+}
+
 RELATIONSHIP_SIGNAL_TO_METRIC: dict[RelationshipSignalType, str] = {
     RelationshipSignalType.TRUST_UP: "trust",
     RelationshipSignalType.TRUST_DOWN: "trust",
@@ -90,6 +95,24 @@ def evaluate_policy(inp: PolicyEvaluationInput) -> PolicyEvaluationResult:
         reaction = runtime_result.intent.reaction
         action_type = runtime_result.intent.action_type
         seen_effect_source_keys: set[tuple[str, ...]] = set()
+
+        for metric, delta in ACTION_STATE_EFFECTS.get(str(action_type), ()):
+            current = state_index.get(source_agent_id, {}).get(metric, 0)
+            effect_candidates.append(EffectCandidate(
+                effect_id=(
+                    f"{inp.run_id}:{inp.tick_number}:{source_agent_id}:"
+                    f"action:{action_type}:{metric}"
+                ),
+                target_type=EffectTargetType.AGENT_STATE,
+                source_agent_id=source_agent_id,
+                target_agent_id=None,
+                metric=metric,
+                delta=delta,
+                before=current,
+                after_preview=_clamp_preview(current, delta, metric),
+                rule_id=f"ACTION_{action_type}",
+                reason=f"{action_type} 기본 효과",
+            ))
 
         relationship_directions: dict[tuple[str, str], set[int]] = {}
         for signal in reaction.relationship_signals:

@@ -92,16 +92,14 @@ def test_tick_broadcasts_committed_relationship_matching_rest(
 
     def generate_relationship_signal(self, runtime_input):
         response = original_generate(self, runtime_input)
-        participant_ids = runtime_input.events[0].participant_agent_ids
-        if runtime_input.agent.agent_id not in participant_ids:
-            # Non-participants still receive the shared world snapshot; only the
-            # actual Event participant reacts to the other participant.
+        # Task 2 Context 분리로 events[0].participant_agent_ids는 관찰 가능한
+        # 대상만 남는다 — 실제로 관찰 가능한(nearby) 상대에게만 반응할 수 있다.
+        if (
+            runtime_input.agent.agent_id not in runtime_input.events[0].participant_agent_ids
+            or not runtime_input.nearby_agents
+        ):
             return response
-        target_agent_id = next(
-            agent_id
-            for agent_id in participant_ids
-            if agent_id != runtime_input.agent.agent_id
-        )
+        target_agent_id = runtime_input.nearby_agents[0].agent_id
         response["reaction"]["relationship_signals"] = [
             {
                 "signal_type": "TRUST_UP",
@@ -131,12 +129,20 @@ def test_tick_broadcasts_committed_relationship_matching_rest(
                 "tick_number": 1,
             },
         }
-        # All 5 Students + the conditional Professor run every Tick.
-        action_events = [websocket.receive_json() for _ in range(6)]
+        # 예정 CLASS Event가 있으면 EVENT_CREATED가 먼저 오고,
+        # 이어서 All 5 Students + the conditional Professor의 AGENT_ACTION_UPDATED,
+        # 마지막으로 RELATIONSHIP_UPDATED 2건이 온다.
+        action_events = []
+        while len(action_events) < 6:
+            event = websocket.receive_json()
+            if event["type"] == "EVENT_CREATED":
+                continue
+            action_events.append(event)
         assert {event["type"] for event in action_events} == {
             "AGENT_ACTION_UPDATED"
         }
-        relationship_events = [websocket.receive_json(), websocket.receive_json()]
+        # Task 2 Context 분리로 nearby_agents가 있는 쪽만 반응하므로 1건만 발생한다.
+        relationship_events = [websocket.receive_json()]
 
         for event in relationship_events:
             assert event["type"] == "RELATIONSHIP_UPDATED"

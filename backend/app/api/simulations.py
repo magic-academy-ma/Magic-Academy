@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
@@ -12,6 +12,7 @@ from app.api.schemas import (
 from app.core.database import get_db
 from app.core.security import require_user_role
 from app.domain.models import User
+from app.repositories.event_results import get_event_result
 from app.services.realtime_events import (
     build_simulation_status_event,
     connection_manager,
@@ -25,6 +26,21 @@ from app.services.simulations import (
 )
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
+
+
+@router.get("/{simulation_id}/event-results/{tick_number}")
+def read_event_result(
+    simulation_id: UUID,
+    tick_number: int = Path(ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+) -> dict:
+    """Return the stored Tick result only after enforcing ownership."""
+    require_owned_simulation(db, simulation_id, current_user)
+    result = get_event_result(db, simulation_id, tick_number)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Event result not found")
+    return result
 
 
 @router.post("", response_model=SimulationResponse, status_code=status.HTTP_201_CREATED)

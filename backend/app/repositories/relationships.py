@@ -14,6 +14,7 @@ from app.domain.relationship_metrics import (
 )
 
 RelationshipRow: TypeAlias = Relationship
+FRIEND_ENTRY_THRESHOLD = 50
 
 
 class RelationshipNotFoundError(LookupError):
@@ -160,6 +161,14 @@ def apply_deltas(session: Session, deltas: list[RelationshipDelta]) -> None:
 
     for relationship, delta in pending:
         setattr(relationship, delta.metric, delta.after)
+
+    for relationship in {item[0] for item in pending}:
+        if (
+            relationship.trust >= FRIEND_ENTRY_THRESHOLD
+            and relationship.affection >= FRIEND_ENTRY_THRESHOLD
+            and relationship.closeness >= FRIEND_ENTRY_THRESHOLD
+        ):
+            relationship.relationship_type = "friend"
 
     # TODO(issue-41-task5): 상위 Tick Commit 경계에서 State, Memory,
     # Event, Outbox 변경과 함께 commit/rollback하도록 통합한다.
