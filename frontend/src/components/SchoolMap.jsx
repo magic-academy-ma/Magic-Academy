@@ -1,11 +1,11 @@
 import "./SchoolMap.css";
 
 const SPACES = [
-  { code: "classroom",  name: "교실",   emoji: "🏫" },
-  { code: "restaurant", name: "식당",   emoji: "🍽️" },
-  { code: "library",    name: "도서관", emoji: "📚" },
-  { code: "lab",        name: "연구실", emoji: "⚗️" },
-  { code: "dormitory",  name: "기숙사", emoji: "🛏️" },
+  { code: "classroom", name: "교실", emoji: "⌂", x: 24, y: 28 },
+  { code: "restaurant", name: "식당", emoji: "♨", x: 69, y: 24 },
+  { code: "library", name: "도서관", emoji: "▤", x: 48, y: 53 },
+  { code: "lab", name: "연구실", emoji: "⚗", x: 76, y: 72 },
+  { code: "dormitory", name: "기숙사", emoji: "◇", x: 22, y: 74 },
 ];
 
 const ACTION_LABEL = {
@@ -48,7 +48,7 @@ function AgentToken({ agent, action, spaceName, onClick }) {
       onKeyDown={handleKeyDown}
     >
       {label && <span className="action-bubble">{label}</span>}
-      <span className="agent-avatar" aria-hidden="true">{initials}</span>
+      <span className="agent-avatar" data-agent-name={agent.name} aria-hidden="true">{initials}</span>
     </div>
   );
 }
@@ -56,6 +56,7 @@ function AgentToken({ agent, action, spaceName, onClick }) {
 export default function SchoolMap({ agents, agentActions, onAgentSelect }) {
   return (
     <div className="school-map" aria-label="학교 공간 맵">
+      <div className="school-map-vignette" aria-hidden="true" />
       {SPACES.map((space) => {
         const occupants = agents.filter((agent) => {
           const liveLocation = agentActions?.get(agent.id)?.location;
@@ -64,7 +65,12 @@ export default function SchoolMap({ agents, agentActions, onAgentSelect }) {
         });
 
         return (
-          <div key={space.code} className="space-tile" data-code={space.code}>
+          <div
+            key={space.code}
+            className="space-tile"
+            data-code={space.code}
+            style={{ left: `${space.x}%`, top: `${space.y}%` }}
+          >
             {/* 공간명은 CSS content: attr(data-name) 으로만 표시해 DOM 텍스트 충돌 방지 */}
             <div
               className="space-header"
@@ -72,7 +78,7 @@ export default function SchoolMap({ agents, agentActions, onAgentSelect }) {
               aria-label={space.name}
               title={space.name}
             >
-              <span aria-hidden="true">{space.emoji}</span>
+              <span className="space-icon" aria-hidden="true">{space.emoji}</span>
               {occupants.length > 0 && (
                 <span className="occupant-count" aria-label={`${occupants.length}명`}>{occupants.length}</span>
               )}

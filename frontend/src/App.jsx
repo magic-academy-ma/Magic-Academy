@@ -435,36 +435,41 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header>
-        <strong>Magic Academy</strong>
+    <div className="app-shell sim-screen">
+      <div className="sim-atmosphere" aria-hidden="true" />
+      <header className="sim-topbar">
+        <div className="sim-brand-mark" aria-hidden="true">M</div>
+        <strong className="sim-brand">Magic Academy</strong>
         {simulation && lastTick && (
-          <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
+          <span className="tick-info">DAY {lastTick.current_day} · TICK {lastTick.current_tick}</span>
         )}
         <div className="header-controls">
+          <button type="button" onClick={runTick} disabled={tickLoading}>
+            {tickLoading ? "Tick 실행 중..." : "Tick 실행"}
+          </button>
           <button type="button" onClick={() => setIsPaused((p) => !p)}>
             {isPaused ? "재개" : "일시정지"}
           </button>
           <button type="button" onClick={handleNightSkip}>
             밤 스킵
           </button>
-          <button type="button" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
+          <button type="button" className="topbar-action" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
         </div>
         <div className="header-right">
-          <button type="button" className="header-save" onClick={() => setScreen("save")}>저장</button>
+          <button type="button" className="topbar-action header-save" onClick={() => setScreen("save")}>저장</button>
           {simulation && (
             <span
               className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
               title={connected ? "실시간 연결됨" : "연결 끊김"}
             >●</span>
           )}
-          <button type="button" onClick={() => setSharedBrowserOpen(true)}>
+          <button type="button" className="topbar-action" onClick={() => setSharedBrowserOpen(true)}>
             공유 설정 둘러보기
           </button>
           <div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div>
         </div>
       </header>
-      <main>
+      <main className="simulation-stage">
         {sharedBrowserOpen ? (
           <SharedBrowser
             token={auth.access_token}
@@ -473,13 +478,13 @@ export default function App() {
           />
         ) : (
         <>
-        <section className="workspace">
-            <div className="panel agent-list">
+        <section className="workspace sim-workspace">
+            <div className="panel agent-list sim-left">
               <h1>
                 {simulation.name}
                 {isImported && <span className="imported-badge">가져온 Simulation</span>}
               </h1>
-              <p>Agent {agents.length}명</p>
+              <p className="agent-count">Agent {agents.length}명</p>
               <input
                 type="search"
                 aria-label="Agent 검색"
@@ -487,7 +492,7 @@ export default function App() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Agent 검색"
               />
-              <div className="agent-type-filter">
+              <div className="agent-type-filter" role="group" aria-label="Agent 종류 필터">
                 <button type="button" onClick={() => setAgentTypeFilter("전체")}>전체</button>
                 <button type="button" onClick={() => setAgentTypeFilter("학생")}>학생</button>
                 <button type="button" onClick={() => setAgentTypeFilter("교수")}>교수</button>
@@ -503,20 +508,23 @@ export default function App() {
                   key={agent.id}
                   onClick={() => setSelectedAgent(agent)}
                 >
-                  <span>{agent.name} · {agent.agent_type} · {agent.mbti_type}</span>
+                  <span className="agent-portrait" data-agent-name={agent.name} aria-hidden="true" />
+                  <span className="agent-list-copy"><b>{agent.name}</b><small data-location={locationLabel(agent.location)}>{agent.mbti_type}</small></span>
                   {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
                 </button>
               ))}
             </div>
 
-            <UserPersonaSetup
-              simulationId={simulation.id}
-              students={students}
-              token={auth.access_token}
-              onSaved={(result) => setPersonaAgentId(result.agent_id)}
-            />
+            <div className="runtime-persona-setup">
+              <UserPersonaSetup
+                simulationId={simulation.id}
+                students={students}
+                token={auth.access_token}
+                onSaved={(result) => setPersonaAgentId(result.agent_id)}
+              />
+            </div>
 
-            <div className="panel agent-detail">
+            <div className="panel agent-detail sim-right">
               <InspectorPanel
                 agent={selectedAgent}
                 simulationId={simulation?.id}
@@ -530,16 +538,8 @@ export default function App() {
             </div>
 
             {/* Tick 실행 및 결과 */}
-            <div className="panel tick-panel">
+            <div className={`panel tick-panel utility-panel${tickLoading || tickResult || tickError ? " is-open" : ""}`}>
               <h2>Tick</h2>
-
-              <button
-                type="button"
-                onClick={runTick}
-                disabled={tickLoading}
-              >
-                {tickLoading ? "Tick 실행 중..." : "Tick 실행"}
-              </button>
 
               {tickError && (
                 <p
@@ -627,10 +627,16 @@ export default function App() {
 										</ul>
                   )}
 
+                  {tickResult.relationship_deltas?.length > 0 && (
+                    <section className="relationship-delta-summary">
+                      <h4>관계 변화</h4>
+                    </section>
+                  )}
+
                 </div>
               )}
             </div>
-            <div className="panel management-panel">
+            <div className="panel management-panel utility-panel">
               <h2>관리</h2>
               <div className="management-tabs">
                 <button
@@ -685,8 +691,7 @@ export default function App() {
               )}
             </div>
 
-            <div className="panel school-map-panel">
-              <h2>학교 공간 맵</h2>
+            <div className="panel school-map-panel map-view-panel">
               <SchoolMap
                 agents={agents}
                 agentActions={agentActions}
