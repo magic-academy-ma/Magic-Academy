@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.health import router as health_router
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.logging_middleware import StructuredLoggingMiddleware
 
 settings = get_settings()
 
@@ -12,6 +13,8 @@ app = FastAPI(
     version=settings.app_version,
     debug=settings.debug,
 )
+
+app.add_middleware(StructuredLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
