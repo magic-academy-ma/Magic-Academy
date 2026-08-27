@@ -14,6 +14,9 @@ import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
 import BrandingPage from "./pages/BrandingPage.jsx";
+import MainPage from "./pages/MainPage.jsx";
+import SavePage from "./pages/SavePage.jsx";
+import MyPage from "./pages/MyPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -194,6 +197,7 @@ function classifyTickError(requestError) {
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [screen, setScreen] = useState("main");
   const [simulationId, setSimulationId] = useState(null);
   const [personaId, setPersonaId] = useState(null);
   const [personaSetupDone, setPersonaSetupDone] = useState(false);
@@ -228,6 +232,7 @@ export default function App() {
 
   function resetSession(notice = "") {
     setAuth(null);
+    setScreen("main");
     setSimulationId(null);
     setSimulation(null);
     setAgents([]);
@@ -249,6 +254,7 @@ export default function App() {
     setSimulation(newSimulation);
     setIsImported(false);
     loadAgents(newSimulation.id);
+    setScreen("persona-select");
   }
 
   // 공유 설정 가져오기 성공 시 호출된다. import는 요청자 소유의 새 Simulation을
@@ -333,14 +339,29 @@ export default function App() {
   }, [agents, selectedAgent]);
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
-  if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (screen === "main") return (
+    <MainPage
+      displayName={auth.user.display_name}
+      onStart={() => setScreen("branding")}
+      onMyPage={() => setScreen("my-page")}
+    />
+  );
+  if (screen === "my-page") return <MyPage auth={auth} onBack={() => setScreen("main")} />;
+  if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (screen === "save") return (
+    <SavePage
+      simulationName={simulation?.name ?? "시뮬레이션"}
+      onComplete={() => setScreen("simulation")}
+      onCancel={() => setScreen("simulation")}
+    />
+  );
   if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
   if (!personaSetupDone) return (
     <PersonaSetupPage
       simulationId={simulationId}
       charId={personaId}
       onBack={() => setPersonaId(null)}
-      onStart={async (_charId, _config) => setPersonaSetupDone(true)}
+      onStart={async (_charId, _config) => { setPersonaSetupDone(true); setScreen("simulation"); }}
     />
   );
 
@@ -453,6 +474,7 @@ export default function App() {
           </button>
         </div>
         <div className="header-right">
+          <button type="button" className="header-save" onClick={() => setScreen("save")}>저장</button>
           {simulation && (
             <span
               className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
