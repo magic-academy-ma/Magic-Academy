@@ -6,7 +6,6 @@ import ReplayPanel from "./components/ReplayPanel.jsx";
 import SnapshotPanel from "./components/SnapshotPanel.jsx";
 import SharingPanel from "./components/SharingPanel.jsx";
 import SharedBrowser from "./components/SharedBrowser.jsx";
-import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import RelationshipModal from "./components/RelationshipModal.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import InspectorPanel from "./components/InspectorPanel.jsx";
@@ -226,7 +225,7 @@ export default function App() {
   const [showInspectorModal, setShowInspectorModal] = useState(false);
   const [showRelationshipModal, setShowRelationshipModal] = useState(false);
 
-  const { connected, lastTick, eventLog, wsRelationshipDeltas, agentActions } = useSimulationWS(
+  const { connected, lastTick, eventLog, agentActions } = useSimulationWS(
     simulation?.id,
     auth?.access_token,
     { onReconnect: () => refreshAgentsSilentlyRef.current?.() }
@@ -411,50 +410,6 @@ export default function App() {
     return matchesSearch && matchesType;
   });
 
-  // WS RELATIONSHIP_UPDATED가 유실 없이 들어오면 그 값을, 아니면 REST tick 결과를 사용한다.
-  const effectiveRelationshipDeltas =
-    wsRelationshipDeltas.length > 0
-      ? wsRelationshipDeltas
-      : (tickResult?.relationship_deltas ?? []);
-
-  const relationshipAgentIds = [
-    ...new Set(
-      effectiveRelationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
-    ),
-  ];
-
-  const flowNodes = relationshipAgentIds.map((id, index) => ({
-    id: String(id),
-    position: {
-      x: (index % 4) * 200,
-      y: Math.floor(index / 4) * 150,
-    },
-    data: {
-      label: agentNameById[id] ?? String(id),
-    },
-  }));
-
-  const edgesByPair = new Map();
-  for (const delta of effectiveRelationshipDeltas) {
-    const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
-
-    if (!edgesByPair.has(key)) {
-      edgesByPair.set(key, {
-        id: `e-${key}`,
-        source: String(delta.source_agent_id),
-        target: String(delta.target_agent_id),
-        type: "delta",
-        data: {
-          effects: [],
-        },
-      });
-    }
-
-    edgesByPair.get(key).data.effects.push(delta);
-  }
-
-  const flowEdges = [...edgesByPair.values()];
-
   function handleEventAgentSelect(agentId) {
     const agent = agents.find((a) => a.id === agentId);
     if (agent) setSelectedAgent(agent);
@@ -474,6 +429,7 @@ export default function App() {
           <button type="button" onClick={() => { /* TODO: 밤 스킵 API 미확정 */ }}>
             밤 스킵
           </button>
+          <button type="button" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
         </div>
         <div className="header-right">
           <button type="button" className="header-save" onClick={() => setScreen("save")}>저장</button>
@@ -709,17 +665,17 @@ export default function App() {
             </div>
 
             <div className="panel school-map-panel">
-              <h2>학교 공간 맵</h2>
               <SchoolMap
                 agents={agents}
                 agentActions={agentActions}
+                simulationId={simulation.id}
+                token={auth.access_token}
                 onAgentSelect={setSelectedAgent}
               />
             </div>
 
             <div className="panel relationship-panel">
               <h4>관계 변화</h4>
-              <RelationshipFlow nodes={flowNodes} edges={flowEdges} />
             </div>
           </section>
           <EventLogPanel

@@ -1,123 +1,343 @@
-.school-map {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-}
+/* SchoolMap — 목업 magic-academy-v2.css 기반, design-system.css 변수 사용 */
 
-.space-tile {
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 12px;
-  padding: 12px;
-  min-height: 120px;
+/* ── Wrapper & Toolbar ── */
+.school-map-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  height: 100%;
+  min-height: 400px;
+  background: var(--c-surface, #0b1838);
+  border-radius: var(--r-lg, 12px);
+  overflow: hidden;
 }
 
-.space-header {
+.school-map-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(6, 13, 32, 0.6);
+  border-bottom: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  flex-shrink: 0;
 }
 
-.space-header > span:first-child {
-  font-size: 18px;
-  line-height: 1;
-}
-
-/* 공간명을 CSS content로만 표시 — DOM 텍스트에 포함되지 않아 테스트 충돌 없음 */
-.space-header::after {
-  content: attr(data-name);
-  font-size: 13px;
-  font-weight: 600;
-  color: #4c1d95;
-  flex: 1;
-}
-
-.occupant-count {
-  margin-left: auto;
-  font-size: 11px;
-  background: #7c3aed;
-  color: #fff;
-  border-radius: 10px;
-  padding: 1px 7px;
-}
-
-.space-agents {
+/* ── View Toggle ── */
+.view-toggle-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: 1;
-  align-content: flex-start;
-}
-
-.agent-token {
-  position: relative;
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 2px;
+  background: rgba(16, 26, 56, 0.6);
+  border: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  border-radius: var(--r-sm, 6px);
+  padding: 2px;
+}
+
+.view-toggle-btn {
+  font-family: var(--f-mono, monospace);
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  color: var(--c-text-2, #a4b5d6);
   background: transparent;
   border: none;
-  padding: 0;
   cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: color 150ms ease, background 150ms ease;
 }
 
-.agent-token:hover .agent-avatar,
-.agent-token:focus-visible .agent-avatar {
-  border-color: #7c3aed;
-  background: #ede9fe;
+.view-toggle-btn:hover {
+  color: var(--c-text, #f2f5fc);
 }
 
-.agent-avatar {
-  width: 36px;
-  height: 36px;
+.view-toggle-btn.active {
+  color: var(--c-cream, #d4b26f);
+  background: var(--c-cream-muted, rgba(212, 178, 111, 0.14));
+  border: 1px solid var(--c-cream-ring, rgba(212, 178, 111, 0.35));
+  font-weight: 600;
+}
+
+/* ── Map View ── */
+.school-map-mapview {
+  position: relative;
+  flex: 1;
+  min-height: 380px;
+  overflow: hidden;
+  border-radius: 0 0 var(--r-lg, 12px) var(--r-lg, 12px);
+}
+
+.map-bg {
+  position: absolute;
+  inset: 0;
+  background-image: url('/assets/concept/academy-night-background.png');
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.48) saturate(0.72);
+}
+
+.map-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(6, 13, 32, 0.5) 100%);
+  pointer-events: none;
+}
+
+/* ── Zone Pin ── */
+.map-zone-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 150ms ease;
+  z-index: 2;
+}
+
+.map-zone-pin:hover {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.map-zone-pin:focus-visible {
+  outline: 2px solid var(--c-primary, #5e60e8);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.map-zone-pin__ring {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  border: 2px solid #c4b5fd;
-  background: #fff;
+  border: 2px solid rgba(212, 178, 111, 0.35);
+  background: rgba(10, 17, 40, 0.72);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: #4c1d95;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.action-bubble {
-  position: absolute;
-  bottom: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%);
+.map-zone-pin__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.map-zone-pin__label-box {
+  background: rgba(8, 14, 32, 0.88);
+  border: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  border-radius: var(--r-sm, 6px);
+  padding: 3px 10px;
+  backdrop-filter: blur(8px);
   white-space: nowrap;
-  background: #fff;
-  border: 1px solid #c4b5fd;
-  border-radius: 8px;
-  padding: 2px 6px;
-  font-size: 10px;
-  color: #6d28d9;
-  pointer-events: none;
-  z-index: 1;
+  text-align: center;
+  transition: border-color 150ms ease;
 }
 
-.action-bubble::after {
-  content: "";
+.map-zone-pin__name {
+  font-family: var(--f-serif-ko, serif);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text, #f2f5fc);
+}
+
+.map-zone-pin__count {
+  font-family: var(--f-mono, monospace);
+  font-size: 9px;
+  color: var(--c-primary, #5e60e8);
+  text-align: center;
+}
+
+/* Active state */
+.map-zone-pin.active .map-zone-pin__ring {
+  border-color: var(--c-primary, #5e60e8);
+  box-shadow: 0 0 20px rgba(94, 96, 232, 0.5);
+}
+
+.map-zone-pin.active .map-zone-pin__label-box {
+  border-color: var(--c-primary, #5e60e8);
+}
+
+.map-zone-pin.active .map-zone-pin__name {
+  color: #a0a4ff;
+}
+
+/* ── Agent Cluster & Dots ── */
+.map-agent-cluster {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 120px;
+}
+
+.map-agent-dot-sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c-border-hi, rgba(212, 178, 111, 0.30));
+  background: var(--c-surface-hi, #122450);
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--c-text-2, #a4b5d6);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.map-agent-dot-sm img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+
+.map-agent-dot-sm:hover {
+  transform: scale(1.2);
+  border-color: var(--c-primary, #5e60e8);
+  box-shadow: 0 0 10px rgba(94, 96, 232, 0.5);
+}
+
+.map-agent-dot-sm:focus-visible {
+  outline: 2px solid var(--c-primary, #5e60e8);
+  outline-offset: 2px;
+}
+
+.map-agent-dot-sm.selected {
+  border-color: var(--c-primary, #5e60e8);
+  box-shadow: 0 0 12px rgba(94, 96, 232, 0.65);
+}
+
+/* ── Card View ── */
+.school-map-cardview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.zone-card {
+  background: rgba(10, 17, 40, 0.52);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  border-radius: var(--r-lg, 12px);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  min-height: 140px;
+}
+
+.zone-card:hover {
+  border-color: var(--c-border-hi, rgba(212, 178, 111, 0.30));
+  background: rgba(18, 28, 62, 0.58);
+}
+
+.zone-card:focus-visible {
+  outline: 2px solid var(--c-primary, #5e60e8);
+  outline-offset: 2px;
+}
+
+.zone-card.active {
+  border-color: var(--c-primary, #5e60e8);
+  background: rgba(94, 96, 232, 0.16);
+  box-shadow: 0 0 28px rgba(94, 96, 232, 0.18), inset 0 0 30px rgba(94, 96, 232, 0.05);
+}
+
+.zone-card__bg {
   position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: #c4b5fd;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.34;
+  transition: opacity 150ms ease;
 }
 
-@media (max-width: 900px) {
-  .school-map {
-    grid-template-columns: repeat(3, 1fr);
+.zone-card:hover .zone-card__bg {
+  opacity: 0.44;
+}
+
+.zone-card.active .zone-card__bg {
+  opacity: 0.42;
+}
+
+.zone-card__content {
+  position: relative;
+  z-index: 1;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.zone-card__tag {
+  font-family: var(--f-mono, monospace);
+  font-size: 9px;
+  color: var(--c-text-3, #62759e);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.zone-card.active .zone-card__tag {
+  color: rgba(140, 144, 255, 0.8);
+}
+
+.zone-card__name {
+  font-family: var(--f-serif-ko, serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-text, #f2f5fc);
+}
+
+.zone-card.active .zone-card__name {
+  color: #a0a4ff;
+}
+
+.zone-card__count {
+  font-family: var(--f-mono, monospace);
+  font-size: 9px;
+  color: var(--c-primary, #5e60e8);
+  background: rgba(94, 96, 232, 0.15);
+  border: 1px solid rgba(94, 96, 232, 0.28);
+  border-radius: 99px;
+  padding: 1px 7px;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.zone-card__agents {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.zone-card__empty {
+  font-family: var(--f-mono, monospace);
+  font-size: 9px;
+  color: var(--c-text-3, #62759e);
+  letter-spacing: 0.08em;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .school-map-cardview {
+    grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 600px) {
-  .school-map {
-    grid-template-columns: repeat(2, 1fr);
+  .school-map-mapview {
+    min-height: 280px;
   }
 }

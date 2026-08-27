@@ -96,7 +96,7 @@ export default function InspectorPanel({ agent, simulationId, token, currentTick
   if (!agent) return <aside className="panel inspector-panel"><h2>Inspector</h2><EmptyState>Agent를 선택하세요.</EmptyState></aside>;
 
   return <aside className="panel inspector-panel" aria-label="Agent Inspector">
-    <div className="inspector-header"><div><p className="eyebrow">AGENT INSPECTOR</p><h2>{detail?.name ?? agent.name}</h2></div><button type="button" className="inspector-close" onClick={onClose}>닫기</button></div>
+    <div className="inspector-header"><div><h2>Inspector</h2><h3>{detail?.name ?? agent.name}</h3></div><button type="button" className="inspector-close" onClick={onClose}>닫기</button></div>
     {loading && <p className="inspector-loading">상세 데이터를 불러오는 중...</p>}
     {error && <p className="message error" role="alert">{error}</p>}
     <section><h3>프로필</h3><div className="profile-summary"><strong>{detail?.name ?? agent.name}</strong><span>{detail?.agent_type ?? agent.agent_type}</span><span>{detail?.mbti_type ?? agent.mbti_type}</span>{detail?.is_user_persona && <b className="persona-badge">User Persona</b>}</div><dl className="inspector-details"><dt>학년</dt><dd>{detail?.student_profile ? `${detail.student_profile.grade}학년` : "-"}</dd><dt>전공</dt><dd>{detail?.student_profile?.interest_field ?? organizations.find((item) => item.organization_type === "major")?.name ?? "-"}</dd><dt>위치</dt><dd>{detail?.location?.name ?? "-"}</dd></dl><div className="meter-list">{BIG_FIVE.map(([key, label]) => <BigFiveBar key={key} value={profile[key]} label={label} />)}</div></section>
