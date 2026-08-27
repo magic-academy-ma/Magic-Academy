@@ -53,8 +53,8 @@ def persist_event_batch(session: Session, batch: EventBatch) -> dict:
         if session.get(Event, event.id) is not None:
             raise ValueError("Event ID already exists")
     for memory in batch.memories:
-        event = events.get(memory.event_id)
-        if event is None or memory.agent_id not in event.participant_agent_ids:
+        participating_event = events.get(memory.event_id)
+        if participating_event is None or memory.agent_id not in participating_event.participant_agent_ids:
             raise ValueError("Memory must reference a participating Event Agent")
     missing_candidates = {agent_id for event in batch.events if event.event_type == "STUDENT_MISSING" for agent_id in event.participant_agent_ids}
     if not set(batch.missing_agent_ids) <= missing_candidates:

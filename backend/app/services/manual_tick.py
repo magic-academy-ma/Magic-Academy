@@ -2,13 +2,20 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import secrets
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
-from app.domain.event_persistence import EventBatch, EventWrite, StateDelta
+from app.domain.event_persistence import (
+    EventBatch,
+    EventTypeLiteral,
+    EventWrite,
+    StateDelta,
+    StateMetricLiteral,
+)
 from app.domain.models import (
     Agent,
     AgentState,
@@ -380,7 +387,7 @@ def _build_event_batch(
     event_writes = [
         EventWrite(
             id=uuid7(),
-            event_type=event.event_type,
+            event_type=cast(EventTypeLiteral, event.event_type),
             event_subtype=event.event_subtype,
             title=event.title,
             description=event.description,
@@ -398,7 +405,7 @@ def _build_event_batch(
     event_writes.extend(
         EventWrite(
             id=uuid7(),
-            event_type=event.event_subtype,
+            event_type=cast(EventTypeLiteral, event.event_subtype),
             title=event.title,
             description=event.description,
             participant_agent_ids=tuple(
@@ -430,7 +437,7 @@ def _build_event_batch(
         state_deltas.append(
             StateDelta(
                 source_agent_id=agent_id,
-                metric=effect.metric,
+                metric=cast(StateMetricLiteral, effect.metric),
                 before=before,
                 requested_total=effect.delta,
                 applied_delta=after - before,
