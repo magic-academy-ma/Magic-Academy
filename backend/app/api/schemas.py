@@ -136,6 +136,16 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
+class LatestEventResponse(EventResponse):
+    # tick / importance 는 events 테이블 컬럼이 아니라 event engine 이
+    # events.metadata(JSONB)에 남긴 값이다 (persist_event_batch). 수동 생성
+    # Event 에는 없으므로 nullable 이다.
+    tick: int | None
+    importance: int | None
+    # 참여(대상) Agent 는 event_participants 테이블에서 조회한다.
+    target_agent_ids: list[UUID]
+
+
 class SimulationShareCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
