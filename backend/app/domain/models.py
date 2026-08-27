@@ -545,6 +545,76 @@ class Relationship(TimestampMixin, Base):
     relationship_type: Mapped[str | None] = mapped_column(String(30))
 
 
+class Dialogue(TimestampMixin, Base):
+    """One conversation between a mutual TALK pair within a single Runtime tick.
+
+    Grouping follows ``intent_conflict.resolve_talk_conflicts`` — the only place
+    the domain binds two Agents' utterances together. ``participant_a_id`` is the
+    pair's source Agent and ``participant_b_id`` the target, as returned by
+    ``TalkConflictResolution.mutual_pairs``.
+    """
+
+    __tablename__ = "dialogues"
+    __table_args__ = (
+        UniqueConstraint(
+            "simulation_id",
+            "run_id",
+            "tick_number",
+            "participant_a_id",
+            "participant_b_id",
+            name="uq_dialogues_pair_per_tick",
+        ),
+        CheckConstraint("tick_number >= 0", name="ck_dialogues_tick_number"),
+        CheckConstraint(
+            "participant_a_id <> participant_b_id",
+            name="ck_dialogues_distinct_participants",
+        ),
+        Index("idx_dialogues_simulation_tick", "simulation_id", "tick_number"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    tick_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    participant_a_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    participant_b_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+
+
+class DialogueMessage(TimestampMixin, Base):
+    __tablename__ = "dialogue_messages"
+    __table_args__ = (
+        UniqueConstraint("dialogue_id", "message_order", name="uq_dialogue_messages_order"),
+        CheckConstraint("message_order >= 0", name="ck_dialogue_messages_order"),
+        Index("idx_dialogue_messages_dialogue", "dialogue_id", "message_order"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    dialogue_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dialogues.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    message_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    speaker_agent_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agents.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    utterance: Mapped[str | None] = mapped_column(Text)
+
+
 class AgentMemory(TimestampMixin, Base):
     __tablename__ = "agent_memories"
     __table_args__ = (

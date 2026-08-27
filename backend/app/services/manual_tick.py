@@ -31,6 +31,7 @@ from app.repositories.memory_repository import (
     MemoryRepository,
 )
 from app.repositories.simulation_snapshots import SimulationConfigRepository
+from app.services.database_dialogue_results import DatabaseDialogueSink
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.event_frequency_history import build_event_parameters
 from app.services.event_magic_phase import (
@@ -595,6 +596,7 @@ async def advance_manual_tick(
             RuntimeOrchestrator(
                 runtime,
                 DatabaseRuntimeResultSink(db),
+                dialogue_sink=DatabaseDialogueSink(db),
             )
         )
     )
