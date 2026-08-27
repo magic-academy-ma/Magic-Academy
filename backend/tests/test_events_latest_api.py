@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -166,9 +166,19 @@ def test_latest_event_is_scoped_to_its_simulation(client) -> None:
 
 
 def test_latest_event_absent_returns_404(client) -> None:
-    test_client, _ = client
+    test_client, session_factory = client
     headers = register_and_login(test_client, "latest-empty")
     simulation_id = create_simulation(test_client, headers, "empty")
+
+    # 새 simulation 은 seed 된 Slice 1 CLASS Event 를 갖는다. event 가 하나도
+    # 없는 상태를 만들기 위해 직접 제거한다 (event_participants 를 먼저 지운다).
+    from app.domain.models import Event, EventParticipant
+
+    with session_factory() as session:
+        owned = select(Event.id).where(Event.simulation_id == UUID(simulation_id))
+        session.execute(delete(EventParticipant).where(EventParticipant.event_id.in_(owned)))
+        session.execute(delete(Event).where(Event.simulation_id == UUID(simulation_id)))
+        session.commit()
 
     response = test_client.get(
         f"/v1/simulations/{simulation_id}/events/latest", headers=headers
@@ -215,6 +225,12 @@ def test_events_list_endpoint_still_returns_all(client) -> None:
     headers = register_and_login(test_client, "latest-regression")
     simulation_id = create_simulation(test_client, headers, "regression")
 
+    # 새 simulation 에는 seed 된 CLASS Event 1건이 이미 있다.
+    seeded = test_client.get(
+        f"/v1/simulations/{simulation_id}/events", headers=headers
+    ).json()
+    assert len(seeded) == 1
+
     first = post_event(test_client, headers, simulation_id, "사건 1")
     second = post_event(test_client, headers, simulation_id, "사건 2")
 
@@ -223,4 +239,5 @@ def test_events_list_endpoint_still_returns_all(client) -> None:
     )
     assert listed.status_code == 200, listed.text
     ids = [item["id"] for item in listed.json()]
-    assert ids == [first["id"], second["id"]]
+    # 기존 list 엔드포인트는 그대로: seed + 새 Event 2건을 created_at, id 순으로 반환.
+    assert ids == [seeded[0]["id"], first["id"], second["id"]]
