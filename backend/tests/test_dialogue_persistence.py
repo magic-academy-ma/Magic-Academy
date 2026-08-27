@@ -56,6 +56,7 @@ def _seed_simulation(session_factory) -> tuple[UUID, list[UUID]]:
                 password_hash="x",
             )
         )
+        session.flush()
         session.add(
             Simulation(id=simulation_id, owner_id=user_id, name="dlg", status="ready")
         )
