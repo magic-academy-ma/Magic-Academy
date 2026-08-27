@@ -7,7 +7,7 @@ Slice 3 인수 조건 — Memory·Inspector
 - retrieval_trace가 TickResult에 포함된다.
 - 활성 Memory 10개 상한이 적용된다.
 - Memory 포함/제외 행동 차이가 검증된다.
-- COT(decision_explanation)는 DB에 저장되지 않는다.
+- 구조화 Decision Explanation만 저장하고 raw COT·reasoning은 저장하지 않는다.
 """
 import subprocess
 from app.simulation.tick_engine import (

@@ -208,6 +208,7 @@ class ScheduleSummary(StrictModel):
 class AgentRuntimeInput(StrictModel):
     run_id: str
     tick_number: int = Field(ge=0)
+    seed: int = Field(default=0, ge=0)
     block: Block
     agent: AgentContext
     nearby_agents: list[AgentSummary]
@@ -264,6 +265,8 @@ class InfluencingFactor(StrictModel):
 
 
 class DecisionExplanation(StrictModel):
+    """Inspector용 구조화 설명이며 모델의 내부 chain-of-thought가 아니다."""
+
     alternatives: list[ActionAlternative] = Field(min_length=1, max_length=3)
     influencing_factors: list[InfluencingFactor]
 
@@ -558,6 +561,12 @@ class AgentRuntime:
     def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
         attempt_count = state["attempt_count"] + 1
         try:
+            # Block LLM invocation during replay mode and instrument the call
+            from app.simulation.replay_guard import assert_not_replay
+            from app.simulation.instrumentation import increment_llm
+
+            assert_not_replay("LLM generation attempted during replay")
+            increment_llm()
             response = self._llm_client.generate(state["runtime_input"])
         except LLMInvocationError as exc:
             return {

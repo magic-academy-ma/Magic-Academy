@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "./api/client.js";
-import { buildSimulationSocketUrl } from "./api/socket.js";
-import { useSimulationSocket } from "./hooks/useSimulationSocket.js";
-
-import EventFeed from "./components/EventFeed.jsx";
-import RelationshipChangesPanel from "./components/RelationshipChangesPanel.jsx";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import ReplayPanel from "./components/ReplayPanel.jsx";
+import SnapshotPanel from "./components/SnapshotPanel.jsx";
 import RelationshipFlow from "./components/RelationshipFlow.jsx";
-
+import EventLogPanel from "./components/EventLogPanel.jsx";
+import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
+import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
+import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
+import { useSimulationWS } from "./hooks/useSimulationWS.js";
+import BrandingPage from "./pages/BrandingPage.jsx";
 import "./App.css";
 
 function AuthPanel({ onLogin, notice }) {
@@ -171,12 +174,13 @@ function classifyTickError(requestError) {
 
 export default function App() {
   const [auth, setAuth] = useState(null);
+  const [simulationId, setSimulationId] = useState(null);
+  const [personaId, setPersonaId] = useState(null);
+  const [personaSetupDone, setPersonaSetupDone] = useState(false);
   const [simulation, setSimulation] = useState(null);
   const [agents, setAgents] = useState([]);
+  const [personaAgentId, setPersonaAgentId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
-
-  const [name, setName] = useState("Slice 0 Simulation");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -185,19 +189,38 @@ export default function App() {
   const [tickError, setTickError] = useState(null);
 
   const [authNotice, setAuthNotice] = useState("");
+  const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot"
+  const refreshAgentsSilentlyRef = useRef(null);
+
+  const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
+    simulation?.id,
+    auth?.access_token,
+    { onReconnect: () => refreshAgentsSilentlyRef.current?.() }
+  );
 
   function resetSession(notice = "") {
     setAuth(null);
+    setSimulationId(null);
     setSimulation(null);
     setAgents([]);
     setSelectedAgent(null);
+    setPersonaAgentId(null);
+    setPersonaId(null);
+    setPersonaSetupDone(false);
     setError("");
     setTickResult(null);
     setTickError(null);
     setAuthNotice(notice);
+    setManagementView(null);
   }
 
-    async function fetchAgents(simulationId) {
+  function handleEnroll(newSimulation) {
+    setSimulationId(newSimulation.id);
+    setSimulation(newSimulation);
+    loadAgents(newSimulation.id);
+  }
+
+  async function fetchAgents(simulationId) {
     const agentList = await apiRequest(
       `/v1/simulations/${simulationId}/agents`,
       {
@@ -247,78 +270,11 @@ export default function App() {
     },
     [auth]
   );
+  refreshAgentsSilentlyRef.current = refreshAgentsSilently;
 
-  async function createSimulation(event) {
-    event.preventDefault();
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const created = await apiRequest("/v1/simulations", {
-        token: auth.access_token,
-        method: "POST",
-        body: JSON.stringify({ name }),
-      });
-
-      setSimulation(created);
-      await loadAgents(created.id);
-    } catch (requestError) {
-      if (requestError.status === 401) {
-        resetSession();
-        return;
-      }
-
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // AGENT_ACTION_UPDATED: action/location은 즉시 반영 가능
-  const handleAgentAction = useCallback((data) => {
-    setAgents((prev) =>
-      prev.map((agent) =>
-        agent.id === data.agent_id
-          ? {
-              ...agent,
-              current_action: data.action,
-              current_location: data.location,
-            }
-          : agent
-      )
-    );
-  }, []);
-
-  // WS 재연결 시 메시지가 유실됐을 수 있으므로 REST로 Agent 목록을 다시 불러온다.
-  const handleReconnect = useCallback(() => {
-    if (simulation) {
-      refreshAgentsSilently(simulation.id);
-    }
-  }, [simulation, refreshAgentsSilently]);
-
-  // TICK_UPDATED = Commit 완료 = agent_states 변경 가능 시점
-  const handleTickUpdated = useCallback(() => {
-    if (simulation) {
-      refreshAgentsSilently(simulation.id);
-    }
-  }, [simulation, refreshAgentsSilently]);
-
-  const wsUrl = simulation
-    ? buildSimulationSocketUrl(simulation.id)
-    : null;
-
-  const {
-    connected: wsConnected,
-    tick,
-    events: liveEvents,
-    relationshipUpdates,
-  } = useSimulationSocket({
-    wsUrl,
-    onAgentAction: handleAgentAction,
-    onTickUpdated: handleTickUpdated,
-    onReconnect: handleReconnect,
-  });
+  // Persona는 기존 Student 5명 중 하나를 가리킬 뿐 별도 Agent를 생성하지 않으므로
+  // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
+  const students = agents.filter((agent) => agent.agent_type === "student");
 
   // agents 목록이 갱신되면 selectedAgent도 최신 상태로 동기화
   useEffect(() => {
@@ -333,9 +289,17 @@ export default function App() {
     }
   }, [agents, selectedAgent]);
 
-  if (!auth) {
-    return <AuthPanel onLogin={setAuth} notice={authNotice} />;
-  }
+  if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
+  if (!simulationId) return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
+  if (!personaSetupDone) return (
+    <PersonaSetupPage
+      simulationId={simulationId}
+      charId={personaId}
+      onBack={() => setPersonaId(null)}
+      onStart={async (_charId, _config) => setPersonaSetupDone(true)}
+    />
+  );
 
   async function runTick() {
     setTickLoading(true);
@@ -367,21 +331,20 @@ export default function App() {
   }
 
   const agentResults = tickResult?.agent_results ?? [];
-  const relationshipDeltas = tickResult?.relationship_deltas ?? [];
-
-  const tickSucceeded = tickResult?.status === "COMPLETED";
+  const tickSucceeded = (tickResult?.status || "").toLowerCase() === "completed";
   const tickFailed = tickResult && !tickSucceeded;
 
-  const agentNameById = Object.fromEntries(
-    agents.map((agent) => [agent.id, agent.name])
-  );
+  const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
+
+  // WS RELATIONSHIP_UPDATED가 유실 없이 들어오면 그 값을, 아니면 REST tick 결과를 사용한다.
+  const effectiveRelationshipDeltas =
+    wsRelationshipDeltas.length > 0
+      ? wsRelationshipDeltas
+      : (tickResult?.relationship_deltas ?? []);
 
   const relationshipAgentIds = [
     ...new Set(
-      relationshipDeltas.flatMap((delta) => [
-        delta.source_agent_id,
-        delta.target_agent_id,
-      ])
+      effectiveRelationshipDeltas.flatMap((d) => [d.source_agent_id, d.target_agent_id])
     ),
   ];
 
@@ -397,8 +360,7 @@ export default function App() {
   }));
 
   const edgesByPair = new Map();
-
-  for (const delta of relationshipDeltas) {
+  for (const delta of effectiveRelationshipDeltas) {
     const key = `${delta.source_agent_id}->${delta.target_agent_id}`;
 
     if (!edgesByPair.has(key)) {
@@ -418,162 +380,75 @@ export default function App() {
 
   const flowEdges = [...edgesByPair.values()];
 
+  function handleEventAgentSelect(agentId) {
+    const agent = agents.find((a) => a.id === agentId);
+    if (agent) setSelectedAgent(agent);
+  }
+
   return (
     <div className="app-shell">
       <header>
         <strong>Magic Academy</strong>
-
-        <div className="profile">
-          <span>{auth.user.display_name}</span>
-          <small>@{auth.user.username}</small>
+        {simulation && lastTick && (
+          <span className="tick-info">Tick {lastTick.current_tick} · Day {lastTick.current_day}</span>
+        )}
+        <div className="header-right">
+          {simulation && (
+            <span
+              className={`ws-indicator ${connected ? "connected" : "disconnected"}`}
+              title={connected ? "실시간 연결됨" : "연결 끊김"}
+            >●</span>
+          )}
+          <div className="profile"><span>{auth.user.display_name}</span><small>@{auth.user.username}</small></div>
         </div>
       </header>
-
       <main>
-        {!simulation ? (
-          <form
-            className="panel create-panel"
-            onSubmit={createSimulation}
-          >
-            <h1>Simulation 생성</h1>
-
-            <label>
-              이름
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-
-            {error && (
-              <p className="message error" role="alert">
-                {error}
-              </p>
-            )}
-
-            <button disabled={loading}>
-              {loading
-                ? "Simulation과 Agent를 생성하는 중..."
-                : "Simulation 생성"}
-            </button>
-          </form>
-        ) : (
-          <section className="workspace">
+        <section className="workspace">
             <div className="panel agent-list">
-              <h1>{simulation.name}</h1>
-              <p>Agent {agents.length}명</p>
-
-              {loading && (
-                <p className="message">
-                  Agent를 불러오는 중...
-                </p>
-              )}
-
-              {error && (
-                <p className="message error" role="alert">
-                  {error}
-                </p>
-              )}
-
-              {error && (
-                <button
-                  type="button"
-                  onClick={() => loadAgents(simulation.id)}
-                >
-                  Agent 다시 불러오기
-                </button>
-              )}
-
-              {!loading && !error && agents.length === 0 && (
-                <p className="message">
-                  표시할 Agent가 없습니다.
-                </p>
-              )}
-
+              <h1>{simulation.name}</h1><p>Agent {agents.length}명</p>
+              {loading && <p className="message">Agent를 불러오는 중...</p>}
+              {error && <p className="message error" role="alert">{error}</p>}
+              {error && <button type="button" onClick={() => loadAgents(simulation.id)}>Agent 다시 불러오기</button>}
+              {!loading && !error && agents.length === 0 && <p className="message">표시할 Agent가 없습니다.</p>}
               {agents.map((agent) => (
                 <button
                   data-agent-id={agent.id}
-                  className={
-                    selectedAgent?.id === agent.id
-                      ? "agent active"
-                      : "agent"
-                  }
+                  className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
                   key={agent.id}
                   onClick={() => setSelectedAgent(agent)}
                 >
                   <b>{agent.name}</b>
-                  <span>
-                    {agent.agent_type} · {agent.mbti_type}
-                  </span>
+                  <span>{agent.agent_type} · {agent.mbti_type}</span>
+                  {agent.id === personaAgentId && <span className="persona-tag">Persona</span>}
                 </button>
               ))}
             </div>
 
+            <UserPersonaSetup
+              simulationId={simulation.id}
+              students={students}
+              token={auth.access_token}
+              onSaved={(result) => setPersonaAgentId(result.agent_id)}
+            />
+
             <aside className="panel inspector">
               <h2>Inspector</h2>
-
-              {!selectedAgent ? (
-                <p>Agent를 선택하세요.</p>
-              ) : (
-                <>
-                  <h3>{selectedAgent.name}</h3>
-
-                  <dl>
-                    <dt>종류</dt>
-                    <dd>{selectedAgent.agent_type}</dd>
-
-                    <dt>MBTI</dt>
-                    <dd>{selectedAgent.mbti_type}</dd>
-
-                    <dt>학년</dt>
-                    <dd>
-                      {selectedAgent.student_profile
-                        ? `${selectedAgent.student_profile.grade}학년`
-                        : "-"}
-                    </dd>
-
-                    <dt>위치</dt>
-                    <dd>{selectedAgent.location.name}</dd>
-
-                    <dt>기분</dt>
-                    <dd>{selectedAgent.state.mood}</dd>
-
-                    <dt>배고픔</dt>
-                    <dd>{selectedAgent.state.hunger}</dd>
-
-                    <dt>피로도</dt>
-                    <dd>{selectedAgent.state.fatigue}</dd>
-
-                    <dt>스트레스</dt>
-                    <dd>{selectedAgent.state.stress}</dd>
-
-                    <dt>만족도</dt>
-                    <dd>{selectedAgent.state.satisfaction}</dd>
-                  </dl>
-                </>
-              )}
+              {!selectedAgent ? <p>Agent를 선택하세요.</p> : <>
+                <h3>{selectedAgent.name}</h3>
+                <dl>
+                  <dt>Persona 여부</dt><dd>{selectedAgent.id === personaAgentId ? "예 (User Persona)" : "아니오"}</dd>
+                  <dt>종류</dt><dd>{selectedAgent.agent_type}</dd>
+                  <dt>MBTI</dt><dd>{selectedAgent.mbti_type}</dd>
+                  <dt>학년</dt><dd>{selectedAgent.student_profile ? `${selectedAgent.student_profile.grade}학년` : "-"}</dd>
+                  <dt>위치</dt><dd>{selectedAgent.location.name}</dd>
+                  <dt>기분</dt><dd>{selectedAgent.state.mood}</dd>
+                  <dt>배고픔</dt><dd>{selectedAgent.state.hunger}</dd>
+                  <dt>피로도</dt><dd>{selectedAgent.state.fatigue}</dd>
+                  <dt>스트레스</dt><dd>{selectedAgent.state.stress}</dd>
+                  <dt>만족도</dt><dd>{selectedAgent.state.satisfaction}</dd>
+                </dl>
+              </>}
             </aside>
-
-            {/* 실시간 WebSocket 이벤트 */}
-            <div className="panel tick-feed">
-              <h2>실시간 이벤트</h2>
-
-              <p className="connection-status">
-                {wsConnected
-                  ? "🟢 실시간 연결됨"
-                  : "🔴 재연결 중..."}
-
-                {tick &&
-                  ` · Day ${tick.current_day} / Tick ${tick.tick_number}`}
-              </p>
-
-              <EventFeed events={liveEvents} />
-
-              <RelationshipChangesPanel
-                updates={relationshipUpdates}
-              />
-            </div>
 
             {/* Tick 실행 및 결과 */}
             <div className="panel tick-panel">
@@ -631,99 +506,102 @@ export default function App() {
                     </p>
                   ) : (
                     <ul className="agent-result-list">
-                      {agentResults.map((agentResult) => {
-                        const status =
-                          agentResult.runtime_status;
-
-                        return (
-                          <li
-                            key={agentResult.agent_id}
-                            className={`agent-result status-${status?.toLowerCase()}`}
-                          >
-                            <b>
-                              {agentResult.agent_name ??
-                                agentResult.agent_id}
-                            </b>
-
-                            <span
-                              className={`runtime-status runtime-status-${status?.toLowerCase()}`}
-                            >
-                              {status === "PROPOSED" &&
-                                "정상 진행"}
-                              {status === "FALLBACK" &&
-                                "재시도 실패 → Fallback 적용"}
-                              {status === "SKIPPED" &&
-                                "이번 Tick 미참여"}
-                            </span>
-
-                            {status === "SKIPPED" ? (
-                              <p className="message">
-                                비활성 상태로 이번 Tick에서
-                                행동하지 않았습니다.
-                              </p>
-                            ) : (
-                              <>
-                                <span className="action-type">
-                                  {agentResult.action_type}
-                                </span>
-
-                                {agentResult.utterance && (
-                                  <p className="utterance">
-                                    “{agentResult.utterance}”
-                                  </p>
-                                )}
-
-                                {agentResult.motivation_summary && (
-                                  <p className="motivation">
-                                    {
-                                      agentResult.motivation_summary
-                                    }
-                                  </p>
-                                )}
-
-                                {agentResult.decision_explanation
-                                  ?.influencing_factors?.length >
-                                  0 && (
-                                  <ul className="influencing-factors">
-                                    {agentResult.decision_explanation.influencing_factors.map(
-                                      (factor, idx) => (
-                                        <li key={idx}>
-                                          [{factor.source}]{" "}
-                                          {factor.description}{" "}
-                                          ({factor.direction})
-                                        </li>
-                                      )
-                                    )}
-                                  </ul>
-                                )}
-                              </>
-                            )}
-
-                            {status === "FALLBACK" && (
-                              <p className="fallback-info">
-                                재시도{" "}
-                                {agentResult.retry_count}회 실패
-                                {agentResult.failure_reason &&
-                                  ` — 사유: ${agentResult.failure_reason}`}
-                              </p>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
+										  {agentResults.map((agentResult) => {
+										    const status = agentResult.runtime_status;
+										    return (
+										      <li key={agentResult.agent_id} className={`agent-result status-${status?.toLowerCase()}`}>
+										        <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
+										        <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
+										          {status?.toUpperCase() === "PROPOSED" && "정상 진행"}
+										          {status?.toUpperCase() === "FALLBACK" && "재시도 실패 → Fallback 적용"}
+										          {status?.toUpperCase() === "SKIPPED" && "이번 Tick 미참여"}
+										        </span>
+										        {status?.toUpperCase() === "SKIPPED" ? (
+										          <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
+										        ) : (
+										          <>
+										            <span className="action-type">{agentResult.action_type}</span>
+										            {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
+										            {agentResult.motivation_summary && (
+										              <p className="motivation">{agentResult.motivation_summary}</p>
+										            )}
+										            {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
+										              <ul className="influencing-factors">
+										                {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
+										                  <li key={idx}>
+										                    [{factor.source}] {factor.description} ({factor.direction})
+										                  </li>
+										                ))}
+										              </ul>
+										            )}
+										          </>
+										        )}
+										        {status?.toUpperCase() === "FALLBACK" && (
+										          <p className="fallback-info">
+										            재시도 {agentResult.retry_count}회 실패
+										            {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
+										          </p>
+										        )}
+										      </li>
+										    );
+										  })}
+										</ul>
                   )}
 
-                  <h4>관계 변화</h4>
-
-                  <RelationshipFlow
-                    nodes={flowNodes}
-                    edges={flowEdges}
-                  />
                 </div>
               )}
             </div>
+            <div className="panel management-panel">
+              <h2>관리</h2>
+              <div className="management-tabs">
+                <button
+                  type="button"
+                  aria-pressed={managementView === "settings"}
+                  onClick={() => setManagementView("settings")}
+                >
+                  설정
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "replay"}
+                  onClick={() => setManagementView("replay")}
+                >
+                  Replay
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={managementView === "snapshot"}
+                  onClick={() => setManagementView("snapshot")}
+                >
+                  Snapshot
+                </button>
+              </div>
+
+              {managementView === "settings" && (
+                <SettingsPanel
+                  token={auth.access_token}
+                  simulationId={simulation.id}
+                  simulationStatus={simulation.status}
+                />
+              )}
+              {managementView === "replay" && (
+                <ReplayPanel token={auth.access_token} simulationId={simulation.id} />
+              )}
+              {managementView === "snapshot" && (
+                <SnapshotPanel token={auth.access_token} simulationId={simulation.id} />
+              )}
+            </div>
+
+            <div className="panel relationship-panel">
+              <h4>관계 변화</h4>
+              <RelationshipFlow nodes={flowNodes} edges={flowEdges} />
+            </div>
           </section>
-        )}
+          <EventLogPanel
+            eventLog={eventLog}
+            agentNames={agentNameById}
+            onAgentSelect={handleEventAgentSelect}
+          />
       </main>
     </div>
   );

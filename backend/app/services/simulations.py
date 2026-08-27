@@ -15,6 +15,20 @@ from app.api.schemas import (
 from app.domain.models import Simulation, User
 from app.repositories.simulations import get_simulation, list_agents_with_state
 from app.services.fixtures import seed_slice_zero
+from app.services.simulation_snapshots import SimulationSnapshotService
+
+
+class InvalidSimulationStatusTransitionError(Exception):
+    pass
+
+
+ALLOWED_STATUS_TRANSITIONS = {
+    "ready": {"running"},
+    "running": {"paused", "completed", "failed"},
+    "paused": {"running", "completed", "failed"},
+    "completed": set(),
+    "failed": set(),
+}
 
 
 def create_simulation(db: Session, owner: User, name: str) -> Simulation:
@@ -23,6 +37,7 @@ def create_simulation(db: Session, owner: User, name: str) -> Simulation:
     try:
         db.flush()
         seed_slice_zero(db, simulation.id)
+        SimulationSnapshotService().create_snapshot(db, simulation)
         db.commit()
     except Exception:
         db.rollback()
@@ -37,6 +52,19 @@ def require_owned_simulation(db: Session, simulation_id: UUID, owner: User) -> S
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Simulation not found")
     if simulation.owner_id != owner.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Simulation access denied")
+    return simulation
+
+
+def update_simulation_status(
+    db: Session,
+    simulation: Simulation,
+    new_status: str,
+) -> Simulation:
+    db.refresh(simulation, with_for_update=True)
+    if new_status not in ALLOWED_STATUS_TRANSITIONS[simulation.status]:
+        raise InvalidSimulationStatusTransitionError
+    simulation.status = new_status
+    db.flush()
     return simulation
 
 

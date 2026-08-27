@@ -23,15 +23,19 @@ class SchemaModelTests(unittest.TestCase):
                 "agent_memories",
                 "relationships",
                 "runtime_results",
+                "runtime_executions",
+                "user_persona_configs",
                 "organizations",
                 "organization_memberships",
                 "events",
                 "event_participants",
                 "event_batch_results",
+                "simulation_configs",
+                "simulation_snapshots",
             },
         )
 
-    def test_primary_and_foreign_keys_use_postgresql_uuid(self) -> None:
+    def test_primary_keys_use_uuid_and_foreign_key_types_match(self) -> None:
         for table in Base.metadata.tables.values():
             for primary_key in table.primary_key.columns:
                 if table.name == "event_batch_results" and primary_key.name == "tick_number":
@@ -39,7 +43,10 @@ class SchemaModelTests(unittest.TestCase):
                     continue
                 self.assertIsInstance(primary_key.type, UUID)
             for foreign_key in table.foreign_keys:
-                self.assertIsInstance(foreign_key.parent.type, UUID)
+                self.assertIsInstance(
+                    foreign_key.parent.type,
+                    type(foreign_key.column.type),
+                )
 
     def test_required_unique_constraints_and_indexes_exist(self) -> None:
         expected_names = {
@@ -53,6 +60,9 @@ class SchemaModelTests(unittest.TestCase):
             "uq_relationships_pair",
             "uq_runtime_results_idempotency_key",
             "uq_runtime_results_run_tick_agent",
+            "uq_runtime_executions_run_id",
+            "uq_runtime_executions_simulation_tick",
+            "idx_runtime_executions_simulation_tick",
             "uq_organizations_simulation_type_name",
             "uq_organizations_simulation_id_id",
             "uq_organization_memberships_active",
@@ -65,6 +75,9 @@ class SchemaModelTests(unittest.TestCase):
             "idx_relationships_source_updated",
             "idx_events_simulation_started",
             "idx_organizations_simulation_id",
+            "uq_simulation_configs_version",
+            "uq_simulation_snapshots_tick",
+            "idx_simulation_snapshots_timeline",
         }
         actual_names = {
             item.name
@@ -80,6 +93,7 @@ class SchemaModelTests(unittest.TestCase):
             "relationships": {"agents"},
             "organization_memberships": {"agents", "organizations"},
             "events": {"locations"},
+            "user_persona_configs": {"agents"},
         }
         for table_name, target_names in expected_targets.items():
             table = Base.metadata.tables[table_name]
@@ -99,6 +113,8 @@ class SchemaModelTests(unittest.TestCase):
         simulations = Base.metadata.tables["simulations"]
         agents = Base.metadata.tables["agents"]
         self.assertFalse(simulations.c.owner_id.nullable)
+        self.assertNotIn("origin_simulation_id", simulations.c)
+        self.assertNotIn("origin_snapshot_id", simulations.c)
         self.assertTrue({"fixture_key", "fixture_version"} <= set(agents.c.keys()))
         self.assertFalse(agents.c.fixture_key.nullable)
         self.assertFalse(agents.c.fixture_version.nullable)

@@ -1,5 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
+import secrets
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -17,17 +19,30 @@ from app.domain.models import (
     Simulation,
     StudentProfile,
 )
+from app.repositories.memory_repository import (
+    MemoryCreateInput,
+    MemoryRepository,
+)
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.event_magic_phase import EventAndMagicResult, run_event_and_magic_phase
 from app.services.event_persistence import persist_event_batch
+from app.services.execution_metadata import (
+    ExecutionMetadataInput,
+    record_execution_metadata,
+)
+from app.services.embedding_service import build_embedding_client
+from app.services.memory_adapter import MemoryAdapter
 from app.services.policy_commit import PolicyCommitResult, evaluate_and_apply_policy
 from app.services.runtime_input_adapter import RuntimeInputAdapter
 from app.services.runtime_orchestrator import RuntimeOrchestrator
+from app.services.runtime_target_selection import select_tick_participant_ids
 from app.services.simulation_tick import SimulationTickService
+from app.services.simulation_snapshots import SimulationSnapshotService
 from app.simulation.agent_runtime import (
     AgentRuntime,
     AgentRuntimeResult,
     Block,
+    EventType,
     ScheduleSummary,
     SignalIntensity,
     StateSignalType,
@@ -47,12 +62,18 @@ from app.simulation.policy.registries.signal_policy import get_state_delta
 from app.simulation.tick_engine import (
     AgentType,
     MemoryItem,
+    MemoryRetrieverFn,
+    MemoryStoreFn,
     PolicyFn,
     TickAgent,
     TickEngine,
     TickEvent,
     WorldSnapshot,
 )
+
+
+POLICY_VERSION = "policy-mvp-0.1"
+EMPTY_QUERY_EMBEDDING = [0.0] * 1536
 
 
 class TickAlreadyRunningError(Exception):
@@ -71,6 +92,44 @@ class ManualTickResult:
     retrieved_memories: dict[str, tuple[MemoryItem, ...]]
     event_and_magic_result: EventAndMagicResult
     event_batch_result: dict
+
+
+def create_memory_callbacks(
+    db: Session, repository: MemoryRepository
+) -> tuple[MemoryRetrieverFn, MemoryStoreFn]:
+    async def retrieve_memories(agent_id, current_tick, _query_text):
+        rows = repository.retrieve_for_runtime(
+            db, UUID(agent_id), current_tick, EMPTY_QUERY_EMBEDDING
+        )
+        return [
+            MemoryItem(
+                id=str(row.id),
+                content=row.content,
+                memory_type=row.memory_type,
+                importance=row.importance,
+                created_tick=row.created_tick,
+                event_id=None if row.event_id is None else str(row.event_id),
+            )
+            for row in rows
+        ]
+
+    async def store_memory(agent_id, event_id, candidate, current_tick):
+        row = repository.create(
+            db,
+            MemoryCreateInput(
+                agent_id=UUID(agent_id),
+                event_id=None if event_id is None else UUID(event_id),
+                content=candidate.content,
+                memory_type=candidate.memory_type,
+                importance=candidate.importance,
+                created_tick=current_tick,
+                occurred_at=datetime.now(UTC),
+            ),
+        )
+        repository.enforce_cap(db, UUID(agent_id))
+        return str(row.id)
+
+    return retrieve_memories, store_memory
 
 
 def tick_position(tick_number: int) -> tuple[int, Block]:
@@ -404,7 +463,14 @@ async def advance_manual_tick(
     *,
     runtime: AgentRuntime,
     policy: PolicyFn | None = None,
+    policy_version: str | None = None,
+    memory_retriever: MemoryRetrieverFn | None = None,
+    memory_store: MemoryStoreFn | None = None,
+    seed: int | None = None,
+    memory_adapter: MemoryAdapter | None = None,
 ) -> ManualTickResult:
+    if (policy is None) != (policy_version is None):
+        raise ValueError("policy and policy_version must be provided together")
     locked = db.scalar(
         select(
             text(
@@ -420,6 +486,12 @@ async def advance_manual_tick(
     current_tick = previous_tick + 1
     current_day, block = tick_position(current_tick)
     run_id = uuid7()
+    execution_seed = seed if seed is not None else secrets.randbits(63)
+    if memory_adapter is None and memory_retriever is None and memory_store is None:
+        try:
+            memory_adapter = MemoryAdapter(db, embedding_client=build_embedding_client())
+        except RuntimeError:
+            memory_adapter = None
 
     event = db.scalar(
         select(Event)
@@ -462,14 +534,24 @@ async def advance_manual_tick(
         ),
     )
     participant_ids = {participant.agent_id for participant in participants}
-    preselected_ids = [
+    selected_ids = select_tick_participant_ids(
+        agents,
+        event_participant_agent_ids=participant_ids,
+    )
+    students = [
         agent.id
         for agent in agents
-        if agent.agent_type in ("student", "user_persona")
-        or (agent.agent_type == "professor" and agent.id in participant_ids)
+        if agent.id in selected_ids
+        and agent.agent_type in ("student", "user_persona")
     ]
-    if not any(agent.fixture_key == "student-01" for agent in agents):
-        raise RuntimeError("Slice 1 student fixture is missing")
+    professors = [
+        agent.id
+        for agent in agents
+        if agent.id in selected_ids and agent.agent_type == "professor"
+    ]
+    if len(students) != 5:
+        raise RuntimeError("Slice 0 Student fixture must contain exactly 5 Agents")
+    preselected_ids = [*students, *professors[:1]]
 
     service = SimulationTickService(
         RuntimeInputAdapter(
@@ -481,7 +563,7 @@ async def advance_manual_tick(
     )
     schedule = ScheduleSummary(
         event_id=event.id,
-        schedule_type="class",
+        schedule_type=EventType.CLASS,
         is_mandatory=True,
         location_id=event.location_id,
         start_tick=current_tick,
@@ -501,11 +583,26 @@ async def advance_manual_tick(
             simulation_id=simulation.id,
             run_id=run_id,
             tick_number=current_tick,
+            seed=execution_seed,
             block=block,
             preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
             schedule=schedule,
             events=[event],
             event_participants={event.id: participants},
+            memories_by_agent={
+                UUID(agent_id): [
+                    {
+                        "id": memory.id,
+                        "content": memory.content,
+                        "memory_type": memory.memory_type,
+                        "importance": memory.importance,
+                        "created_tick": memory.created_tick,
+                        "event_id": memory.event_id,
+                    }
+                    for memory in memories
+                ]
+                for agent_id, memories in _snapshot.data.get("memories", {}).items()
+            },
         )
         return {str(result.agent_id): result for result in batch.results}
 
@@ -536,11 +633,16 @@ async def advance_manual_tick(
     ]
     snapshot = WorldSnapshot(
         simulation_id=str(simulation.id),
-        current_tick=previous_tick,
+        current_tick=current_tick,
+        data={"execution_seed": execution_seed},
     )
     tick_result = await TickEngine(
         runtime=run_runtime_batch,
         policy=evaluate_policy_batch,
+        memory_retriever=(
+            memory_retriever if memory_adapter is None else memory_adapter.retrieve
+        ),
+        memory_store=memory_store if memory_adapter is None else memory_adapter.store,
     ).run_tick(
         tick_candidates,
         TickEvent(
@@ -560,9 +662,23 @@ async def advance_manual_tick(
         result=event_and_magic_result,
     )
     event_batch_result = persist_event_batch(db, event_batch)
+    first_result = batch.results[0]
+    record_execution_metadata(
+        db,
+        ExecutionMetadataInput(
+            simulation_id=simulation.id,
+            run_id=str(run_id),
+            tick_number=current_tick,
+            seed=execution_seed,
+            model=first_result.model,
+            prompt_version=first_result.prompt_version,
+            policy_version=policy_version or POLICY_VERSION,
+        ),
+    )
     simulation.current_tick = current_tick
     simulation.current_day = current_day
     db.flush()
+    SimulationSnapshotService().create_snapshot(db, simulation)
     return ManualTickResult(
         previous_tick=previous_tick,
         current_tick=current_tick,

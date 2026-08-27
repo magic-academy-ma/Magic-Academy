@@ -1,14 +1,16 @@
 from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.models import Agent, AgentState, Relationship
+from app.domain.relationship_metrics import RelationshipMetric
 from app.repositories.relationships import RelationshipDelta, apply_deltas
 from app.simulation.agent_runtime import AgentRuntimeResult
+from app.simulation.policy import engine as policy_engine
 from app.simulation.policy.conflict import resolve_conflicts
-from app.simulation.policy.engine import evaluate_policy
 from app.simulation.policy.models import (
     AgentSnapshot,
     EffectCandidate,
@@ -57,7 +59,7 @@ def evaluate_and_apply_policy(
             select(Relationship).where(Relationship.simulation_id == simulation_id)
         )
     )
-    evaluation = evaluate_policy(
+    evaluation = policy_engine.evaluate_policy(
         PolicyEvaluationInput(
             run_id=str(run_id),
             tick_number=tick_number,
@@ -111,12 +113,12 @@ def evaluate_and_apply_policy(
             RelationshipDelta(
                 source_agent_id=UUID(effect.source_agent_id),
                 target_agent_id=UUID(effect.target_agent_id),
-                metric=effect.metric,
+                metric=cast(RelationshipMetric, effect.metric),
                 before=effect.before,
                 requested_total=effect.delta,
                 applied_delta=effect.after_preview - effect.before,
                 after=effect.after_preview,
-                effect_ids=(effect.effect_id,),
+                effect_ids=effect.effect_ids or (effect.effect_id,),
                 policy_version=POLICY_VERSION,
                 resolver_version=RESOLVER_VERSION,
                 resolution_id=resolution_id,

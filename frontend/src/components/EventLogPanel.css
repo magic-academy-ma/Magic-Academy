@@ -1,0 +1,8 @@
+.event-log-panel { margin-top: 24px; max-width: 1100px; margin-left: auto; margin-right: auto; }
+.event-log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.event-log-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #f5f3ff; }
+.event-log-item.clickable { cursor: pointer; }
+.event-log-item.clickable:hover { background: #ede9fe; }
+.event-tick { font-size: 12px; color: #6b7280; white-space: nowrap; }
+.event-description { font-size: 14px; }
+.event-agents { font-size: 12px; color: #7c3aed; white-space: nowrap; }

@@ -31,6 +31,7 @@ source_updated: 2026-08-04
 ## 2. 현재 확정 사항과 충돌 정리
 
 * Decision Explanation은 LLM의 내부 추론(COT) 노출이 아니다.
+* 과거 Tick 조회를 위해 허용된 구조화 설명(`alternatives`, `influencing_factors`)만 Runtime 결과에 저장하며 raw COT·reasoning은 저장하지 않는다.
 * Runtime이 같은 호출에서 생성한 구조화된 설명을 Inspector가 표시한다.
 * User Persona의 성격 입력은 MBTI 5종 중 하나를 선택한 뒤 유형별 Big Five 기본값·허용 범위를 적용하고 `-50~+50` 축에서 5단위 슬라이더로 조절하는 방식이다.
 * mood는 다른 상태값과 범위가 다르다.

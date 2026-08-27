@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from typing import Any, Literal
 from uuid import UUID
 
 from app.domain.models import Agent, AgentState, Event, EventParticipant, Relationship
@@ -7,20 +8,23 @@ from app.services.runtime_orchestrator import (
     RuntimeOrchestrator,
 )
 from app.simulation.agent_runtime import (
+    MBTI,
     AgentContext,
+    AgentStateContext,
+    BigFiveContext,
     Block,
     EventSummary,
+    EventType,
     RelationshipSummary,
     ScheduleSummary,
 )
-
 
 ACTIVE_STATUS_VALUES = {
     "active": True,
     "inactive_temporary": False,
 }
 
-RUNTIME_AGENT_TYPES = {
+RUNTIME_AGENT_TYPES: dict[str, Literal["student", "professor"]] = {
     "student": "student",
     "professor": "professor",
     "user_persona": "student",
@@ -49,21 +53,21 @@ class RuntimeInputAdapter:
             fixture_key=agent.fixture_key,
             agent_type=agent_type,
             name=agent.name,
-            mbti=agent.mbti_type,
-            big_five={
-                "openness": agent.openness,
-                "conscientiousness": agent.conscientiousness,
-                "extraversion": agent.extraversion,
-                "agreeableness": agent.agreeableness,
-                "emotional_stability": agent.emotional_stability,
-            },
-            state={
-                "hunger": state.hunger,
-                "fatigue": state.fatigue,
-                "stress": state.stress,
-                "satisfaction": state.satisfaction,
-                "mood": state.mood,
-            },
+            mbti=MBTI(agent.mbti_type),
+            big_five=BigFiveContext(
+                openness=agent.openness,
+                conscientiousness=agent.conscientiousness,
+                extraversion=agent.extraversion,
+                agreeableness=agent.agreeableness,
+                emotional_stability=agent.emotional_stability,
+            ),
+            state=AgentStateContext(
+                hunger=state.hunger,
+                fatigue=state.fatigue,
+                stress=state.stress,
+                satisfaction=state.satisfaction,
+                mood=state.mood,
+            ),
             current_location_id=state.location_id,
             active_status=active_status,
         )
@@ -75,6 +79,8 @@ class RuntimeInputAdapter:
     ) -> tuple[EventSummary, ...]:
         summaries = []
         for event in events:
+            if event.location_id is None:
+                raise ValueError("Event.location_id is required for Runtime input")
             participants = event_participants.get(event.id, ())
             participant_agent_ids = []
             for participant in participants:
@@ -84,7 +90,7 @@ class RuntimeInputAdapter:
             summaries.append(
                 EventSummary(
                     event_id=event.id,
-                    event_type=event.event_type,
+                    event_type=EventType(event.event_type),
                     location_id=event.location_id,
                     participant_agent_ids=participant_agent_ids,
                     title=event.title,
@@ -116,6 +122,7 @@ class RuntimeInputAdapter:
         *,
         run_id: str,
         tick_number: int,
+        seed: int = 0,
         block: Block,
         agents: Sequence[Agent],
         preselected_agent_ids: Sequence[UUID],
@@ -126,6 +133,7 @@ class RuntimeInputAdapter:
         valid_agent_ids: Sequence[UUID],
         valid_location_ids: Sequence[UUID],
         relationships: Sequence[Relationship] = (),
+        memories_by_agent: Mapping[UUID, Sequence[dict[str, Any]]] | None = None,
     ) -> RuntimeBatchExecutionResult:
         self._validate_uuid_sequence("preselected_agent_ids", preselected_agent_ids)
         self._validate_uuid_sequence("valid_agent_ids", valid_agent_ids)
@@ -140,6 +148,7 @@ class RuntimeInputAdapter:
         return self._orchestrator.run_preselected(
             run_id=run_id,
             tick_number=tick_number,
+            seed=seed,
             block=block,
             agent_candidates=agent_candidates,
             preselected_agent_ids=preselected_agent_ids,
@@ -148,6 +157,7 @@ class RuntimeInputAdapter:
             valid_agent_ids=valid_agent_ids,
             valid_location_ids=valid_location_ids,
             relationships=relationship_summaries,
+            memories_by_agent=memories_by_agent,
         )
 
     @staticmethod

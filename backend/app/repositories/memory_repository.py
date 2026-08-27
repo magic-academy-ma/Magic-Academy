@@ -1,9 +1,9 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
@@ -88,9 +88,13 @@ class MemoryRepository:
             )
             .limit(2)
         ).all()
+        latest_ids = [memory.id for memory in latest]
+        similarity_filters = [*eligible, AgentMemory.embedding.is_not(None)]
+        if latest_ids:
+            similarity_filters.append(AgentMemory.id.not_in(latest_ids))
         similar = session.scalars(
             select(AgentMemory)
-            .where(*eligible, AgentMemory.embedding.is_not(None))
+            .where(*similarity_filters)
             .order_by(
                 AgentMemory.embedding.cosine_distance(list(query_embedding)),
                 AgentMemory.id.asc(),
@@ -124,10 +128,24 @@ class MemoryRepository:
         if excess_count == 0:
             return 0
 
-        ids_to_delete = session.scalars(
+        latest_ids = session.scalars(
             select(AgentMemory.id)
             .where(AgentMemory.agent_id == agent_id)
             .order_by(
+                AgentMemory.created_tick.desc(),
+                AgentMemory.occurred_at.desc(),
+                AgentMemory.id.desc(),
+            )
+            .limit(min(2, max_active))
+        ).all()
+        deletion_filters = [AgentMemory.agent_id == agent_id]
+        if latest_ids:
+            deletion_filters.append(AgentMemory.id.not_in(latest_ids))
+        ids_to_delete = session.scalars(
+            select(AgentMemory.id)
+            .where(*deletion_filters)
+            .order_by(
+                case((AgentMemory.memory_type == "reflection", 1), else_=0),
                 AgentMemory.importance.asc(),
                 AgentMemory.created_tick.asc(),
                 AgentMemory.id.asc(),
