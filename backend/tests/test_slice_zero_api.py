@@ -291,6 +291,45 @@ def test_locations_endpoint_returns_six_mvp_spaces_and_enforces_ownership(client
     )
 
 
+def test_simulation_detail_exposes_night_waiting(client) -> None:
+    from app.domain.models import Simulation
+
+    test_client, session_factory = client
+    _, headers = register_and_login(test_client, "night-owner")
+    simulation_id = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Night"}
+    ).json()["id"]
+
+    fresh = test_client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert fresh.status_code == 200
+    assert fresh.json()["night_waiting"] is False
+
+    with session_factory() as db:
+        simulation = db.get(Simulation, UUID(simulation_id))
+        simulation.night_waiting = True
+        db.commit()
+
+    waiting = test_client.get(f"/v1/simulations/{simulation_id}", headers=headers)
+    assert waiting.status_code == 200
+    assert waiting.json()["night_waiting"] is True
+
+
+def test_agents_list_exposes_active_status_and_location(client) -> None:
+    test_client, _ = client
+    _, headers = register_and_login(test_client, "active-owner")
+    simulation_id = test_client.post(
+        "/v1/simulations", headers=headers, json={"name": "Active"}
+    ).json()["id"]
+
+    agents = test_client.get(
+        f"/v1/simulations/{simulation_id}/agents", headers=headers
+    ).json()
+    assert agents
+    for agent in agents:
+        assert agent["active_status"] == "active"
+        assert set(agent["location"]) == {"id", "code", "name"}
+
+
 def test_duplicate_username_returns_409_and_bad_password_returns_401(client) -> None:
     test_client, _ = client
     register_and_login(test_client, "duplicate")
