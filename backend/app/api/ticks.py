@@ -17,7 +17,16 @@ from app.services.manual_tick import (
     create_memory_callbacks,
 )
 from app.services.memory_dependency import get_memory_hooks
-from app.services.realtime_events import build_tick_events, connection_manager
+from app.services.night_transition import (
+    NightSkipConflictError,
+    NightSkipNotAllowedError,
+    skip_night,
+)
+from app.services.realtime_events import (
+    build_simulation_status_event,
+    build_tick_events,
+    connection_manager,
+)
 from app.services.runtime_dependency import get_agent_runtime, get_memory_repository
 from app.services.simulations import require_owned_simulation
 from app.services.simulation_events import (
@@ -257,3 +266,54 @@ async def advance_tick(
             for agent_id, memory_ids in result.retrieval_traces.items()
         ],
     )
+
+
+@router.post("/simulations/{simulation_id}/night/skip")
+def skip_night_endpoint(
+    simulation_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user_role),
+):
+    simulation = require_owned_simulation(db, simulation_id, current_user)
+    try:
+        outcome = skip_night(db, simulation)
+        db.commit()
+    except NightSkipConflictError as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=409,
+            content={"error": {"code": "CONFLICT", "message": str(exc)}},
+        )
+    except NightSkipNotAllowedError as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=422,
+            content={"error": {"code": "BUSINESS_RULE_VIOLATION", "message": str(exc)}},
+        )
+    except Exception:
+        db.rollback()
+        raise
+
+    db.refresh(simulation)
+    if outcome.transitioned:
+        background_tasks.add_task(
+            connection_manager.broadcast,
+            simulation.id,
+            [
+                build_simulation_status_event(
+                    simulation.id,
+                    simulation.status,
+                    current_day=simulation.current_day,
+                    current_tick=simulation.current_tick,
+                )
+            ],
+        )
+    return {
+        "data": {
+            "id": str(simulation.id),
+            "status": simulation.status,
+            "current_day": simulation.current_day,
+            "current_tick": simulation.current_tick,
+        }
+    }

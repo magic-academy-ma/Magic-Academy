@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.domain.models import Simulation, SimulationSnapshot
+from app.domain.models import Simulation, SimulationConfig, SimulationSnapshot
 from app.repositories.simulation_snapshots import (
     SimulationConfigRepository,
     SimulationSnapshotRepository,
@@ -91,19 +91,33 @@ class SimulationSnapshotService:
         )
 
     def create_snapshot(
-        self, session: Session, simulation: Simulation
+        self,
+        session: Session,
+        simulation: Simulation,
+        config: SimulationConfig | None = None,
     ) -> SimulationSnapshot:
-        config = self.configs.latest(session, simulation.id)
+        """``config``이 주어지면 그 버전을 스냅샷에 고정한다 (Tick 시작 시 고정한
+        파라미터가 진행 중 변경분에 오염되지 않도록 — mvp-tick-event-policy.md §4.5).
+        주어지지 않으면 최신 config를 사용하고, 없으면 기본값으로 생성한다.
+        """
         if config is None:
-            config = self.save_config(
+            config = self.configs.latest(session, simulation.id)
+        if config is None:
+            # 아직 config가 없는 시뮬레이션(예: Tick 시작 시점 §4.5)에는 기본값
+            # v1을 부트스트랩한다. 이는 시스템이 확정된 기본 설정을 물질화하는
+            # 것이지 사용자가 초기 설정을 바꾸는 것이 아니므로, save_config의 초기
+            # 설정 잠금(InitialSettingsLockedError, status != "ready" 이면서
+            # latest is None)에 걸려서는 안 된다. 잠금 정책은 사용자 경로
+            # (app/api/simulation_history.py → save_config)에서 그대로 유지된다.
+            config = self.configs.create_version(
                 session,
                 simulation,
-                SimulationConfigInput(
-                    event_frequency="medium",
-                    event_impact="medium",
-                    magic_enabled=simulation.magic_enabled,
-                    user_persona_settings={},
-                ),
+                event_frequency="medium",
+                event_impact="medium",
+                magic_enabled=simulation.magic_enabled,
+                user_persona_settings={},
+                policy_version=None,
+                resolver_version=None,
             )
         return self.snapshots.create(session, simulation, config)
 

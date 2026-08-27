@@ -66,6 +66,7 @@ class Simulation(TimestampMixin, Base):
     current_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     current_tick: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     magic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    night_waiting: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
