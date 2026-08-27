@@ -34,6 +34,27 @@ export async function handleMockRequest(path, options = {}) {
     };
   }
 
+  // 2-1. Simulation save / restore
+  if (/\/v1\/simulations\/[^/]+\/save$/.test(path) && method === "POST") {
+    const id = path.split("/")[3];
+    return {
+      id,
+      status: "PAUSED",
+      current_day: mockSimulations[0].current_day,
+      current_tick: mockSimulations[0].current_tick,
+      saved_at: new Date().toISOString(),
+    };
+  }
+  if (/\/v1\/simulations\/[^/]+\/restore$/.test(path) && method === "POST") {
+    const id = path.split("/")[3];
+    return {
+      id,
+      status: "RUNNING",
+      current_day: mockSimulations[0].current_day,
+      current_tick: mockSimulations[0].current_tick,
+    };
+  }
+
   // 3. World Map API
   if (/\/v1\/simulations\/[^/]+\/world\/map/.test(path) && method === "GET") {
     return mockWorldMap;

@@ -9,19 +9,39 @@ function formatSavedAt(simulation) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ko-KR');
 }
 
-export default function MyPage({ auth, onBack }) {
+export default function MyPage({ auth, onBack, onRestore }) {
   const [simulations, setSimulations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [restoringId, setRestoringId] = useState(null);
+  const [restoreError, setRestoreError] = useState('');
 
   useEffect(() => {
     let active = true;
     apiRequest('/v1/simulations', { token: auth.access_token })
-      .then((result) => { if (active) setSimulations(result); })
+      .then((result) => {
+        if (active) setSimulations(Array.isArray(result) ? result : (result.data ?? []));
+      })
       .catch((requestError) => { if (active) setError(requestError.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [auth.access_token]);
+
+  async function handleRestore(id) {
+    setRestoringId(id);
+    setRestoreError('');
+    try {
+      const simulation = await apiRequest(`/v1/simulations/${id}/restore`, {
+        method: 'POST',
+        token: auth.access_token,
+      });
+      onRestore(simulation);
+    } catch (requestError) {
+      setRestoreError(requestError.message);
+    } finally {
+      setRestoringId(null);
+    }
+  }
 
   return (
     <main className="my-page">
@@ -32,13 +52,20 @@ export default function MyPage({ auth, onBack }) {
         </div>
         {loading && <p className="my-page__message">목록을 불러오는 중...</p>}
         {error && <p className="my-page__message my-page__error" role="alert">{error}</p>}
+        {restoreError && <p className="my-page__message my-page__error" role="alert">{restoreError}</p>}
         {!loading && !error && simulations.length === 0 && <p className="my-page__message">저장된 시뮬레이션이 없습니다.</p>}
         {!loading && !error && simulations.length > 0 && (
           <ul className="my-page__list">
             {simulations.map((item) => (
               <li key={item.id}>
                 <div><strong>{item.name}</strong><span>{formatSavedAt(item)} · {item.status}</span></div>
-                <button type="button" disabled title="준비 중">불러오기 · 준비 중</button>
+                <button
+                  type="button"
+                  disabled={restoringId !== null}
+                  onClick={() => handleRestore(item.id)}
+                >
+                  {restoringId === item.id ? '불러오는 중...' : '불러오기'}
+                </button>
               </li>
             ))}
           </ul>
