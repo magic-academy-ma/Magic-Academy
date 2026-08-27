@@ -261,7 +261,7 @@ describe('Slice 0 UI', () => {
   it('opens MyPage from S1 and returns to S1', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
-      .mockImplementationOnce(() => response([simulation]))
+      .mockImplementationOnce(() => response({ data: [simulation], meta: { next_cursor: null, has_more: false } }))
     render(<App />)
     await login()
     await userEvent.click(screen.getByRole('button', { name: '마이페이지' }))
@@ -272,6 +272,28 @@ describe('Slice 0 UI', () => {
     expect(screen.getByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
   })
 
+  it('MyPage restore 성공 후 Persona 설정을 복구하고 Simulation 화면으로 이동한다', async () => {
+    const restoredSimulation = {
+      ...simulation,
+      status: 'RUNNING',
+      updated_at: '2026-08-27T12:00:00Z',
+      user_persona: { agent_id: agents[1].id, status: 'APPLIED', locked: true },
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ access_token: 'token', token_type: 'bearer', user }))
+      .mockImplementationOnce(() => response({ data: [simulation], meta: { next_cursor: null, has_more: false } }))
+      .mockImplementationOnce(() => response({ data: restoredSimulation }))
+      .mockImplementationOnce(() => response(agents))
+
+    render(<App />)
+    await login()
+    await userEvent.click(screen.getByRole('button', { name: '마이페이지' }))
+    await userEvent.click(await screen.findByRole('button', { name: '불러오기' }))
+
+    expect(await screen.findByRole('heading', { name: simulation.name })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '함께할 Persona를 선택하세요' })).not.toBeInTheDocument()
+  })
+
   it('opens SavePage from S5 and returns on cancel', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     await setupSimulationWithAgents(fetchMock)
@@ -279,6 +301,21 @@ describe('Slice 0 UI', () => {
     expect(screen.getByRole('heading', { name: '시뮬레이션 저장' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: '취소' }))
     expect(screen.getByRole('heading', { name: 'Magic Academy Simulation' })).toBeInTheDocument()
+  })
+
+  it('SavePage에 현재 Simulation과 인증 정보를 연결해 저장한다', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    fetchMock.mockImplementationOnce(() => response({ data: { id: simulation.id, status: 'PAUSED' } }))
+
+    await userEvent.click(screen.getByRole('button', { name: '저장' }))
+    await userEvent.click(screen.getByRole('button', { name: '저장' }))
+
+    expect(await screen.findByRole('heading', { name: simulation.name })).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url, options]) =>
+      url.endsWith(`/v1/simulations/${simulation.id}/save`) &&
+      options?.method === 'POST' &&
+      options?.headers?.Authorization === 'Bearer token'
+    )).toBe(true)
   })
   it('shows loading state while a tick is running', async () => {
     const fetchMock = await setupSimulationWithAgents()

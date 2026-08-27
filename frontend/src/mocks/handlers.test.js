@@ -19,7 +19,43 @@ describe('handleMockRequest', () => {
 
   it('returns mock simulations on GET /v1/simulations', async () => {
     const res = await handleMockRequest('/v1/simulations', { method: 'GET' })
-    expect(res).toEqual(mockSimulations)
+    expect(res).toEqual({
+      data: mockSimulations,
+      meta: { next_cursor: null, has_more: false },
+    })
+  })
+
+  it('returns the saved Simulation on POST /v1/simulations/:id/save', async () => {
+    const res = await handleMockRequest('/v1/simulations/sim-001/save', { method: 'POST' })
+
+    expect(res).toEqual({
+      data: expect.objectContaining({
+        id: 'sim-001',
+        status: 'PAUSED',
+        saved_at: expect.any(String),
+      }),
+    })
+  })
+
+  it('returns the restored Simulation and Persona on POST /v1/simulations/:id/restore', async () => {
+    const res = await handleMockRequest('/v1/simulations/sim-001/restore', {
+      method: 'POST',
+      body: '{}',
+    })
+
+    expect(res).toEqual({
+      data: expect.objectContaining({
+        id: 'sim-001',
+        name: expect.any(String),
+        status: 'RUNNING',
+        updated_at: expect.any(String),
+        user_persona: {
+          agent_id: expect.any(String),
+          status: 'APPLIED',
+          locked: true,
+        },
+      }),
+    })
   })
 
   it('returns mock agents on GET /v1/simulations/sim-001/agents', async () => {

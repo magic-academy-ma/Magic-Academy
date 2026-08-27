@@ -11,8 +11,11 @@ export default function EventLogPanel({ eventLog = [], agentNames = {}, onAgentS
   }
 
   return (
-    <div className="panel event-log-panel">
-      <h2>Event Log</h2>
+    <div className="panel event-log-panel sim-eventlog">
+      <div className="event-log-header">
+        <h2>Event Log</h2>
+        <span>실시간 기록</span>
+      </div>
       {eventLog.length === 0 ? (
         <p className="message">수신된 이벤트가 없습니다.</p>
       ) : (

@@ -22,7 +22,10 @@ export async function handleMockRequest(path, options = {}) {
 
   // 2. Simulation API
   if (path === "/v1/simulations" && method === "GET") {
-    return mockSimulations;
+    return {
+      data: mockSimulations,
+      meta: { next_cursor: null, has_more: false },
+    };
   }
   if (path === "/v1/simulations" && method === "POST") {
     const body = options.body ? JSON.parse(options.body) : {};
@@ -38,20 +41,29 @@ export async function handleMockRequest(path, options = {}) {
   if (/\/v1\/simulations\/[^/]+\/save$/.test(path) && method === "POST") {
     const id = path.split("/")[3];
     return {
-      id,
-      status: "PAUSED",
-      current_day: mockSimulations[0].current_day,
-      current_tick: mockSimulations[0].current_tick,
-      saved_at: new Date().toISOString(),
+      data: {
+        id,
+        status: "PAUSED",
+        current_day: mockSimulations[0].current_day,
+        current_tick: mockSimulations[0].current_tick,
+        saved_at: new Date().toISOString(),
+      },
     };
   }
   if (/\/v1\/simulations\/[^/]+\/restore$/.test(path) && method === "POST") {
     const id = path.split("/")[3];
     return {
-      id,
-      status: "RUNNING",
-      current_day: mockSimulations[0].current_day,
-      current_tick: mockSimulations[0].current_tick,
+      data: {
+        ...mockSimulations[0],
+        id,
+        status: "RUNNING",
+        updated_at: new Date().toISOString(),
+        user_persona: {
+          agent_id: mockAgents[1].id,
+          status: "APPLIED",
+          locked: true,
+        },
+      },
     };
   }
 
