@@ -10,6 +10,7 @@ import RelationshipFlow from "./components/RelationshipFlow.jsx";
 import RelationshipModal from "./components/RelationshipModal.jsx";
 import EventLogPanel from "./components/EventLogPanel.jsx";
 import InspectorPanel from "./components/InspectorPanel.jsx";
+import SchoolMap from "./components/SchoolMap.jsx";
 import UserPersonaSetup from "./components/UserPersonaSetup.jsx";
 import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
@@ -225,7 +226,7 @@ export default function App() {
   const [showInspectorModal, setShowInspectorModal] = useState(false);
   const [showRelationshipModal, setShowRelationshipModal] = useState(false);
 
-  const { connected, lastTick, eventLog, wsRelationshipDeltas } = useSimulationWS(
+  const { connected, lastTick, eventLog, wsRelationshipDeltas, agentActions } = useSimulationWS(
     simulation?.id,
     auth?.access_token,
     { onReconnect: () => refreshAgentsSilentlyRef.current?.() }
@@ -706,6 +707,15 @@ export default function App() {
                   simulationStatus={simulation.status}
                 />
               )}
+            </div>
+
+            <div className="panel school-map-panel">
+              <h2>학교 공간 맵</h2>
+              <SchoolMap
+                agents={agents}
+                agentActions={agentActions}
+                onAgentSelect={setSelectedAgent}
+              />
             </div>
 
             <div className="panel relationship-panel">

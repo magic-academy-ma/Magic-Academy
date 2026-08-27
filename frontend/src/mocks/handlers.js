@@ -1,6 +1,7 @@
 import { mockAgents } from "./fixtures/agents.js";
 import { mockSimulations } from "./fixtures/simulations.js";
 import { mockAuthUser } from "./fixtures/auth.js";
+import { mockWorldMap } from "./fixtures/worldMap.js";
 
 /**
  * 백엔드 미완성 시 프론트엔드 독립 실행을 지원하는 Mock API 핸들러
@@ -33,11 +34,16 @@ export async function handleMockRequest(path, options = {}) {
     };
   }
 
-  // 3. Agents API
+  // 3. World Map API
+  if (/\/v1\/simulations\/[^/]+\/world\/map/.test(path) && method === "GET") {
+    return mockWorldMap;
+  }
+
+  // 4. Agents API
   if (path.includes("/agents") && method === "GET") {
     return mockAgents;
   }
 
-  // 4. Fallback: 기본 성공 응답
+  // 5. Fallback: 기본 성공 응답
   return { status: "success", message: "Mock API response", path };
 }

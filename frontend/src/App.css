@@ -22,5 +22,6 @@ button:disabled { opacity: .6; cursor: wait; }.link-button { background: transpa
 .ws-indicator { font-size: 10px; }
 .ws-indicator.connected { color: #16a34a; }
 .ws-indicator.disconnected { color: #dc2626; }
+.school-map-panel { grid-column: 1 / -1; }
 .relationship-panel { grid-column: 1 / -1; }
 @media (max-width: 760px) { main { padding: 16px; }.workspace { grid-template-columns: 1fr; } header { padding: 0 16px; } }

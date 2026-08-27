@@ -11,6 +11,8 @@ export function useSimulationWS(simulationId, token, { onReconnect } = {}) {
   const [lastTick, setLastTick] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [wsRelationshipDeltas, setWsRelationshipDeltas] = useState([]);
+  // agent_id → { action_type, location } — AGENT_ACTION_UPDATED 수신 시 갱신
+  const [agentActions, setAgentActions] = useState(new Map());
   const wsRef = useRef(null);
   const onReconnectRef = useRef(onReconnect);
   onReconnectRef.current = onReconnect;
@@ -74,6 +76,17 @@ export function useSimulationWS(simulationId, token, { onReconnect } = {}) {
               ].slice(0, MAX_EVENT_LOG)
             );
             break;
+          case "AGENT_ACTION_UPDATED": {
+            const { agent_id, action_type, location } = data;
+            if (agent_id) {
+              setAgentActions((prev) => {
+                const next = new Map(prev);
+                next.set(agent_id, { action_type, location });
+                return next;
+              });
+            }
+            break;
+          }
           case "RELATIONSHIP_UPDATED": {
             const changes = data.changes ?? {};
             const deltas = Object.entries(changes).map(([metric, delta]) => ({
@@ -123,5 +136,5 @@ export function useSimulationWS(simulationId, token, { onReconnect } = {}) {
     };
   }, [simulationId, token]);
 
-  return { connected, lastTick, eventLog, wsRelationshipDeltas };
+  return { connected, lastTick, eventLog, wsRelationshipDeltas, agentActions };
 }
