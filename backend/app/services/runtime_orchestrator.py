@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
 
+from app.services.dialogue_results import DialogueSink
 from app.services.runtime_results import (
     RuntimeResultBatchSaveResult,
     RuntimeResultSink,
@@ -40,9 +41,12 @@ class RuntimeOrchestrator:
         runtime: AgentRuntimeExecutor,
         result_sink: RuntimeResultSink,
         context_assembler: AgentContextAssembler | None = None,
+        *,
+        dialogue_sink: DialogueSink | None = None,
     ) -> None:
         self._runtime = runtime
         self._result_sink = result_sink
+        self._dialogue_sink = dialogue_sink
         self._context_assembler = context_assembler or AgentContextAssembler()
         self._target_selector = RuntimeTargetSelector()
 
@@ -101,8 +105,11 @@ class RuntimeOrchestrator:
             max_workers=self.MAX_CONCURRENT_RUNTIMES
         ) as executor:
             proposed_results = tuple(executor.map(self._runtime.run, runtime_inputs))
-        results = resolve_talk_conflicts(proposed_results).runtime_results
+        resolution = resolve_talk_conflicts(proposed_results)
+        results = resolution.runtime_results
         save_result = self._result_sink.save_batch(results)
+        if self._dialogue_sink is not None:
+            self._dialogue_sink.save_batch(resolution)
         return RuntimeBatchExecutionResult(
             results=results,
             save_result=save_result,

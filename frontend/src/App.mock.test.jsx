@@ -29,7 +29,7 @@ describe('Mock 모드 통합 흐름', () => {
     const { default: App } = await import('./App.jsx')
 
     render(<App />)
-    await userEvent.type(screen.getByLabelText('아이디'), 'wizard_master')
+    await userEvent.type(screen.getByLabelText('이메일'), 'wizard@magic.ac')
     await userEvent.type(screen.getByLabelText('비밀번호'), 'mock-password')
     await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 

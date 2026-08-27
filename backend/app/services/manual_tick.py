@@ -31,6 +31,7 @@ from app.repositories.memory_repository import (
     MemoryRepository,
 )
 from app.repositories.simulation_snapshots import SimulationConfigRepository
+from app.services.database_dialogue_results import DatabaseDialogueSink
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.event_frequency_history import build_event_parameters
 from app.services.event_magic_phase import (
@@ -511,6 +512,11 @@ async def advance_manual_tick(
         apply_night_transition(db, simulation)
     previous_tick = simulation.current_tick
     current_tick = previous_tick + 1
+    # 새 활동 Tick 시작 — LLM 실행 쿼터를 초기화한다. runtime 인스턴스는 Tick마다
+    # 새로 생성되지 않고 재사용될 수 있으므로(예: slice5 campaign 루프) 여기서
+    # 명시적으로 reset하지 않으면 이전 Tick의 소진 상태가 이월돼 이번 Tick의
+    # 모든 LLM 호출이 거부된다.
+    runtime.reset_llm_quota()
     current_day, block = tick_position(current_tick)
     # 이 Tick에 적용할 Event 파라미터를 시작 시점에 고정한다 (§4.5).
     pinned_config = SimulationConfigRepository().latest(db, simulation.id)
@@ -595,6 +601,7 @@ async def advance_manual_tick(
             RuntimeOrchestrator(
                 runtime,
                 DatabaseRuntimeResultSink(db),
+                dialogue_sink=DatabaseDialogueSink(db),
             )
         )
     )
