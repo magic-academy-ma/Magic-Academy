@@ -759,7 +759,7 @@ export default function App() {
             </div>
 
             <div className="panel relationship-panel">
-              <h4>관계 변화</h4>
+              <h4>관계 그래프</h4>
             </div>
 
           </section>
