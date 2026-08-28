@@ -1,28 +1,392 @@
 .main-page {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+  background: var(--c-bg, #060d20);
+  color: var(--c-text, #f2f5fc);
+  font-family: var(--f-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+}
+
+/* ── Hero ── */
+.main-hero {
+  position: relative;
+  height: 440px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.main-hero__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 75% 15%, rgba(94, 96, 232, 0.14), transparent 55%),
+    linear-gradient(to bottom, rgba(6, 13, 32, 0.35), rgba(6, 13, 32, 0.55)),
+    url('/assets/concept/academy-night-background.png') center / cover;
+  transform: scale(1.03);
+}
+
+.main-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, var(--c-bg, #060d20) 100%);
+}
+
+/* ── Nav ── */
+.main-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  background: rgba(11, 14, 35, 0.6);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s-8, 32px);
+  gap: var(--s-4, 16px);
+  z-index: 10;
+}
+
+.main-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2, 8px);
+  font-family: var(--f-serif-en, 'Playfair Display', Georgia, serif);
+  font-size: var(--t-base, 0.9375rem);
+  font-weight: 600;
+  color: var(--c-text, #f2f5fc);
+  letter-spacing: 0.04em;
+}
+
+.main-nav__brand img {
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.main-nav__links {
+  display: flex;
+  gap: var(--s-5, 20px);
+  margin-left: var(--s-4, 16px);
+}
+
+.main-nav__link {
+  font-size: var(--t-sm, 0.8125rem);
+  color: var(--c-text-2, #a4b5d6);
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--tr-fast, 150ms ease);
+}
+
+.main-nav__link:hover,
+.main-nav__link--active {
+  color: var(--c-text, #f2f5fc);
+}
+
+.main-nav__user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3, 12px);
+}
+
+.main-nav__profile-btn {
+  font-size: var(--t-sm, 0.8125rem);
+  color: var(--c-text-2, #a4b5d6);
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--tr-fast, 150ms ease);
+}
+
+.main-nav__profile-btn:hover {
+  color: var(--c-text, #f2f5fc);
+}
+
+/* ── Hero Content ── */
+.main-hero__content {
+  position: absolute;
+  bottom: var(--s-8, 32px);
+  left: var(--s-12, 48px);
+}
+
+.main-hero__eyebrow {
+  font-family: var(--f-mono, 'JetBrains Mono', monospace);
+  font-size: var(--t-xs, 0.6875rem);
+  color: #d4b26f;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0 0 var(--s-2, 8px);
+}
+
+.main-hero__title {
+  font-family: var(--f-serif-ko, 'Noto Serif KR', Georgia, serif);
+  font-size: 3rem;
+  font-weight: 600;
+  color: var(--c-text, #f2f5fc);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.main-hero__sub {
+  font-size: var(--t-base, 0.9375rem);
+  color: var(--c-text-2, #a4b5d6);
+  margin: var(--s-2, 8px) 0 0;
+}
+
+.main-hero__cta {
+  margin-top: var(--s-6, 24px);
+  display: flex;
+  gap: var(--s-3, 12px);
+}
+
+.main-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s-4, 16px) var(--s-8, 32px);
+  background: linear-gradient(135deg, #6e70f2, #4a4dd0);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--r-lg, 14px);
+  font-size: var(--t-md, 1rem);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(94, 96, 232, 0.35);
+  transition: all var(--tr-fast, 150ms ease);
+}
+
+.main-cta-primary:hover {
+  background: linear-gradient(135deg, #8082f5, #5e60e8);
+  box-shadow: 0 6px 20px rgba(94, 96, 232, 0.5);
+  transform: translateY(-1px);
+}
+
+.main-cta-outline {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s-4, 16px) var(--s-8, 32px);
+  background: rgba(11, 24, 56, 0.6);
+  color: var(--c-text, #f2f5fc);
+  border: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  border-radius: var(--r-lg, 14px);
+  font-size: var(--t-md, 1rem);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all var(--tr-fast, 150ms ease);
+}
+
+.main-cta-outline:hover {
+  border-color: var(--c-border-hi, rgba(212, 178, 111, 0.30));
+  background: var(--c-surface-hi, #122450);
+  color: #fff;
+}
+
+/* ── Main Content ── */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s-6, 24px) var(--s-12, 48px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6, 24px);
+}
+
+/* ── Section Header ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--s-4, 16px);
+}
+
+.section-title {
+  font-size: var(--t-base, 0.9375rem);
+  font-weight: 500;
+  color: var(--c-text, #f2f5fc);
+}
+
+.section-more {
+  font-size: var(--t-sm, 0.8125rem);
+  color: var(--c-text-2, #a4b5d6);
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--tr-fast, 150ms ease);
+}
+
+.section-more:hover {
+  color: var(--c-primary, #5e60e8);
+}
+
+/* ── Sim Grid ── */
+.sim-grid {
   display: grid;
-  place-items: center;
-  padding: var(--s-6);
-  background: radial-gradient(circle at top, var(--c-surface-hi), var(--c-bg) 58%);
-  color: var(--c-text);
-  font-family: var(--f-ui);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4, 16px);
 }
 
-.main-page__card {
-  width: min(560px, 100%);
-  padding: var(--s-12);
-  border: 1px solid var(--c-border-hi);
-  border-radius: var(--r-xl);
-  background: var(--c-surface-card);
-  box-shadow: var(--sh-lg);
-  text-align: center;
+/* ── Sim Card ── */
+.sim-card {
+  background: rgba(14, 23, 48, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--c-border, rgba(70, 100, 180, 0.24));
+  border-radius: var(--r-lg, 14px);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--tr-fast, 150ms ease);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-.main-page__eyebrow { margin: 0 0 var(--s-4); color: var(--c-cream); font-family: var(--f-serif-en); letter-spacing: .15em; }
-.main-page h1 { margin: 0; font-family: var(--f-serif-ko); font-size: var(--t-2xl); }
-.main-page__description { margin: var(--s-4) 0 var(--s-8); color: var(--c-text-2); }
-.main-page__actions { display: grid; gap: var(--s-3); }
-.main-page__actions button { padding: var(--s-3) var(--s-6); border-radius: var(--r-md); }
-.main-page__primary { background: var(--c-primary); color: var(--c-text); }
-.main-page__primary:hover { background: var(--c-primary-hover); }
-.main-page__secondary { border: 1px solid var(--c-border-hi); background: transparent; color: var(--c-cream); }
+.sim-card:hover {
+  border-color: var(--c-border-hi, rgba(212, 178, 111, 0.30));
+  transform: translateY(-4px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 178, 111, 0.12);
+}
+
+.sim-card:focus-visible {
+  outline: 2px solid var(--c-primary-ring, rgba(94, 96, 232, 0.38));
+  outline-offset: 2px;
+}
+
+.sim-card__thumb {
+  height: 100px;
+  position: relative;
+  overflow: hidden;
+  background: rgba(16, 26, 56, 0.6);
+}
+
+.sim-card__thumb-img {
+  width: 100%;
+  height: 100%;
+  background-image: url('/assets/concept/academy-night-background.png');
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.7) saturate(0.85);
+  transition: transform var(--tr-normal, 260ms ease);
+}
+
+.sim-card:hover .sim-card__thumb-img {
+  transform: scale(1.08);
+}
+
+.sim-card__thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, rgba(14, 23, 48, 0.95) 100%);
+}
+
+.sim-card__thumb-status {
+  position: absolute;
+  top: var(--s-2, 8px);
+  left: var(--s-2, 8px);
+}
+
+.sim-card__thumb-preview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 13, 32, 0.35);
+  opacity: 0;
+  transition: opacity var(--tr-fast, 150ms ease);
+}
+
+.sim-card:hover .sim-card__thumb-preview {
+  opacity: 1;
+}
+
+.sim-card__thumb-preview span {
+  font-family: var(--f-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--r-sm, 6px);
+  padding: 4px 10px;
+  backdrop-filter: blur(4px);
+  background: rgba(6, 13, 32, 0.4);
+}
+
+/* Status chips */
+.sim-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--s-2, 8px);
+  border-radius: var(--r-sm, 6px);
+  font-family: var(--f-mono, monospace);
+  font-size: var(--t-xs, 0.6875rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sim-status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sim-status--running { background: rgba(109, 230, 140, 0.12); color: #5ce67a; }
+.sim-status--running::before { background: #5ce67a; }
+
+.sim-status--paused { background: rgba(52, 179, 199, 0.14); color: #34b3c7; }
+.sim-status--paused::before { background: #34b3c7; }
+
+.sim-status--ended { background: rgba(219, 76, 76, 0.16); color: var(--c-critical, #db4c4c); }
+.sim-status--ended::before { background: var(--c-critical, #db4c4c); }
+
+/* Card body */
+.sim-card__body {
+  padding: var(--s-4, 16px);
+}
+
+.sim-card__name {
+  font-weight: 500;
+  color: var(--c-text, #f2f5fc);
+  font-size: var(--t-base, 0.9375rem);
+}
+
+.sim-card__meta {
+  font-family: var(--f-mono, 'JetBrains Mono', monospace);
+  font-size: var(--t-xs, 0.6875rem);
+  color: var(--c-text-2, #a4b5d6);
+  margin-top: var(--s-1, 4px);
+  letter-spacing: 0.06em;
+}
+
+/* New Simulation Card */
+.sim-card--new {
+  border: 1.5px dashed var(--c-border, rgba(70, 100, 180, 0.24));
+  background: rgba(14, 23, 48, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--s-3, 12px);
+  min-height: 160px;
+  color: var(--c-text-2, #a4b5d6);
+  font-size: var(--t-sm, 0.8125rem);
+}
+
+.sim-card--new:hover {
+  border-color: var(--c-primary, #5e60e8);
+  color: #fff;
+  background: rgba(94, 96, 232, 0.12);
+  box-shadow: 0 0 20px rgba(94, 96, 232, 0.25);
+  transform: translateY(-4px);
+}

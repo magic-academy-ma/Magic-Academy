@@ -109,7 +109,7 @@ describe('Slice 0 UI', () => {
     createFetchMock()
     render(<App />)
     await login()
-    expect(await screen.findByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner A님의 마법학교' })).toBeInTheDocument()
     await completeOnboarding()
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
@@ -254,7 +254,7 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     await login()
 
-    expect(await screen.findByRole('heading', { name: 'Owner B님, 환영합니다.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner B님의 마법학교' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Magic Academy Simulation' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
   })
@@ -269,7 +269,7 @@ describe('Slice 0 UI', () => {
     expect(screen.getByText('Magic Academy Simulation')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '불러오기' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: '뒤로가기' }))
-    expect(screen.getByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Owner A님의 마법학교' })).toBeInTheDocument()
   })
 
   it('MyPage restore 성공 후 Persona 설정을 복구하고 Simulation 화면으로 이동한다', async () => {
