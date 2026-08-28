@@ -99,7 +99,7 @@ async function login() {
 
 async function completeOnboarding() {
   await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-  await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+  await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
   await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
   await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
 }
@@ -109,7 +109,7 @@ describe('Slice 0 UI', () => {
     createFetchMock()
     render(<App />)
     await login()
-    expect(await screen.findByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner A님의 마법학교' })).toBeInTheDocument()
     await completeOnboarding()
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
@@ -184,9 +184,9 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
-    expect(screen.getByRole('button', { name: '입학 중...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '시작 중...' })).toBeDisabled()
   })
 
   it('shows an inline error when enrollment fails', async () => {
@@ -197,10 +197,10 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.')
-    expect(screen.getByRole('button', { name: '입학하기' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '건너뛰기 →' })).toBeEnabled()
   })
 
   it('shows the basic 401 message', async () => {
@@ -249,12 +249,12 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     await login()
 
-    expect(await screen.findByRole('heading', { name: 'Owner B님, 환영합니다.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Owner B님의 마법학교' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Magic Academy Simulation' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(0)
   })
@@ -269,7 +269,7 @@ describe('Slice 0 UI', () => {
     expect(screen.getByText('Magic Academy Simulation')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '불러오기' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: '뒤로가기' }))
-    expect(screen.getByRole('heading', { name: 'Owner A님, 환영합니다.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Owner A님의 마법학교' })).toBeInTheDocument()
   })
 
   it('MyPage restore 성공 후 Persona 설정을 복구하고 Simulation 화면으로 이동한다', async () => {
