@@ -67,7 +67,7 @@ def test_factory_builds_anthropic_runtime_with_configured_metadata(monkeypatch):
     result = runtime.run(make_runtime_input())
 
     assert FakeAnthropicLLMClient.created_with == {
-        "api_key": "test-anthropic-key",
+        "api_key": "fake",
         "model": "configured-model",
         "max_tokens": 1234,
     }
