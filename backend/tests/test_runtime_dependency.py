@@ -42,7 +42,7 @@ def test_factory_wires_llm_quota_from_settings(monkeypatch):
         runtime_dependency, "AnthropicLLMClient", FakeAnthropicLLMClient
     )
     configured = settings(
-        anthropic_api_key="test-anthropic-key",
+        anthropic_api_key="fake",
         agent_tick_llm_quota=9,
     )
 
@@ -58,7 +58,7 @@ def test_factory_builds_anthropic_runtime_with_configured_metadata(monkeypatch):
         runtime_dependency, "AnthropicLLMClient", FakeAnthropicLLMClient
     )
     configured = settings(
-        anthropic_api_key="test-anthropic-key",
+        anthropic_api_key="fake",
         agent_runtime_model="configured-model",
         agent_runtime_max_tokens=1234,
     )

@@ -752,8 +752,14 @@ export default function App() {
               <SchoolMap
                 agents={agents}
                 agentActions={agentActions}
+                simulationId={simulation.id}
+                token={auth.access_token}
                 onAgentSelect={setSelectedAgent}
               />
+            </div>
+
+            <div className="panel relationship-panel">
+              <h4>관계 그래프</h4>
             </div>
 
           </section>

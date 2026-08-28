@@ -92,7 +92,7 @@ afterEach(() => {
 })
 
 async function login() {
-  await userEvent.type(screen.getByLabelText('아이디'), 'owner-a')
+  await userEvent.type(screen.getByLabelText('이메일'), 'owner-a@magic.ac')
   await userEvent.type(screen.getByLabelText('비밀번호'), 'Slice0-password!')
   await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 }
@@ -115,7 +115,7 @@ describe('Slice 0 UI', () => {
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(6)
     await userEvent.click(screen.getByRole('button', { name: /아델/ }))
     expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
-    expect(screen.getByText(/기숙사/)).toBeInTheDocument()
+    expect(screen.getByText(/기숙사/, { selector: 'dd' })).toBeInTheDocument()
   }, 10000)
 
   it('filters agents by name and agent type', async () => {
