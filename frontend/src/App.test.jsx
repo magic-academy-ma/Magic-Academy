@@ -99,7 +99,7 @@ async function login() {
 
 async function completeOnboarding() {
   await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-  await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+  await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
   await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
   await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
 }
@@ -184,9 +184,9 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
-    expect(screen.getByRole('button', { name: '입학 중...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '시작 중...' })).toBeDisabled()
   })
 
   it('shows an inline error when enrollment fails', async () => {
@@ -197,10 +197,10 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.')
-    expect(screen.getByRole('button', { name: '입학하기' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '건너뛰기 →' })).toBeEnabled()
   })
 
   it('shows the basic 401 message', async () => {
@@ -249,7 +249,7 @@ describe('Slice 0 UI', () => {
     render(<App />)
     await login()
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    await userEvent.click(await screen.findByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
 
     expect(await screen.findByRole('main')).toHaveClass('auth-shell')
     await login()
