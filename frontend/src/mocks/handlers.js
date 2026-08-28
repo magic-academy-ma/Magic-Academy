@@ -2,6 +2,7 @@ import { mockAgents } from "./fixtures/agents.js";
 import { mockSimulations } from "./fixtures/simulations.js";
 import { mockAuthUser } from "./fixtures/auth.js";
 import { mockWorldMap } from "./fixtures/worldMap.js";
+import { mockRelationships } from "./fixtures/relationships.js";
 
 /**
  * 백엔드 미완성 시 프론트엔드 독립 실행을 지원하는 Mock API 핸들러
@@ -72,7 +73,13 @@ export async function handleMockRequest(path, options = {}) {
     return mockWorldMap;
   }
 
-  // 4. Agents API
+  // 4. Relationship API (must come before broad agents check)
+  if (/\/v1\/agents\/[^/]+\/relationships$/.test(path) && method === "GET") {
+    const agentId = path.split("/")[3];
+    return mockRelationships[agentId] ?? [];
+  }
+
+  // 5. Agents API
   if (path.includes("/agents") && method === "GET") {
     return mockAgents;
   }
