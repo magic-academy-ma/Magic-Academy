@@ -34,8 +34,7 @@ describe('Mock 모드 통합 흐름', () => {
     await userEvent.click(screen.getByRole('button', { name: '로그인' }))
 
     await userEvent.click(await screen.findByRole('button', { name: '시뮬레이션 시작' }))
-    expect(await screen.findByRole('heading', { name: /마법이 살아 숨쉬는/ })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '입학하기' }))
+    await userEvent.click(await screen.findByRole('button', { name: '건너뛰기 →' }))
     await userEvent.click(await screen.findByRole('button', { name: '이 Persona로 시작하기 →' }))
     await userEvent.click(await screen.findByRole('button', { name: /시뮬레이션 시작/ }))
 
