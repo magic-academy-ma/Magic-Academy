@@ -3,9 +3,10 @@ from types import SimpleNamespace
 import anthropic
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from app.simulation.agent_runtime import AgentRuntime, IntentCandidate, LLMInvocationError
-from app.simulation.anthropic_llm_client import AnthropicLLMClient
+from app.simulation.anthropic_llm_client import AnthropicLLMClient, SYSTEM_PROMPT
 from tests.test_agent_runtime_graph import make_runtime_input, valid_response
 
 
@@ -46,6 +47,35 @@ def test_generate_uses_configured_structured_output_request():
     assert request["output_format"] is IntentCandidate
     assert runtime_input.run_id in request["messages"][0]["content"]
     assert str(runtime_input.agent.agent_id) in request["messages"][0]["content"]
+
+
+def test_system_prompt_defines_concise_action_target_contract():
+    assert "WAIT: all target and related Event fields must be null" in SYSTEM_PROMPT
+    assert "ATTEND_CLASS or TEACH_CLASS" in SYSTEM_PROMPT
+    assert "Keep every explanation concise" in SYSTEM_PROMPT
+
+
+def test_structured_output_validation_error_reports_safe_field_path():
+    runtime_input = make_runtime_input()
+    invalid = valid_response(runtime_input)
+    invalid["decision_explanation"]["alternatives"][0]["selected"] = False
+
+    with pytest.raises(ValidationError) as validation:
+        IntentCandidate.model_validate(invalid)
+
+    client = AnthropicLLMClient(
+        client=FakeAnthropic(validation.value),
+        model="configured-model",
+        max_tokens=4096,
+    )
+
+    with pytest.raises(LLMInvocationError) as exc_info:
+        client.generate(runtime_input)
+
+    message = str(exc_info.value)
+    assert "ValidationError" in message
+    assert "value_error" in message
+    assert "motivation_summary" not in message
 
 
 def test_anthropic_api_error_is_sanitized_as_retryable_runtime_error():
