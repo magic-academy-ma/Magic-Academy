@@ -36,7 +36,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .sim-workspace { position: absolute; inset: 0; display: block; }
 
 .sim-left, .sim-right { position: absolute; z-index: 20; top: 4px; bottom: 148px; overflow: hidden; backdrop-filter: blur(16px); }
-.sim-left { left: 12px; width: 230px; padding: 0; }
+.sim-left { left: 12px; z-index: 25; width: 230px; padding: 0; background: rgba(10,20,50,.98); }
 .sim-right { right: 12px; width: 290px; padding: 0; overflow-y: auto; }
 .sim-left h1 { margin: 0; padding: 14px 16px 2px; overflow: hidden; color: var(--c-text); font-family: var(--f-serif-ko); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .agent-count { margin: 0; padding: 0 16px 10px; color: var(--c-text-3); font: 10px var(--f-mono); letter-spacing: .1em; }
@@ -59,7 +59,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .agent-list-copy small::before { content: attr(data-location) " · "; }
 .persona-tag { margin-left: auto; color: var(--c-cream); font: 9px var(--f-mono); }
 
-.map-view-panel { position: absolute; z-index: 15; left: 254px; right: 314px; top: 4px; bottom: 148px; padding: 0; overflow: hidden; }
+.map-view-panel { position: absolute; z-index: 15; left: 254px; right: 314px; top: 4px; bottom: 148px; padding: 0; overflow: hidden; isolation: isolate; }
 .sim-right .inspector-panel { border: 0; box-shadow: none; background: transparent; }
 .sim-right .relationship-modal-btn { margin: 0 16px 16px; width: calc(100% - 32px); color: var(--c-cream); background: var(--c-cream-muted); border-color: rgba(212,178,111,.35); }
 .runtime-persona-setup { position: fixed; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
