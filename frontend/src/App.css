@@ -23,6 +23,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .tick-info { font-family: var(--f-mono); font-size: 12px; color: var(--c-text-2); }
 .header-controls, .header-right { display: flex; align-items: center; gap: 8px; }
 .header-controls { margin-left: auto; }
+.header-controls, .header-right, .sim-brand, .tick-info { flex-shrink: 0; }
 .topbar-action, .header-controls button { min-width: auto; padding: 6px 10px; border-color: var(--c-border); color: var(--c-text-2); font-size: 12px; background: rgba(16,26,56,.7); }
 .topbar-action:hover, .header-controls button:hover { color: var(--c-text); border-color: var(--c-border-hi); }
 .header-save { color: var(--c-bg); background: var(--c-cream); border-color: var(--c-cream); }
@@ -75,6 +76,16 @@ button:disabled { opacity: .6; cursor: wait; }
 .inspector-modal dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .inspector-modal dd { text-align: right; }
 @media (max-width: 1100px) { .sim-screen { min-width: 0; } .sim-left { width: 210px; } .sim-right { width: 260px; } .map-view-panel { left: 234px; right: 284px; } .profile { display: none; } }
+@media (max-width: 1280px) {
+  .sim-topbar { padding: 0 12px; gap: 7px; }
+  .sim-brand, .profile { display: none; }
+  .header-controls, .header-right { gap: 4px; }
+  .topbar-action, .header-controls button { padding: 6px 7px; }
+}
+@media (max-width: 1040px) {
+  .tick-info { display: none; }
+  .sim-topbar { overflow-x: auto; }
+}
 
 /* === Auth Panel (Login Card) === */
 .auth-panel { position: relative; z-index: 1; width: min(440px, calc(100vw - 32px)); background: rgba(12, 24, 58, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(100, 130, 200, 0.3); border-radius: 14px; padding: 40px; display: flex; flex-direction: column; gap: 20px; }

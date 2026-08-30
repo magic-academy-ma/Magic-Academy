@@ -22,7 +22,7 @@ function rosterSummary(payload) {
   return { studentCount, professorCount, organizationCount: payload?.organizations?.length ?? 0 };
 }
 
-export default function SharedBrowser({ token, onImported, onClose }) {
+export default function SharedBrowser({ token, recentShare, onImported, onClose }) {
   const [query, setQuery] = useState("");
   const [shares, setShares] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -43,7 +43,18 @@ export default function SharedBrowser({ token, onImported, onClose }) {
     setListError(null);
     try {
       const results = await listShares(token, { q });
-      setShares(results ?? []);
+      const publicShares = results ?? [];
+      const normalizedQuery = (q ?? "").trim().toLowerCase();
+      const recentMatches = recentShare && (
+        !normalizedQuery ||
+        recentShare.title?.toLowerCase().includes(normalizedQuery) ||
+        recentShare.description?.toLowerCase().includes(normalizedQuery)
+      );
+      setShares(
+        recentMatches && !publicShares.some((item) => item.id === recentShare.id)
+          ? [recentShare, ...publicShares]
+          : publicShares
+      );
     } catch (requestError) {
       setListError(requestError);
     } finally {

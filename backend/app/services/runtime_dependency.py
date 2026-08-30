@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+from fastapi import HTTPException, status
+
 from app.core.config import Settings, get_settings
 from app.repositories.memory_repository import MemoryRepository
 from app.simulation.agent_runtime import AgentRuntime
@@ -32,7 +34,13 @@ def create_agent_runtime(settings: Settings) -> AgentRuntime:
 
 
 def get_agent_runtime() -> AgentRuntime:
-    return create_agent_runtime(get_settings())
+    try:
+        return create_agent_runtime(get_settings())
+    except RuntimeConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent Runtime API 키가 설정되지 않았습니다. 관리자에게 문의해 주세요.",
+        ) from exc
 
 
 def get_policy_evaluator() -> Callable[

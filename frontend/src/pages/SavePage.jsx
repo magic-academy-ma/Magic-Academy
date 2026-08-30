@@ -1,27 +1,6 @@
-import { useState } from 'react';
-import { apiRequest } from '../api/client.js';
 import './SavePage.css';
 
-export default function SavePage({ simulationName, simulationId, token, onComplete, onCancel }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSave() {
-    setLoading(true);
-    setError('');
-    try {
-      await apiRequest(`/v1/simulations/${simulationId}/save`, {
-        method: 'POST',
-        token,
-      });
-      onComplete();
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+export default function SavePage({ simulationName, onComplete, onCancel }) {
   return (
     <div className="save-bg-wrap">
       <div className="save-bg" aria-hidden="true" />
@@ -70,8 +49,10 @@ export default function SavePage({ simulationName, simulationId, token, onComple
               </div>
             </div>
 
-            {error && <p className="message error" role="alert">{error}</p>}
-            <p className="save-modal__hint">저장 후에도 시뮬레이션을 계속 진행할 수 있습니다.</p>
+            <p className="message" role="status">
+              Simulation과 Tick 결과는 실행할 때마다 자동으로 저장됩니다.
+            </p>
+            <p className="save-modal__hint">별도의 수동 저장 없이 안전하게 계속 진행할 수 있습니다.</p>
           </div>
 
           <div className="save-modal__footer">
@@ -79,17 +60,15 @@ export default function SavePage({ simulationName, simulationId, token, onComple
               type="button"
               className="btn btn-ghost"
               onClick={onCancel}
-              disabled={loading}
             >
-              취소
+              돌아가기
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={handleSave}
-              disabled={loading}
+              onClick={onComplete}
             >
-              {loading ? '저장 중...' : '저장'}
+              확인
             </button>
           </div>
         </div>

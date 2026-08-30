@@ -54,4 +54,17 @@ describe("ReplayPanel", () => {
     await waitFor(() => expect(api.getReplayTick).toHaveBeenCalledWith("tok", "sim_01", 1));
     expect(await screen.findByText(/수업/)).toBeInTheDocument();
   });
+
+  it("Tick 0은 RuntimeResult를 조회하지 않고 초기 상태로 안내한다", async () => {
+    api.getReplayList.mockResolvedValue({
+      items: [{ tick_number: 0, simulation_day: 1 }],
+      meta: { has_more: false },
+    });
+
+    render(<ReplayPanel token="tok" simulationId="sim_01" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Tick 0/ }));
+
+    expect(screen.getByText(/실행 전 초기 상태/)).toBeInTheDocument();
+    expect(api.getReplayTick).not.toHaveBeenCalled();
+  });
 });

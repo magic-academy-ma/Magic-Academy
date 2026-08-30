@@ -11,6 +11,7 @@ const ERROR_MESSAGES = {
   409: "이미 적용되었거나 Simulation이 시작되어 변경할 수 없습니다.",
   422: "시작 조건을 만족하지 않습니다.",
   500: "서버 오류가 발생했습니다.",
+  503: "서비스가 아직 준비되지 않았습니다.",
 };
 
 export async function apiRequest(path, { token, ...options } = {}) {

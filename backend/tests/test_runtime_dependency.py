@@ -1,4 +1,5 @@
 import pytest
+from fastapi import HTTPException
 
 from app.core.config import Settings
 from app.services import runtime_dependency
@@ -79,3 +80,17 @@ def test_factory_builds_anthropic_runtime_with_configured_metadata(monkeypatch):
 def test_factory_rejects_missing_or_blank_api_key(api_key):
     with pytest.raises(RuntimeConfigurationError, match="ANTHROPIC_API_KEY"):
         create_agent_runtime(settings(anthropic_api_key=api_key))
+
+
+def test_dependency_returns_service_unavailable_when_runtime_is_not_configured(monkeypatch):
+    monkeypatch.setattr(
+        runtime_dependency,
+        "get_settings",
+        lambda: settings(anthropic_api_key=None),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        runtime_dependency.get_agent_runtime()
+
+    assert exc_info.value.status_code == 503
+    assert "API 키" in exc_info.value.detail

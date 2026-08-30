@@ -50,6 +50,16 @@ describe("SharedBrowser", () => {
     expect(await screen.findByText("공개된 공유 설정이 없습니다.")).toBeInTheDocument();
   });
 
+  it("방금 만든 비공개 공유는 작성자의 둘러보기 목록에 표시한다", async () => {
+    api.listShares.mockResolvedValue([]);
+    const privateShare = { ...sampleShare, id: "share_private", visibility: "private" };
+
+    render(<SharedBrowser token="tok" recentShare={privateShare} />);
+
+    expect(await screen.findByText("마법 대학 표준 설정")).toBeInTheDocument();
+    expect(screen.getByText("private")).toBeInTheDocument();
+  });
+
   it("목록 항목을 선택하면 상세와 roster 요약을 보여준다", async () => {
     api.listShares.mockResolvedValue([sampleShare]);
     api.getShareDetail.mockResolvedValue(sampleDetail);

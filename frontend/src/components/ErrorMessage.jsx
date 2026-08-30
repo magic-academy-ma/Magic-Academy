@@ -13,6 +13,7 @@ const STATUS_LABELS = {
   409: "처리할 수 없습니다",
   422: "규칙 위반",
   500: "서버 오류",
+  503: "서비스 준비 안 됨",
 };
 
 export default function ErrorMessage({ error }) {

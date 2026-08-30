@@ -47,6 +47,25 @@ describe("SharingPanel", () => {
     });
   });
 
+  it("공유 생성 결과를 둘러보기 연결 콜백에 전달한다", async () => {
+    const createdShare = { id: "share_03", visibility: "private", title: "내 설정" };
+    const onShareCreated = vi.fn();
+    api.createShare.mockResolvedValue(createdShare);
+
+    render(
+      <SharingPanel
+        token="tok"
+        simulationId="sim_01"
+        simulationStatus="ready"
+        onShareCreated={onShareCreated}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "공유하기" }));
+
+    expect(await screen.findByText(/공개 검색에는 노출되지 않지만/)).toBeInTheDocument();
+    expect(onShareCreated).toHaveBeenCalledWith(createdShare);
+  });
+
   it("실행 중 Simulation 공유 시 409 오류를 표시한다", async () => {
     const error = new Error("이미 적용되었거나 Simulation이 시작되어 변경할 수 없습니다.");
     error.status = 409;

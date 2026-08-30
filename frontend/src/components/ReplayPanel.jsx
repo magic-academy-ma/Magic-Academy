@@ -43,9 +43,13 @@ export default function ReplayPanel({ token, simulationId }) {
 
   async function handleSelectTick(tickNumber) {
     setSelectedTick(tickNumber);
-    setDetailLoading(true);
     setDetailError(null);
     setDetail(null);
+    if (tickNumber === 0) {
+      setDetailLoading(false);
+      return;
+    }
+    setDetailLoading(true);
     try {
       const data = await getReplayTick(token, simulationId, tickNumber);
       setDetail(data);
@@ -84,6 +88,11 @@ export default function ReplayPanel({ token, simulationId }) {
 
       {selectedTick !== null && (
         <div className="replay-detail" aria-live="polite">
+          {selectedTick === 0 && (
+            <p className="message">
+              Tick 0은 실행 전 초기 상태입니다. 실행 결과 대신 Snapshot에서 조회해 주세요.
+            </p>
+          )}
           {detailLoading && <p className="message">Tick {selectedTick} 데이터를 불러오는 중...</p>}
           {detailError && <ErrorMessage error={detailError} />}
 

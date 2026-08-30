@@ -299,23 +299,18 @@ describe('Slice 0 UI', () => {
     await setupSimulationWithAgents(fetchMock)
     await userEvent.click(screen.getByRole('button', { name: '저장' }))
     expect(screen.getByRole('heading', { name: '시뮬레이션 저장' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '취소' }))
+    await userEvent.click(screen.getByRole('button', { name: '돌아가기' }))
     expect(screen.getByRole('heading', { name: 'Magic Academy Simulation' })).toBeInTheDocument()
   })
 
-  it('SavePage에 현재 Simulation과 인증 정보를 연결해 저장한다', async () => {
+  it('SavePage에서 자동 저장을 안내하고 API 호출 없이 돌아온다', async () => {
     const fetchMock = await setupSimulationWithAgents()
-    fetchMock.mockImplementationOnce(() => response({ data: { id: simulation.id, status: 'PAUSED' } }))
-
     await userEvent.click(screen.getByRole('button', { name: '저장' }))
-    await userEvent.click(screen.getByRole('button', { name: '저장' }))
+    expect(screen.getByRole('status')).toHaveTextContent('자동으로 저장됩니다')
+    await userEvent.click(screen.getByRole('button', { name: '확인' }))
 
     expect(await screen.findByRole('heading', { name: simulation.name })).toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url, options]) =>
-      url.endsWith(`/v1/simulations/${simulation.id}/save`) &&
-      options?.method === 'POST' &&
-      options?.headers?.Authorization === 'Bearer token'
-    )).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith(`/v1/simulations/${simulation.id}/save`))).toBe(false)
   })
   it('shows loading state while a tick is running', async () => {
     const fetchMock = await setupSimulationWithAgents()
@@ -445,6 +440,18 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('이미 진행 중인 Tick이 있습니다')
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
+
+  it('Runtime API 키가 없으면 설정 안내를 표시한다', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    fetchMock.mockImplementationOnce(() => response({
+      detail: 'Agent Runtime API 키가 설정되지 않았습니다. 관리자에게 문의해 주세요.',
+    }, 503))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Agent Runtime API 키가 설정되지 않았습니다')
+  })
+
   it('does not treat a 409 with a different error code as TICK_ALREADY_RUNNING', async () => {
     const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response({

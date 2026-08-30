@@ -9,7 +9,7 @@ import { useState } from "react";
 import { cancelShare, createShare } from "../api/sharing.js";
 import ErrorMessage from "./ErrorMessage";
 
-export default function SharingPanel({ token, simulationId, simulationStatus }) {
+export default function SharingPanel({ token, simulationId, simulationStatus, onShareCreated, onShareCancelled }) {
   const isReady = (simulationStatus || "").toLowerCase() === "ready";
 
   const [visibility, setVisibility] = useState("private");
@@ -30,6 +30,7 @@ export default function SharingPanel({ token, simulationId, simulationStatus }) 
     try {
       const result = await createShare(token, simulationId, { visibility, title, description });
       setShare(result);
+      onShareCreated?.(result);
       setCancelError(null);
     } catch (requestError) {
       setError(requestError);
@@ -43,6 +44,7 @@ export default function SharingPanel({ token, simulationId, simulationStatus }) 
     setCancelError(null);
     try {
       await cancelShare(token, share.id);
+      onShareCancelled?.(share.id);
       setShare(null);
     } catch (requestError) {
       setCancelError(requestError);
@@ -95,6 +97,11 @@ export default function SharingPanel({ token, simulationId, simulationStatus }) 
           <p className="message">
             설정이 공유되었습니다. ({share.visibility})
           </p>
+          {share.visibility !== "public" && (
+            <p className="message">
+              이 공유는 공개 검색에는 노출되지 않지만, 현재 브라우저의 공유 설정 둘러보기에서 확인할 수 있습니다.
+            </p>
+          )}
           <dl>
             <dt>공유 ID</dt>
             <dd>{share.id}</dd>
