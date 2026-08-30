@@ -361,6 +361,41 @@ describe('Slice 0 UI', () => {
     expect(screen.queryByRole('heading', { name: '실행 결과' })).not.toBeInTheDocument()
   })
 
+  it('refreshes the list and Inspector location from the committed Tick state', async () => {
+    const movedAgents = agents.map((agent) =>
+      agent.fixture_key === 'student-01'
+        ? {
+            ...agent,
+            state: { ...agent.state, current_action: 'ATTEND_CLASS' },
+            location: {
+              id: '01900000-0000-7000-8000-000000000099',
+              code: 'classroom',
+              name: '교실',
+            },
+          }
+        : agent
+    )
+    const fetchMock = createFetchMock({
+      agents: [() => response(agents), () => response(movedAgents)],
+    })
+    render(<App />)
+    await login()
+    await completeOnboarding()
+    await screen.findByText('Agent 6명')
+    fetchMock.mockImplementationOnce(() => response(tickResult()))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    await screen.findAllByText('아델')
+    const adelRow = document.querySelector(
+      `[data-agent-id="${agents[1].id}"]`
+    )
+    expect(adelRow.querySelector('small')).toHaveAttribute(
+      'data-location',
+      '🏫 교실'
+    )
+  })
+
   it('shows an empty agent-results message', async () => {
     const fetchMock = await setupSimulationWithAgents()
     fetchMock.mockImplementationOnce(() => response(tickResult({ agent_results: [] })))

@@ -418,8 +418,37 @@ class MockLLMClient:
         if self._response is not None:
             return deepcopy(self._response)
         class_event = next(
-            event for event in runtime_input.events if event.event_type == EventType.CLASS
+            (event for event in runtime_input.events if event.event_type == EventType.CLASS),
+            None,
         )
+        if class_event is None:
+            return {
+                "action_type": "REST",
+                "target_agent_id": None,
+                "target_location_id": str(runtime_input.agent.current_location_id),
+                "related_event_id": None,
+                "utterance": None,
+                "motivation_summary": "의무 일정이 없는 자유 시간에 현재 위치에서 쉰다.",
+                "reaction": {
+                    "valence": "NEUTRAL",
+                    "relationship_signals": [],
+                    "state_signals": [
+                        {"signal_type": "FATIGUE_DOWN", "intensity": "LOW"}
+                    ],
+                },
+                "decision_explanation": {
+                    "alternatives": [
+                        {
+                            "action_type": "REST",
+                            "description": "자유 시간에 휴식한다.",
+                            "relative_priority": "HIGH",
+                            "selected": True,
+                        }
+                    ],
+                    "influencing_factors": [],
+                },
+                "memory_candidates": [],
+            }
         is_professor = runtime_input.agent.agent_type == "professor"
         action_type = "TEACH_CLASS" if is_professor else "ATTEND_CLASS"
         response = {

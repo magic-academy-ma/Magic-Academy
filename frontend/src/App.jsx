@@ -453,6 +453,7 @@ export default function App() {
       );
 
       setTickResult(result.data ?? result);
+      await refreshAgentsSilently(simulation.id);
     } catch (requestError) {
       const classified = classifyTickError(requestError);
 

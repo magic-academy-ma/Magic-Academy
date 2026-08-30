@@ -852,7 +852,8 @@ def test_manual_tick_reinjects_tick_n_memory_into_tick_n_plus_one_runtime(client
     assert (first.current_tick, second.current_tick) == (1, 2)
     assert all(second.retrieval_traces.values())
     second_tick_inputs = [item for item in runtime_inputs if item.tick_number == 2]
-    assert len(second_tick_inputs) == len(second.runtime_results) == 6
+    # AFTERNOON 자유 시간에는 활성 Student 5명만 Runtime을 실행한다.
+    assert len(second_tick_inputs) == len(second.runtime_results) == 5
     assert all(item.memories for item in second_tick_inputs)
     assert {
         memory["created_tick"]

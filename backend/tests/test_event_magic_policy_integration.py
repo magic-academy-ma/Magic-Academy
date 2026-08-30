@@ -567,6 +567,58 @@ def test_advance_manual_tick_wires_db_class_event_into_event_master(db):
     assert any(event["event_type"] == "CLASS" for event in saved["events"])
     assert db.get(Simulation, simulation_id).current_tick == 1
 
+    # Runtime이 실제 수행한 수업 위치/행동은 API·지도와 같은 DB 상태가 된다.
+    states_by_agent_id = {
+        state.agent_id: state
+        for state in db.scalars(
+            select(AgentState).where(AgentState.simulation_id == simulation_id)
+        )
+    }
+    for runtime_result in result.runtime_results:
+        if runtime_result.status == "PROPOSED":
+            state = states_by_agent_id[runtime_result.agent_id]
+            assert state.location_id == runtime_result.intent.target_location_id
+            assert state.current_action == runtime_result.intent.action_type.value
+
+
+def test_afternoon_tick_is_free_time_instead_of_repeating_class(db):
+    import asyncio
+
+    from app.services.manual_tick import advance_manual_tick
+    from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
+
+    class RecordingLLM(MockLLMClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.inputs = []
+
+        def generate(self, runtime_input):
+            self.inputs.append(runtime_input)
+            return super().generate(runtime_input)
+
+    simulation_id = _setup_simulation(db)
+    simulation = db.get(Simulation, simulation_id)
+    simulation.current_tick = 1
+    db.flush()
+    llm = RecordingLLM()
+
+    result = asyncio.run(
+        advance_manual_tick(
+            db,
+            simulation,
+            runtime=AgentRuntime(llm, model="test-free-time"),
+        )
+    )
+
+    assert len(llm.inputs) == 5  # 자유 시간에는 Student만 실행한다.
+    assert all(runtime_input.block == "AFTERNOON" for runtime_input in llm.inputs)
+    assert all(not runtime_input.schedule.is_mandatory for runtime_input in llm.inputs)
+    assert all(runtime_input.events == [] for runtime_input in llm.inputs)
+    assert all(item.intent.action_type == "REST" for item in result.runtime_results)
+    assert not any(
+        event.event_type == "CLASS" for event in result.event_and_magic_result.events
+    )
+
 
 def test_advance_manual_tick_rolls_back_all_tick_writes_after_event_batch_failure(
     db, monkeypatch
