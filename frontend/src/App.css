@@ -23,6 +23,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .tick-info { font-family: var(--f-mono); font-size: 12px; color: var(--c-text-2); }
 .header-controls, .header-right { display: flex; align-items: center; gap: 8px; }
 .header-controls { margin-left: auto; }
+.header-controls, .header-right, .sim-brand-mark, .sim-brand, .tick-info { flex-shrink: 0; }
 .topbar-action, .header-controls button { min-width: auto; padding: 6px 10px; border-color: var(--c-border); color: var(--c-text-2); font-size: 12px; background: rgba(16,26,56,.7); }
 .topbar-action:hover, .header-controls button:hover { color: var(--c-text); border-color: var(--c-border-hi); }
 .header-save { color: var(--c-bg); background: var(--c-cream); border-color: var(--c-cream); }
@@ -35,7 +36,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .sim-workspace { position: absolute; inset: 0; display: block; }
 
 .sim-left, .sim-right { position: absolute; z-index: 20; top: 4px; bottom: 148px; overflow: hidden; backdrop-filter: blur(16px); }
-.sim-left { left: 12px; width: 230px; padding: 0; }
+.sim-left { left: 12px; z-index: 25; width: 230px; padding: 0; background: rgba(10,20,50,.98); }
 .sim-right { right: 12px; width: 290px; padding: 0; overflow-y: auto; }
 .sim-left h1 { margin: 0; padding: 14px 16px 2px; overflow: hidden; color: var(--c-text); font-family: var(--f-serif-ko); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .agent-count { margin: 0; padding: 0 16px 10px; color: var(--c-text-3); font: 10px var(--f-mono); letter-spacing: .1em; }
@@ -58,7 +59,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .agent-list-copy small::before { content: attr(data-location) " · "; }
 .persona-tag { margin-left: auto; color: var(--c-cream); font: 9px var(--f-mono); }
 
-.map-view-panel { position: absolute; z-index: 15; left: 254px; right: 314px; top: 4px; bottom: 148px; padding: 0; overflow: hidden; }
+.map-view-panel { position: absolute; z-index: 15; left: 254px; right: 314px; top: 4px; bottom: 148px; padding: 0; overflow: hidden; isolation: isolate; }
 .sim-right .inspector-panel { border: 0; box-shadow: none; background: transparent; }
 .sim-right .relationship-modal-btn { margin: 0 16px 16px; width: calc(100% - 32px); color: var(--c-cream); background: var(--c-cream-muted); border-color: rgba(212,178,111,.35); }
 .runtime-persona-setup { position: fixed; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
@@ -75,6 +76,16 @@ button:disabled { opacity: .6; cursor: wait; }
 .inspector-modal dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .inspector-modal dd { text-align: right; }
 @media (max-width: 1100px) { .sim-screen { min-width: 0; } .sim-left { width: 210px; } .sim-right { width: 260px; } .map-view-panel { left: 234px; right: 284px; } .profile { display: none; } }
+@media (max-width: 1280px) {
+  .sim-topbar { padding: 0 12px; gap: 7px; }
+  .sim-brand, .profile { display: none; }
+  .header-controls, .header-right { gap: 4px; }
+  .topbar-action, .header-controls button { padding: 6px 7px; }
+}
+@media (max-width: 1040px) {
+  .tick-info { display: none; }
+  .sim-topbar { overflow-x: auto; }
+}
 
 /* === Auth Panel (Login Card) === */
 .auth-panel { position: relative; z-index: 1; width: min(440px, calc(100vw - 32px)); background: rgba(12, 24, 58, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(100, 130, 200, 0.3); border-radius: 14px; padding: 40px; display: flex; flex-direction: column; gap: 20px; }

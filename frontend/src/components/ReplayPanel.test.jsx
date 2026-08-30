@@ -54,4 +54,46 @@ describe("ReplayPanel", () => {
     await waitFor(() => expect(api.getReplayTick).toHaveBeenCalledWith("tok", "sim_01", 1));
     expect(await screen.findByText(/수업/)).toBeInTheDocument();
   });
+
+  it("Tick 0은 RuntimeResult를 조회하지 않고 초기 상태로 안내한다", async () => {
+    api.getReplayList.mockResolvedValue({
+      items: [{ tick_number: 0, simulation_day: 1 }],
+      meta: { has_more: false },
+    });
+
+    render(<ReplayPanel token="tok" simulationId="sim_01" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Tick 0/ }));
+
+    expect(screen.getByText(/실행 전 초기 상태/)).toBeInTheDocument();
+    expect(api.getReplayTick).not.toHaveBeenCalled();
+  });
+
+  it("Tick 0 선택 후 늦게 도착한 이전 Tick 상세를 표시하지 않는다", async () => {
+    let resolveTickOne;
+    api.getReplayList.mockResolvedValue({
+      items: [
+        { tick_number: 0, simulation_day: 1 },
+        { tick_number: 1, simulation_day: 1 },
+      ],
+      meta: { has_more: false },
+    });
+    api.getReplayTick.mockImplementation(() => new Promise((resolve) => {
+      resolveTickOne = resolve;
+    }));
+
+    render(<ReplayPanel token="tok" simulationId="sim_01" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Tick 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Tick 0/ }));
+
+    resolveTickOne({
+      tick_number: 1,
+      simulation_day: 1,
+      events: [{ id: "late", title: "늦은 응답", event_type: "CLASS" }],
+      agent_snapshots: [],
+      relationship_deltas: [],
+    });
+
+    expect(await screen.findByText(/실행 전 초기 상태/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("늦은 응답 (CLASS)")).not.toBeInTheDocument());
+  });
 });

@@ -227,6 +227,13 @@ function classifyTickError(requestError) {
     };
   }
 
+  if (status === 503) {
+    return {
+      type: "RUNTIME_NOT_CONFIGURED",
+      message: requestError.message,
+    };
+  }
+
   if (status >= 500) {
     return {
       type: "RUNTIME",
@@ -263,6 +270,7 @@ export default function App() {
   const [managementView, setManagementView] = useState(null); // null | "settings" | "replay" | "snapshot" | "sharing"
   const [isImported, setIsImported] = useState(false); // 이 Simulation이 공유 설정을 가져와 생성됐는지
   const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
+  const [recentShare, setRecentShare] = useState(null);
   const refreshAgentsSilentlyRef = useRef(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -294,6 +302,7 @@ export default function App() {
     setManagementView(null);
     setIsImported(false);
     setSharedBrowserOpen(false);
+    setRecentShare(null);
   }
 
   function handleEnroll(newSimulation) {
@@ -415,8 +424,6 @@ export default function App() {
   if (screen === "save") return (
     <SavePage
       simulationName={simulation?.name ?? "시뮬레이션"}
-      simulationId={simulationId}
-      token={auth.access_token}
       onComplete={() => setScreen("simulation")}
       onCancel={() => setScreen("simulation")}
     />
@@ -530,6 +537,7 @@ export default function App() {
         {sharedBrowserOpen ? (
           <SharedBrowser
             token={auth.access_token}
+            recentShare={recentShare}
             onImported={handleImported}
             onClose={() => setSharedBrowserOpen(false)}
           />
@@ -744,6 +752,10 @@ export default function App() {
                   token={auth.access_token}
                   simulationId={simulation.id}
                   simulationStatus={simulation.status}
+                  onShareCreated={setRecentShare}
+                  onShareCancelled={(shareId) => {
+                    setRecentShare((current) => current?.id === shareId ? null : current);
+                  }}
                 />
               )}
             </div>

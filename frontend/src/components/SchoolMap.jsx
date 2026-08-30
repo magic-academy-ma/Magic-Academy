@@ -2,11 +2,11 @@ import { useState } from "react";
 import "./SchoolMap.css";
 
 const SPACES = [
-  { code: "classroom",  name: "교실",   emoji: "🏫", top: "28%", left: "38%", bgImage: "/assets/classroom.png" },
-  { code: "restaurant", name: "식당",   emoji: "🍽️", top: "48%", left: "62%", bgImage: "/assets/restaurant.png" },
-  { code: "library",    name: "도서관", emoji: "📚", top: "62%", left: "30%", bgImage: "/assets/library.png" },
-  { code: "lab",        name: "연구실", emoji: "⚗️", top: "30%", left: "68%", bgImage: "/assets/lab.png" },
-  { code: "dormitory",  name: "기숙사", emoji: "🏠", top: "65%", left: "58%", bgImage: "/assets/dormitory.png" },
+  { code: "classroom",  name: "교실",   emoji: "🏫", top: "24%", left: "28%", bgImage: "/assets/classroom.png" },
+  { code: "restaurant", name: "식당",   emoji: "🍽️", top: "49%", left: "56%", bgImage: "/assets/restaurant.png" },
+  { code: "library",    name: "도서관", emoji: "📚", top: "69%", left: "23%", bgImage: "/assets/library.png" },
+  { code: "lab",        name: "연구실", emoji: "⚗️", top: "23%", left: "73%", bgImage: "/assets/lab.png" },
+  { code: "dormitory",  name: "기숙사", emoji: "🏠", top: "77%", left: "67%", bgImage: "/assets/dormitory.png" },
 ];
 
 const ACTION_LABEL = {

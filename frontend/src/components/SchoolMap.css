@@ -12,6 +12,8 @@
 }
 
 .school-map-toolbar {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
   padding: 8px 12px;
@@ -166,7 +168,9 @@
   gap: 4px;
   justify-content: center;
   flex-wrap: wrap;
-  max-width: 120px;
+  width: max-content;
+  max-width: 104px;
+  min-height: 26px;
 }
 
 .map-agent-dot-sm {

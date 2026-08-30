@@ -3,7 +3,7 @@
 // Replay 진입 + 실행 기록(tick) 목록 선택 + 선택한 tick 상세 조회.
 // 조회만 하며 부수 효과 없음(§3.12, §3.13).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getReplayList, getReplayTick } from "../api/simulationHistory.js";
 import ErrorMessage from "./ErrorMessage";
 
@@ -16,6 +16,7 @@ export default function ReplayPanel({ token, simulationId }) {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
+  const detailRequestId = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,17 +43,26 @@ export default function ReplayPanel({ token, simulationId }) {
   }, [token, simulationId]);
 
   async function handleSelectTick(tickNumber) {
+    const requestId = ++detailRequestId.current;
     setSelectedTick(tickNumber);
-    setDetailLoading(true);
     setDetailError(null);
     setDetail(null);
+    if (tickNumber === 0) {
+      setDetailLoading(false);
+      return;
+    }
+    setDetailLoading(true);
     try {
       const data = await getReplayTick(token, simulationId, tickNumber);
+      if (requestId !== detailRequestId.current) return;
       setDetail(data);
     } catch (requestError) {
+      if (requestId !== detailRequestId.current) return;
       setDetailError(requestError);
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestId.current) {
+        setDetailLoading(false);
+      }
     }
   }
 
@@ -84,6 +94,11 @@ export default function ReplayPanel({ token, simulationId }) {
 
       {selectedTick !== null && (
         <div className="replay-detail" aria-live="polite">
+          {selectedTick === 0 && (
+            <p className="message">
+              Tick 0은 실행 전 초기 상태입니다. 실행 결과 대신 Snapshot에서 조회해 주세요.
+            </p>
+          )}
           {detailLoading && <p className="message">Tick {selectedTick} 데이터를 불러오는 중...</p>}
           {detailError && <ErrorMessage error={detailError} />}
 
