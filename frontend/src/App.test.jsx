@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App.jsx'
@@ -163,16 +163,28 @@ describe('Slice 0 UI', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '관계 보기' }))
 
-    expect(await screen.findByRole('dialog', { name: '관계 그래프' })).toBeInTheDocument()
-    expect(screen.getByText('호감도 12')).toBeInTheDocument()
-    expect(screen.getByText('친밀도 23')).toBeInTheDocument()
-    expect(screen.getByText('신뢰도 34')).toBeInTheDocument()
-    expect(screen.getByText('긴장도 45')).toBeInTheDocument()
-    expect(screen.getByText('경쟁 56')).toBeInTheDocument()
-    expect(screen.getByText('의존도 67')).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: '관계 그래프' })
+    await vi.waitFor(() => expect(dialog.querySelector('svg.rm-svg line')).not.toBeNull())
+    fireEvent.click(dialog.querySelector('svg.rm-svg line'))
 
-    await userEvent.click(screen.getByRole('button', { name: '아델' }))
-    expect(screen.queryByRole('dialog', { name: '관계 그래프' })).not.toBeInTheDocument()
+    const detail = dialog.querySelector('.rel-detail')
+    expect(detail).not.toBeNull()
+    expect(within(detail).getByText('호감도')).toBeInTheDocument()
+    expect(within(detail).getByText('12')).toBeInTheDocument()
+    expect(within(detail).getByText('친밀도')).toBeInTheDocument()
+    expect(within(detail).getByText('23')).toBeInTheDocument()
+    expect(within(detail).getByText('신뢰도')).toBeInTheDocument()
+    expect(within(detail).getByText('34')).toBeInTheDocument()
+    expect(within(detail).getByText('긴장도')).toBeInTheDocument()
+    expect(within(detail).getByText('45')).toBeInTheDocument()
+    expect(within(detail).getByText('경쟁')).toBeInTheDocument()
+    expect(within(detail).getByText('56')).toBeInTheDocument()
+    expect(within(detail).getByText('의존도')).toBeInTheDocument()
+    expect(within(detail).getByText('67')).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '아델 선택' }))
+    expect(within(dialog).getByText('아델 선택 중')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '아델 선택' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
   })
 
