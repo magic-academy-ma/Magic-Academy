@@ -64,17 +64,20 @@ export function useSimulationWS(simulationId, token, { onReconnect } = {}) {
             setWsRelationshipDeltas([]);
             break;
           case "EVENT_CREATED":
-            setEventLog((prev) =>
-              [
+            setEventLog((prev) => {
+              const description = data.title ?? data.description;
+              return [
                 {
                   id: data.event_id,
-                  description: data.title ?? data.description,
+                  description,
                   involved_agents: data.participant_agent_ids ?? [],
                   tick: data.tick_number,
                 },
-                ...prev,
-              ].slice(0, MAX_EVENT_LOG)
-            );
+                ...prev.filter(
+                  (item) => item.id !== data.event_id && item.description !== description
+                ),
+              ].slice(0, MAX_EVENT_LOG);
+            });
             break;
           case "AGENT_ACTION_UPDATED": {
             const { agent_id, action_type, location } = data;

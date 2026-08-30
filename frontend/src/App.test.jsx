@@ -354,6 +354,11 @@ describe('Slice 0 UI', () => {
     expect(await screen.findByText('STUDY')).toBeInTheDocument()
     expect(screen.getByText('“오늘도 열심히 공부하자”')).toBeInTheDocument()
     expect(screen.getByText('정상 진행')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '결과 닫기' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '다음 Tick 실행' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '결과 닫기' }))
+    expect(screen.queryByRole('heading', { name: '실행 결과' })).not.toBeInTheDocument()
   })
 
   it('shows an empty agent-results message', async () => {
