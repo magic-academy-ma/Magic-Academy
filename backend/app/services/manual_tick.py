@@ -565,6 +565,7 @@ async def advance_manual_tick(
         )
     )
     scheduled_event_input = _to_scheduled_event_input(event, participants)
+    has_class_schedule = block == Block.MORNING
     event_and_magic_result = _run_event_and_magic_phase(
         db,
         simulation_id=simulation.id,
@@ -573,10 +574,14 @@ async def advance_manual_tick(
         agents=agents,
         scheduled_events=(
             (scheduled_event_input,) if scheduled_event_input is not None else ()
-        ),
+        ) if has_class_schedule else (),
         event_parameters=event_parameters,
     )
-    participant_ids = {participant.agent_id for participant in participants}
+    participant_ids = (
+        {participant.agent_id for participant in participants}
+        if has_class_schedule
+        else set()
+    )
     selected_ids = select_tick_participant_ids(
         agents,
         event_participant_agent_ids=participant_ids,
@@ -608,7 +613,7 @@ async def advance_manual_tick(
     schedule = ScheduleSummary(
         event_id=event.id,
         schedule_type=EventType.CLASS,
-        is_mandatory=True,
+        is_mandatory=has_class_schedule,
         location_id=event.location_id,
         start_tick=current_tick,
         end_tick=current_tick,
@@ -631,8 +636,8 @@ async def advance_manual_tick(
             block=block,
             preselected_agent_ids=[UUID(agent.id) for agent in selected_agents],
             schedule=schedule,
-            events=[event],
-            event_participants={event.id: participants},
+            events=[event] if has_class_schedule else [],
+            event_participants={event.id: participants} if has_class_schedule else {},
             memories_by_agent={
                 UUID(agent_id): [
                     {

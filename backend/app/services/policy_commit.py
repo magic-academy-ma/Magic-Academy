@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.domain.models import Agent, AgentState, Relationship
 from app.domain.relationship_metrics import RelationshipMetric
 from app.repositories.relationships import RelationshipDelta, apply_deltas
-from app.simulation.agent_runtime import AgentRuntimeResult
+from app.simulation.agent_runtime import AgentRuntimeResult, RuntimeStatus
 from app.simulation.policy import engine as policy_engine
 from app.simulation.policy.conflict import resolve_conflicts
 from app.simulation.policy.models import (
@@ -137,6 +137,16 @@ def evaluate_and_apply_policy(
                 f"stale {effect.metric}: expected {effect.before}, found {current}"
             )
         setattr(state, effect.metric, effect.after_preview)
+
+    # Runtime Intent의 위치/행동도 상태·관계 delta와 같은 Tick transaction에서
+    # 저장한다. Fallback/Skipped 결과는 실제로 수행된 행동이 아니므로 반영하지 않는다.
+    for runtime_result in runtime_results:
+        if runtime_result.status != RuntimeStatus.PROPOSED:
+            continue
+        state = states_by_agent_id[str(runtime_result.agent_id)]
+        state.current_action = runtime_result.intent.action_type.value
+        if runtime_result.intent.target_location_id is not None:
+            state.location_id = runtime_result.intent.target_location_id
     db.flush()
     return PolicyCommitResult(
         relationship_effects=relationship_effects,
