@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import Event, Relationship
+from app.domain.models import Event, Location, Relationship
 from app.services.manual_tick import ManualTickResult
 
 
@@ -113,13 +113,40 @@ def build_tick_events(
         )
         for event in result.event_batch_result["events"]
     )
+    target_location_ids = {
+        runtime_result.intent.target_location_id
+        for runtime_result in result.runtime_results
+        if runtime_result.intent.target_location_id is not None
+    }
+    locations_by_id = {
+        location.id: location
+        for location in db.scalars(
+            select(Location).where(
+                Location.simulation_id == simulation_id,
+                Location.id.in_(target_location_ids),
+            )
+        )
+    } if target_location_ids else {}
+
     events.extend(
         RealtimeEvent(
             type="AGENT_ACTION_UPDATED",
             data={
                 "agent_id": runtime_result.agent_id,
-                "action": runtime_result.intent.action_type,
-                "location": runtime_result.intent.target_location_id,
+                "action_type": runtime_result.intent.action_type,
+                "location": (
+                    {
+                        "id": location.id,
+                        "code": location.code,
+                        "name": location.name,
+                    }
+                    if (
+                        location := locations_by_id.get(
+                            runtime_result.intent.target_location_id
+                        )
+                    )
+                    else None
+                ),
             },
         )
         for runtime_result in result.runtime_results

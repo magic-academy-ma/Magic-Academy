@@ -141,6 +141,17 @@ def test_tick_broadcasts_committed_relationship_matching_rest(
         assert {event["type"] for event in action_events} == {
             "AGENT_ACTION_UPDATED"
         }
+        assert all("action_type" in event["data"] for event in action_events)
+        attend_class_events = [
+            event
+            for event in action_events
+            if event["data"]["action_type"] == "ATTEND_CLASS"
+        ]
+        assert attend_class_events
+        assert all(
+            event["data"]["location"]["name"] == "교실"
+            for event in attend_class_events
+        )
         # Task 2 Context 분리로 nearby_agents가 있는 쪽만 반응하므로 1건만 발생한다.
         relationship_events = [websocket.receive_json()]
 

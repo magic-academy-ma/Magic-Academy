@@ -604,7 +604,25 @@ export default function App() {
 
             {/* Tick 실행 및 결과 */}
             <div className={`panel tick-panel utility-panel${tickLoading || tickResult || tickError ? " is-open" : ""}`}>
-              <h2>Tick</h2>
+              <div className="tick-panel-header">
+                <h2>Tick</h2>
+                <div className="tick-panel-actions">
+                  {tickSucceeded && (
+                    <button type="button" className="next-tick-button" onClick={runTick}>
+                      다음 Tick 실행
+                    </button>
+                  )}
+                  {(tickResult || tickError) && (
+                    <button
+                      type="button"
+                      className="tick-panel-close"
+                      onClick={() => { setTickResult(null); setTickError(null); }}
+                    >
+                      결과 닫기
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {tickError && (
                 <p

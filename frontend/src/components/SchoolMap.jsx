@@ -2,7 +2,7 @@ import { useState } from "react";
 import "./SchoolMap.css";
 
 const SPACES = [
-  { code: "classroom",  name: "교실",   emoji: "🏫", top: "24%", left: "28%", bgImage: "/assets/classroom.png" },
+  { code: "classroom",  name: "교실",   emoji: "🏫", top: "31%", left: "42%", bgImage: "/assets/classroom.png" },
   { code: "restaurant", name: "식당",   emoji: "🍽️", top: "49%", left: "56%", bgImage: "/assets/restaurant.png" },
   { code: "library",    name: "도서관", emoji: "📚", top: "69%", left: "23%", bgImage: "/assets/library.png" },
   { code: "lab",        name: "연구실", emoji: "⚗️", top: "23%", left: "73%", bgImage: "/assets/lab.png" },
