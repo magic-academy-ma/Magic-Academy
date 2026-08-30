@@ -23,7 +23,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .tick-info { font-family: var(--f-mono); font-size: 12px; color: var(--c-text-2); }
 .header-controls, .header-right { display: flex; align-items: center; gap: 8px; }
 .header-controls { margin-left: auto; }
-.header-controls, .header-right, .sim-brand, .tick-info { flex-shrink: 0; }
+.header-controls, .header-right, .sim-brand-mark, .sim-brand, .tick-info { flex-shrink: 0; }
 .topbar-action, .header-controls button { min-width: auto; padding: 6px 10px; border-color: var(--c-border); color: var(--c-text-2); font-size: 12px; background: rgba(16,26,56,.7); }
 .topbar-action:hover, .header-controls button:hover { color: var(--c-text); border-color: var(--c-border-hi); }
 .header-save { color: var(--c-bg); background: var(--c-cream); border-color: var(--c-cream); }
