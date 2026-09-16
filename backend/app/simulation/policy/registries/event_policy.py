@@ -41,7 +41,15 @@ EVENT_BASE_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {
 # RANDOM_INCIDENT event_subtype별 등록 효과. 확정된 subtype 규칙이 아직 없어
 # 비워둔다 — 미등록 subtype은 효과 없이 거부한다(policy-signal-delta.md §2.2와
 # 동일 원칙: "Registry에 등록되지 않은 ... 거부하고 warning을 남긴다").
-RANDOM_INCIDENT_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {}
+#
+# 도전과제1 Round 3(docs/04-feature-specs/challenge-mode-team-revival.md §8) 신규
+# subtype 3종은 MEDIUM 티어(상태 signal 절댓값 5, policy-engine.md §6)를 그대로
+# 재사용한다 — 새 숫자를 발명하지 않는다.
+RANDOM_INCIDENT_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {
+    "PRESENTATION_ERROR": (("stress", 5),),
+    "MEMBER_DROPOUT": (("stress", 5),),
+    "SUPPLY_MISSING": (("stress", 5),),
+}
 
 # Magic Layer 특수 Event → typed state signal 매핑 (slice-5-integration.md §2,
 # policy-signal-delta.md §8.1). Magic Layer는 방향/강도만 주고, 실제 delta는
