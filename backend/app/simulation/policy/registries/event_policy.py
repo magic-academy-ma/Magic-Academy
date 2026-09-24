@@ -49,6 +49,12 @@ RANDOM_INCIDENT_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {
     "PRESENTATION_ERROR": (("stress", 5),),
     "MEMBER_DROPOUT": (("stress", 5),),
     "SUPPLY_MISSING": (("stress", 5),),
+    # 도전과제2(docs/04-feature-specs/challenge-mode-festival-booth.md §4.7)도
+    # 같은 MEDIUM 티어를 재사용한다 — 방향만 subtype별로 다르다.
+    "BUDGET_RUMOR": (("stress", 5),),
+    "INGREDIENT_SHORTAGE": (("stress", 5),),
+    "CUSTOMER_RUSH": (("fatigue", 5),),
+    "RIVAL_BOOTH_ISSUE": (("stress", 5),),
 }
 
 # Magic Layer 특수 Event → typed state signal 매핑 (slice-5-integration.md §2,
