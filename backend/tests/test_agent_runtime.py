@@ -309,6 +309,55 @@ def test_study_without_target_is_valid(runtime_input: AgentRuntimeInput) -> None
     assert candidate.action_type.value == "STUDY"
 
 
+def test_free_time_student_must_leave_classroom(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    free_time_input = runtime_input.model_copy(
+        update={
+            "block": "AFTERNOON",
+            "events": [],
+            "schedule": runtime_input.schedule.model_copy(
+                update={"is_mandatory": False}
+            ),
+        }
+    )
+    response = valid_response(runtime_input)
+    response["action_type"] = "TALK"
+    response["target_agent_id"] = str(STUDENT_IDS[1])
+    response["target_location_id"] = None
+    response["related_event_id"] = None
+    response["memory_candidates"] = []
+    response["decision_explanation"]["alternatives"][0]["action_type"] = "TALK"
+
+    with pytest.raises(ValueError, match="must leave the classroom during free time"):
+        validate_intent_candidate(response, free_time_input)
+
+
+def test_free_time_student_can_move_out_of_classroom(
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    free_time_input = runtime_input.model_copy(
+        update={
+            "block": "EVENING",
+            "events": [],
+            "schedule": runtime_input.schedule.model_copy(
+                update={"is_mandatory": False}
+            ),
+        }
+    )
+    response = valid_response(runtime_input)
+    response["action_type"] = "MOVE"
+    response["target_agent_id"] = None
+    response["target_location_id"] = str(LOCATION_IDS[1])
+    response["related_event_id"] = None
+    response["memory_candidates"] = []
+    response["decision_explanation"]["alternatives"][0]["action_type"] = "MOVE"
+
+    candidate = validate_intent_candidate(response, free_time_input)
+
+    assert candidate.target_location_id == LOCATION_IDS[1]
+
+
 @pytest.mark.parametrize("action_type", ["TALK", "HELP"])
 def test_agent_action_with_other_target_is_valid(
     runtime_input: AgentRuntimeInput, action_type: str
