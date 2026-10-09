@@ -188,8 +188,8 @@ describe('RelationshipModal', () => {
     );
 
     await vi.waitFor(() => {
-      const lines = container.querySelectorAll('svg.rm-svg line');
-      expect(lines.length).toBeGreaterThan(0);
+      const lines = container.querySelectorAll('svg.rm-svg line.edge-base');
+      expect(lines).toHaveLength(1);
     });
   });
 });
