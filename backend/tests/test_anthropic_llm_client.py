@@ -53,6 +53,7 @@ def test_system_prompt_defines_concise_action_target_contract():
     assert "WAIT: all target and related Event fields must be null" in SYSTEM_PROMPT
     assert "ATTEND_CLASS or TEACH_CLASS" in SYSTEM_PROMPT
     assert "Keep every explanation concise" in SYSTEM_PROMPT
+    assert "Write every human-readable text field in Korean" in SYSTEM_PROMPT
 
 
 def test_structured_output_validation_error_reports_safe_field_path():
