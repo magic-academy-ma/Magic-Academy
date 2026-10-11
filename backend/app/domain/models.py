@@ -70,6 +70,42 @@ class Simulation(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ClubChallengeRun(TimestampMixin, Base):
+    __tablename__ = "club_challenge_runs"
+    __table_args__ = (
+        UniqueConstraint("simulation_id", name="uq_club_challenge_runs_simulation"),
+        CheckConstraint("current_tick BETWEEN 0 AND 9", name="ck_club_challenge_runs_tick"),
+        CheckConstraint("member_count >= 0", name="ck_club_challenge_runs_members"),
+        CheckConstraint("reputation BETWEEN 0 AND 100", name="ck_club_challenge_runs_reputation"),
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')",
+            name="ck_club_challenge_runs_status",
+        ),
+        CheckConstraint(
+            "ending IS NULL OR ending IN ('REVIVAL', 'CONDITIONAL', 'ONE_MEMBER', 'CLOSED')",
+            name="ck_club_challenge_runs_ending",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    current_tick: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    member_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="2")
+    reputation: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="40")
+    choices: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="in_progress")
+    ending: Mapped[str | None] = mapped_column(String(20))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SimulationConfig(TimestampMixin, Base):
     __tablename__ = "simulation_configs"
     __table_args__ = (
