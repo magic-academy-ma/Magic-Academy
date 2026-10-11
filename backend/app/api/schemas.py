@@ -330,6 +330,15 @@ class RelationshipResponse(BaseModel):
     updated_at: datetime
 
 
+class BehaviorLogResponse(BaseModel):
+    id: UUID
+    tick_number: int
+    status: str
+    action_type: str
+    utterance: str | None
+    motivation_summary: str | None
+
+
 class DecisionAlternativeResponse(BaseModel):
     action_type: str
     description: str

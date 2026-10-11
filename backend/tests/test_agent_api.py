@@ -98,6 +98,8 @@ def test_memory_relationship_and_decision_explanation(client):
             id=uuid7(), run_id="api-test", tick_number=1, agent_id=source_id,
             status="PROPOSED", action_type="STUDY",
             intent={
+                "utterance": "도서관에서 공부할게.",
+                "motivation_summary": "시험 준비를 위해 공부한다.",
                 "decision_explanation": {
                     "alternatives": [
                         {
@@ -122,6 +124,7 @@ def test_memory_relationship_and_decision_explanation(client):
     memories = test_client.get(f"/v1/agents/{source_id}/memories", headers=headers)
     relationships = test_client.get(f"/v1/agents/{source_id}/relationships", headers=headers)
     explanation = test_client.get(f"/v1/agents/{source_id}/decision-explanation?tick=1", headers=headers)
+    behavior = test_client.get(f"/v1/agents/{source_id}/behavior-log?limit=5", headers=headers)
     assert memories.status_code == 200 and memories.json()[0]["content"] == "기억"
     assert relationships.status_code == 200 and relationships.json()[0]["trust"] == 3
     assert explanation.status_code == 200
@@ -136,6 +139,17 @@ def test_memory_relationship_and_decision_explanation(client):
     serialized = explanation.text
     for forbidden in ("chain_of_thought", "hidden_prompt", "reasoning"):
         assert forbidden not in serialized
+    assert behavior.status_code == 200
+    assert behavior.json() == [
+        {
+            "id": behavior.json()[0]["id"],
+            "tick_number": 1,
+            "status": "PROPOSED",
+            "action_type": "STUDY",
+            "utterance": "도서관에서 공부할게.",
+            "motivation_summary": "시험 준비를 위해 공부한다.",
+        }
+    ]
 
 
 def test_other_owner_cannot_access_agent(client):
@@ -152,6 +166,7 @@ def test_other_owner_cannot_access_agent(client):
         f"/v1/agents/{agent_id}/relationships",
         f"/v1/agents/{agent_id}/memories",
         f"/v1/agents/{agent_id}/decision-explanation?tick=1",
+        f"/v1/agents/{agent_id}/behavior-log",
     )
     for path in paths:
         assert test_client.get(path, headers=other_headers).status_code == 403
@@ -163,6 +178,7 @@ def test_other_owner_cannot_access_agent(client):
         f"/v1/agents/{missing_id}/relationships",
         f"/v1/agents/{missing_id}/memories",
         f"/v1/agents/{missing_id}/decision-explanation?tick=1",
+        f"/v1/agents/{missing_id}/behavior-log",
     )
     for path in missing_paths:
         assert test_client.get(path, headers=owner_headers).status_code == 404
@@ -175,6 +191,8 @@ def test_other_owner_cannot_access_agent(client):
         "/memories?limit=11",
         "/decision-explanation?tick=-1",
         "/decision-explanation",
+        "/behavior-log?limit=0",
+        "/behavior-log?limit=21",
     ),
 )
 def test_agent_query_validation(client, path):
