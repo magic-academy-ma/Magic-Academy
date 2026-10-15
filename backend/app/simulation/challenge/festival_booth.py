@@ -1,84 +1,96 @@
-"""도전과제 2 — 축제 부스 운영하기.
+"""스토리모드 CHAPTER 4 — 축제 부스 운영하기.
 
-docs/04-feature-specs/challenge-mode-festival-booth.md: 9개 Tick의 강제 Event,
-R1 Tick3 부스 컨셉 선택, R2 Tick2 갈등 쌍 선정, R3 Tick2 돌발 대응 선택,
-부스 성과 계산과 엔딩 판정을 순수 함수로 구성한다.
+docs/04-feature-specs/challenge-mode-festival-booth.md: R1 기획·준비 / R2~R3 운영의
+9 Tick 강제 Event, 라운드마다 1번씩인 개입 ①~③의 조치, 부스 담당 인원 기록,
+부스 성과 계산, 엔딩·챕터 결과 기록·업적 판정을 순수 함수로 구성한다.
 
-도전과제 1(controller.py)과 마찬가지로 EventMaster/AgentRuntime을 직접 호출하지
-않는다 — Event·override를 조립하기만 하고, 실제 Tick 실행 연동은
-round_driver.run_forced_event_round() 또는 별도 통합 작업의 몫이다.
+CHAPTER 2(controller.py)와 같은 공통 실행 모델을 따른다 — 컨트롤러는 Agent 행동을
+정하지 않고 Event 주입·정보 주입(ChallengeLLMOverride가 쓸 injections)·일정 변경
+(round_driver에 넘길 non_mandatory_agent_ids)만 만든다. EventMaster/AgentRuntime을
+직접 호출하지 않으며, 실제 Tick 실행 연동은 별도 통합 작업의 몫이다.
 """
 
 from __future__ import annotations
 
 import random
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import combinations
-from uuid import UUID
 
-from app.simulation.agent_runtime import AgentRuntimeInput, ReactionValence
+from app.simulation.agent_runtime import ActionType, ReactionValence
 from app.simulation.challenge.evaluation import (
     AFFECTION_AVG_THRESHOLD,
     PROJECT_PROGRESS_THRESHOLD,
-    STRESS_LIMIT,
-    ChallengeEnding,
 )
 from app.simulation.challenge.forced_events import (
     build_forced_festival,
     build_forced_group_project,
     build_forced_meeting,
 )
+from app.simulation.challenge.llm_override import (
+    Injections,
+    build_injected_memory,
+    merge_injections,
+)
 from app.simulation.challenge.progress import (
     DEFAULT_PROGRESS_STEP,
     calculate_project_progress,
 )
+from app.simulation.challenge.record import (
+    WATCH,
+    ChapterGrade,
+    ChapterRecord,
+    InterventionRecord,
+)
 from app.simulation.event_master import Event, EventMaster, ImpactLevel
 
-BUDGET_RUMOR_SUBTYPE = "BUDGET_RUMOR"
-
-
-# CHAPTER 4 개편 전까지 남겨 두는 강제 REST 응답 — CHAPTER 2 개편으로 controller.py에서
-# 옮겨 왔다. 스토리모드 원칙(행동 직접 지정 금지)에 맞지 않아 CHAPTER 4 이슈에서
-# SUGGEST_REST로 대체하며 삭제한다. ChallengeLLMOverride가 더 이상 스크립트 응답을
-# 반환하지 않으므로 plan_final_tick_llm_overrides()의 결과는 현재 소비되지 않는다.
-def _build_forced_rest_response(runtime_input: AgentRuntimeInput) -> dict:
-    return {
-        "action_type": "REST",
-        "target_agent_id": None,
-        "target_location_id": str(runtime_input.agent.current_location_id),
-        "related_event_id": None,
-        "utterance": None,
-        "motivation_summary": "도전과제 개입으로 강제 휴식한다.",
-        "reaction": {
-            "valence": "NEUTRAL",
-            "relationship_signals": [],
-            "state_signals": [{"signal_type": "FATIGUE_DOWN", "intensity": "HIGH"}],
-        },
-        "decision_explanation": {
-            "alternatives": [
-                {
-                    "action_type": "REST",
-                    "description": "사용자 개입으로 강제 휴식",
-                    "relative_priority": "HIGH",
-                    "selected": True,
-                }
-            ],
-            "influencing_factors": [],
-        },
-        "memory_candidates": [],
-    }
-
-# 성과·엔딩 상수 — 도전과제 1 값을 초기값으로 재사용하되 따로 조정할 수 있게
-# 도전과제 2 전용 이름으로 분리한다 (§4.8/§4.9). 모두 플레이테스트 후 조정 대상.
+# 성과·엔딩 상수 (§4.8/§4.10). 모두 플레이테스트 후 조정 대상인 임시값이다.
 BOOTH_PERFORMANCE_STEP = DEFAULT_PROGRESS_STEP  # 임시값 — 집계 건수가 많아 조정 필요
 BOOTH_PERFORMANCE_THRESHOLD = PROJECT_PROGRESS_THRESHOLD  # 임시값
+BOOTH_VACANCY_PENALTY = BOOTH_PERFORMANCE_STEP  # 임시값 — 공백 Tick 1회당 성과 ↓
+BOOTH_VACANCY_LIMIT = 1  # 임시값 — 공백 Tick이 이 값을 넘으면 HALTED
 FESTIVAL_AFFECTION_AVG_THRESHOLD = AFFECTION_AVG_THRESHOLD  # 임시값
-FESTIVAL_STRESS_LIMIT = STRESS_LIMIT  # 임시값
+FESTIVAL_STRESS_LIMIT = 90  # 임시값 — 번아웃 한계값
 
-# 부스 성과 집계 대상 Event 타입 (§4.8). R1 MEETING, R3 RANDOM_INCIDENT,
-# R3 T3 긴급 회의 MEETING은 집계하지 않는다.
-BOOTH_PERFORMANCE_EVENT_TYPES: frozenset[str] = frozenset({"GROUP_PROJECT", "FESTIVAL"})
+_PERFORMANCE_MIN = 0
+
+
+# ─── Tick 계획 (§4.3) ────────────────────────────────────────────────────────
+
+# R1 기획·준비
+PLANNING_TICK = 1  # 부스 기획 회의 → 개입 ①
+PREPARATION_TICK = 2  # 준비 작업
+REHEARSAL_TICK = 3  # 리허설·사전 점검
+# R2 운영 첫날
+OPENING_TICK = 4  # 별빛제 개장
+INCIDENT_TICK = 5  # 돌발 상황 → 개입 ②
+INCIDENT_FOLLOWUP_TICK = 6  # 운영 계속 (개입 ② 조치 적용)
+# R3 운영 둘째 날
+SECOND_DAY_TICK = 7  # 운영 둘째 날
+BLAME_TICK = 8  # 책임 공방 → 개입 ③
+CLOSING_TICK = 9  # 운영 마무리 (개입 ③ 조치 적용) → 종료 평가
+
+PREPARATION_TICKS: tuple[int, ...] = (PREPARATION_TICK, REHEARSAL_TICK)
+OPERATION_TICKS: tuple[int, ...] = (
+    OPENING_TICK,
+    INCIDENT_TICK,
+    INCIDENT_FOLLOWUP_TICK,
+    SECOND_DAY_TICK,
+    BLAME_TICK,
+    CLOSING_TICK,
+)
+# 역할·컨셉 공지를 매 Tick 주입하는 범위 (R1 T2 이후 전부)
+POST_SETUP_TICKS: tuple[int, ...] = (*PREPARATION_TICKS, *OPERATION_TICKS)
+
+
+class InterventionPoint(StrEnum):
+    BOOTH_SETUP = "BOOTH_SETUP"  # 개입 ① 컨셉·역할 배정
+    INCIDENT_RESPONSE = "INCIDENT_RESPONSE"  # 개입 ② 돌발 대응
+    STAFFING_ADJUSTMENT = "STAFFING_ADJUSTMENT"  # 개입 ③ 인력 조정
+
+
+# ─── 컨셉·역할 (§4.2/§4.4) ──────────────────────────────────────────────────
 
 
 class BoothConcept(StrEnum):
@@ -87,87 +99,313 @@ class BoothConcept(StrEnum):
     EXHIBITION = "EXHIBITION"
 
 
-class IncidentResponse(StrEnum):
-    EMERGENCY_MEETING = "EMERGENCY_MEETING"
-    ROTATE_REST = "ROTATE_REST"
-    PUSH_THROUGH = "PUSH_THROUGH"
-
-
 CONCEPT_LABELS: dict[BoothConcept, str] = {
     BoothConcept.FOOD: "먹거리 부스",
     BoothConcept.EXPERIENCE: "체험형 부스",
     BoothConcept.EXHIBITION: "전시형 부스",
 }
 
-# 컨셉은 수치를 직접 바꾸지 않고 R3 T2 돌발 subtype만 결정한다 (§4.4, 확정적 매핑).
-CONCEPT_INCIDENT_SUBTYPES: dict[BoothConcept, str] = {
-    BoothConcept.FOOD: "INGREDIENT_SHORTAGE",
-    BoothConcept.EXPERIENCE: "CUSTOMER_RUSH",
-    BoothConcept.EXHIBITION: "RIVAL_BOOTH_ISSUE",
+# 컨셉은 수치를 바꾸지 않고 R2 T2 돌발의 후보 풀만 바꾼다. 실제 돌발은 run 시드로 뽑는다.
+CONCEPT_INCIDENT_POOLS: dict[BoothConcept, tuple[str, ...]] = {
+    BoothConcept.FOOD: ("INGREDIENT_SHORTAGE", "CUSTOMER_RUSH"),
+    BoothConcept.EXPERIENCE: ("CUSTOMER_RUSH", "RIVAL_BOOTH_ISSUE"),
+    BoothConcept.EXHIBITION: ("RIVAL_BOOTH_ISSUE", "INGREDIENT_SHORTAGE"),
+}
+
+INCIDENT_LABELS: dict[str, str] = {
+    "INGREDIENT_SHORTAGE": "재료 부족",
+    "CUSTOMER_RUSH": "손님 폭주",
+    "RIVAL_BOOTH_ISSUE": "옆 부스와의 문제",
 }
 
 
+class BoothRole(StrEnum):
+    COUNTER = "COUNTER"
+    PRODUCTION = "PRODUCTION"
+    SUPPLY = "SUPPLY"
+    PROMOTION = "PROMOTION"
+
+
+ROLE_LABELS: dict[BoothRole, str] = {
+    BoothRole.COUNTER: "부스 담당",
+    BoothRole.PRODUCTION: "제작·진행",
+    BoothRole.SUPPLY: "조달",
+    BoothRole.PROMOTION: "홍보",
+}
+
+RoleAssignment = Mapping[str, BoothRole]
+
+
 def _concept_description(concept: BoothConcept) -> str:
-    return f"동아리 부스 컨셉: {CONCEPT_LABELS[concept]}"
+    return f"별빛제 부스 컨셉: {CONCEPT_LABELS[concept]}"
 
 
-# ─── Round 1 — 부스 기획 ─────────────────────────────────────────────────────
+# ─── 개입 결과 ──────────────────────────────────────────────────────────────
 
 
-def build_club_meeting_event(
-    *, tick: int, agent_ids: Sequence[str], location_id: str
+@dataclass(frozen=True)
+class BoothInterventionPlan:
+    """개입 조치. 행동은 지정하지 않고 Event·정보 주입·일정 변경만 담는다.
+
+    non_mandatory_agent_ids는 해당 Tick의 일정을 비필수로 바꿀 Agent다 —
+    round_driver.run_forced_event_round(non_mandatory_agent_ids=...)로 넘긴다.
+    roles는 개입 이후 유효한 역할 배정이다(역할 배정을 생략했으면 None).
+    """
+
+    events: tuple[Event, ...] = ()
+    injections: Injections = field(default_factory=dict)
+    non_mandatory_agent_ids: frozenset[str] = frozenset()
+    roles: dict[str, BoothRole] | None = None
+
+
+def _notice(
+    tick: int, agent_id: str, kind: str, content: str, memory_type: str = "observation"
+) -> Injections:
+    return {
+        (tick, agent_id): [
+            build_injected_memory(
+                tick=tick, agent_id=agent_id, kind=kind, content=content, memory_type=memory_type
+            )
+        ]
+    }
+
+
+def _festival(
+    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str, title: str
 ) -> Event:
-    """R1 T1 — 축제 부스 기획 동아리 회의."""
-    return build_forced_meeting(
+    return build_forced_festival(
         tick=tick,
         participant_agent_ids=agent_ids,
         location_id=location_id,
-        impact_level=ImpactLevel.MEDIUM,
-        title="동아리 회의 (축제 부스 기획)",
-    )
-
-
-def build_budget_rumor_event(
-    *, tick: int, agent_ids: Sequence[str], location_id: str
-) -> Event:
-    """R1 T2 ★ — 예산·자원 부족 소문."""
-    return EventMaster().build_random_incident(
-        tick=tick,
-        event_subtype=BUDGET_RUMOR_SUBTYPE,
-        participant_agent_ids=agent_ids,
-        location_id=location_id,
-        title="예산·자원 부족 소문",
-    )
-
-
-def build_concept_meeting_event(
-    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str
-) -> Event:
-    """R1 T3 — 사용자가 고른 컨셉으로 최종 결정하는 회의."""
-    return build_forced_meeting(
-        tick=tick,
-        participant_agent_ids=agent_ids,
-        location_id=location_id,
-        impact_level=ImpactLevel.MEDIUM,
-        title=f"부스 컨셉 확정 회의 ({CONCEPT_LABELS[concept]})",
+        title=title,
         description=_concept_description(concept),
     )
 
 
-# ─── Round 2 — 준비 및 역할 분담 ─────────────────────────────────────────────
+# ─── Round 1 — 기획·준비 ─────────────────────────────────────────────────────
+
+
+def build_planning_meeting_event(
+    *, agent_ids: Sequence[str], location_id: str, tick: int = PLANNING_TICK
+) -> Event:
+    """R1 T1 — 부스 기획 회의. 직후 개입 ①."""
+    return build_forced_meeting(
+        tick=tick,
+        participant_agent_ids=agent_ids,
+        location_id=location_id,
+        impact_level=ImpactLevel.MEDIUM,
+        title="별빛제 부스 기획 회의",
+    )
+
+
+def setup_choice(roles: RoleAssignment | None) -> str:
+    """개입 ① 기록값: 역할 배정을 생략하면 WATCH."""
+    return WATCH if roles is None else "ASSIGN_ROLES"
+
+
+def plan_booth_setup(
+    *,
+    concept: BoothConcept,
+    agent_ids: Sequence[str],
+    roles: RoleAssignment | None,
+    ticks: Sequence[int] = POST_SETUP_TICKS,
+) -> BoothInterventionPlan:
+    """개입 ① — 역할을 배정했으면 각 Agent에게 자기 역할 공지를 ``ticks``마다 주입한다.
+
+    역할 배정을 생략하면(WATCH) 공지를 주입하지 않고 학생들이 스스로 나눈다.
+    컨셉은 공지가 아니라 R1 T2 이후 Event description으로 전달된다.
+    """
+    if roles is None:
+        return BoothInterventionPlan()
+    if set(roles) != set(agent_ids):
+        raise ValueError("roles must assign exactly one role to every agent")
+    roles = {agent_id: BoothRole(role) for agent_id, role in roles.items()}
+    return BoothInterventionPlan(
+        injections=_role_notices(concept=concept, roles=roles, ticks=ticks),
+        roles=roles,
+    )
+
+
+def _role_notices(
+    *, concept: BoothConcept, roles: Mapping[str, BoothRole], ticks: Sequence[int]
+) -> Injections:
+    return merge_injections(
+        *(
+            _notice(
+                tick,
+                agent_id,
+                "booth_role",
+                f"조정관 공지: 너는 {CONCEPT_LABELS[concept]}에서 "
+                f"{ROLE_LABELS[role]}({role.value}) 담당이다.",
+            )
+            for agent_id, role in roles.items()
+            for tick in ticks
+        )
+    )
 
 
 def build_preparation_event(
-    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str
+    *, concept: BoothConcept, agent_ids: Sequence[str], location_id: str, tick: int = PREPARATION_TICK
 ) -> Event:
-    """R2 T1 — 재료 조달·디자인 작업."""
+    """R1 T2 — 준비 작업(컨셉·역할 반영)."""
     return build_forced_group_project(
         tick=tick,
         participant_agent_ids=agent_ids,
         location_id=location_id,
         impact_level=ImpactLevel.MEDIUM,
-        title="부스 준비 (재료 조달·디자인)",
+        title="부스 준비 작업",
         description=_concept_description(concept),
+    )
+
+
+def build_rehearsal_event(
+    *, concept: BoothConcept, agent_ids: Sequence[str], location_id: str, tick: int = REHEARSAL_TICK
+) -> Event:
+    """R1 T3 — 리허설·사전 점검."""
+    return build_forced_group_project(
+        tick=tick,
+        participant_agent_ids=agent_ids,
+        location_id=location_id,
+        impact_level=ImpactLevel.MEDIUM,
+        title="리허설·사전 점검",
+        description=_concept_description(concept),
+    )
+
+
+# ─── Round 2 — 운영 첫날 ─────────────────────────────────────────────────────
+
+
+def build_opening_event(
+    *, concept: BoothConcept, agent_ids: Sequence[str], location_id: str, tick: int = OPENING_TICK
+) -> Event:
+    """R2 T1 — 별빛제 개장."""
+    return _festival(
+        tick=tick, concept=concept, agent_ids=agent_ids, location_id=location_id, title="별빛제 개장"
+    )
+
+
+def draw_festival_incident_subtype(concept: BoothConcept, rng: random.Random) -> str:
+    """컨셉의 돌발 후보 풀에서 run 시드 RNG로 하나를 뽑는다 (§4.4)."""
+    return rng.choice(CONCEPT_INCIDENT_POOLS[concept])
+
+
+def build_festival_incident_event(
+    *,
+    event_subtype: str,
+    concept: BoothConcept,
+    agent_ids: Sequence[str],
+    location_id: str,
+    tick: int = INCIDENT_TICK,
+) -> Event:
+    """R2 T2 ★ — 돌발 상황. subtype은 draw_festival_incident_subtype()으로 뽑는다."""
+    if event_subtype not in CONCEPT_INCIDENT_POOLS[concept]:
+        raise ValueError(
+            f"event_subtype must be one of {CONCEPT_INCIDENT_POOLS[concept]}, got {event_subtype!r}"
+        )
+    return EventMaster().build_random_incident(
+        tick=tick,
+        event_subtype=event_subtype,
+        participant_agent_ids=agent_ids,
+        location_id=location_id,
+        title=f"별빛제 돌발 상황 ({INCIDENT_LABELS[event_subtype]})",
+        description=_concept_description(concept),
+    )
+
+
+class IncidentResponse(StrEnum):
+    SEND_HELP = "SEND_HELP"
+    KEEP_BOOTH = "KEEP_BOOTH"
+    EMERGENCY_MEETING = "EMERGENCY_MEETING"
+    WATCH = WATCH
+
+
+def plan_incident_response(
+    *,
+    choice: IncidentResponse,
+    incident_subtype: str,
+    concept: BoothConcept,
+    agent_ids: Sequence[str],
+    location_id: str,
+    help_agent_id: str | None = None,
+    tick: int = INCIDENT_FOLLOWUP_TICK,
+) -> BoothInterventionPlan:
+    """개입 ② — R2 T3에 적용할 조치 (§4.5).
+
+    SEND_HELP는 5명 FESTIVAL을 유지한다. ``help_agent_id``를 지목하면 그 학생에게
+    부탁을 주입하고 일정을 비필수로 바꾸며, 지목하지 않으면 5명 모두에게 공지만
+    주입한다. 실제로 부스를 떠날지는 Agent가 정한다.
+    """
+    if help_agent_id is not None and choice != IncidentResponse.SEND_HELP:
+        raise ValueError("help_agent_id is only valid for SEND_HELP")
+    incident = INCIDENT_LABELS[incident_subtype]
+    if choice == IncidentResponse.EMERGENCY_MEETING:
+        event = build_forced_meeting(
+            tick=tick,
+            participant_agent_ids=agent_ids,
+            location_id=location_id,
+            title="긴급 대책 회의",
+            description=f"{_concept_description(concept)} / 돌발: {incident}",
+        )
+        return BoothInterventionPlan(events=(event,))
+
+    festival = _festival(
+        tick=tick, concept=concept, agent_ids=agent_ids, location_id=location_id, title="부스 운영 계속"
+    )
+    if choice == IncidentResponse.SEND_HELP:
+        if help_agent_id is None:
+            injections = merge_injections(
+                *(
+                    _notice(
+                        tick,
+                        agent_id,
+                        "send_help",
+                        f"조정관 공지: 누군가 부스를 잠시 떠나 '{incident}' 문제를 처리해 줬으면 한다. "
+                        "누가 갈지는 너희가 정한다.",
+                    )
+                    for agent_id in agent_ids
+                )
+            )
+            return BoothInterventionPlan(events=(festival,), injections=injections)
+        if help_agent_id not in agent_ids:
+            raise ValueError(f"help_agent_id {help_agent_id!r} is not a booth member")
+        return BoothInterventionPlan(
+            events=(festival,),
+            injections=_notice(
+                tick,
+                help_agent_id,
+                "send_help",
+                f"조정관이 너에게 부스를 잠시 떠나 '{incident}' 문제를 처리해 달라고 부탁했다. "
+                "갈지는 네가 정한다.",
+            ),
+            non_mandatory_agent_ids=frozenset({help_agent_id}),
+        )
+    if choice == IncidentResponse.KEEP_BOOTH:
+        injections = merge_injections(
+            *(
+                _notice(
+                    tick,
+                    agent_id,
+                    "keep_booth",
+                    f"조정관 공지: '{incident}' 문제는 나중에 처리하고 지금은 부스 운영에 집중한다.",
+                )
+                for agent_id in agent_ids
+            )
+        )
+        return BoothInterventionPlan(events=(festival,), injections=injections)
+    if choice == IncidentResponse.WATCH:
+        return BoothInterventionPlan(events=(festival,))
+    raise ValueError(f"unknown IncidentResponse: {choice}")
+
+
+# ─── Round 3 — 운영 둘째 날 ──────────────────────────────────────────────────
+
+
+def build_second_day_event(
+    *, concept: BoothConcept, agent_ids: Sequence[str], location_id: str, tick: int = SECOND_DAY_TICK
+) -> Event:
+    """R3 T1 — 운영 둘째 날."""
+    return _festival(
+        tick=tick, concept=concept, agent_ids=agent_ids, location_id=location_id, title="별빛제 운영 둘째 날"
     )
 
 
@@ -177,7 +415,7 @@ def select_conflict_pair(
     directional_affections: Mapping[tuple[str, str], int],
     rng: random.Random,
 ) -> tuple[str, str]:
-    """R2 T2 갈등 쌍 (§4.5): R1 종료 시점 양방향 affection 합이 가장 낮은 쌍.
+    """R3 T2 갈등 쌍 (§4.6): R2 종료 시점 양방향 affection 합이 가장 낮은 쌍.
 
     동률이면 동률 쌍 중에서 ``rng``로 고른다 — replay 재현성을 위해 호출자는
     run 단위 시드로 만든 Random을 넘겨야 한다. 기록이 없는 edge는 0으로 본다.
@@ -194,173 +432,265 @@ def select_conflict_pair(
     return rng.choice([pair for pair in pairs if mutual(pair) == lowest])
 
 
-def build_role_conflict_event(
+def build_blame_event(
     *,
-    tick: int,
     concept: BoothConcept,
     conflict_pair: tuple[str, str],
     location_id: str,
+    tick: int = BLAME_TICK,
 ) -> Event:
-    """R2 T2 ★ — 갈등 쌍 2명만 참여하는 역할 배분 GROUP_PROJECT (Reflection 대상)."""
+    """R3 T2 ★ — 갈등 쌍 2명만 참여하는 책임 공방 GROUP_PROJECT (importance high)."""
     return build_forced_group_project(
         tick=tick,
         participant_agent_ids=conflict_pair,
         location_id=location_id,
         impact_level=ImpactLevel.HIGH,
-        title="역할 배분 갈등",
-        description=_concept_description(concept),
+        title="책임 공방",
+        description=f"{_concept_description(concept)} / 작은 실수를 두고 책임을 따진다.",
     )
 
 
-def build_rehearsal_event(
-    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str
-) -> Event:
-    """R2 T3 — 리허설·사전 점검."""
-    return build_forced_group_project(
-        tick=tick,
-        participant_agent_ids=agent_ids,
-        location_id=location_id,
-        impact_level=ImpactLevel.MEDIUM,
-        title="리허설·사전 점검",
-        description=_concept_description(concept),
-    )
-
-
-# ─── Round 3 — 축제 당일 운영 및 평가 ────────────────────────────────────────
-
-
-def build_opening_event(
-    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str
-) -> Event:
-    """R3 T1 — 개장 준비·홍보."""
-    return build_forced_festival(
-        tick=tick,
-        participant_agent_ids=agent_ids,
-        location_id=location_id,
-        title="부스 개장·홍보",
-        description=_concept_description(concept),
-    )
-
-
-def build_festival_incident_event(
-    *, tick: int, concept: BoothConcept, agent_ids: Sequence[str], location_id: str
-) -> Event:
-    """R3 T2 ★ — 컨셉에 매핑된 돌발 상황 (§4.4)."""
-    return EventMaster().build_random_incident(
-        tick=tick,
-        event_subtype=CONCEPT_INCIDENT_SUBTYPES[concept],
-        participant_agent_ids=agent_ids,
-        location_id=location_id,
-        title="축제 당일 돌발 상황",
-        description=_concept_description(concept),
-    )
+class StaffingAdjustment(StrEnum):
+    SUGGEST_REST = "SUGGEST_REST"
+    SWAP_ROLES = "SWAP_ROLES"
+    MEDIATE = "MEDIATE"
+    WATCH = WATCH
 
 
 def select_rest_target(agent_states: Mapping[str, tuple[int, int]]) -> str:
-    """ROTATE_REST 대상: (stress, fatigue) 합이 가장 높은 Agent. 동률은 agent_id 순."""
+    """SUGGEST_REST 대상: (stress, fatigue) 합이 가장 높은 Agent. 동률은 agent_id 순."""
     if not agent_states:
         raise ValueError("select_rest_target requires at least 1 agent")
     return min(agent_states, key=lambda agent_id: (-sum(agent_states[agent_id]), agent_id))
 
 
-def plan_final_tick_events(
+def swap_conflict_roles(
+    *, roles: RoleAssignment | None, conflict_pair: tuple[str, str], rng: random.Random
+) -> dict[str, BoothRole]:
+    """SWAP_ROLES로 바뀌는 역할만 돌려준다 (§4.6).
+
+    두 사람의 역할이 다르면 맞바꾼다. 같거나 역할 배정을 생략했으면 갈등 쌍 중
+    1명(``rng``)을 PROMOTION으로, 이미 PROMOTION이면 COUNTER로 옮긴다.
+    """
+    a, b = conflict_pair
+    if roles is not None and roles[a] != roles[b]:
+        return {a: roles[b], b: roles[a]}
+    mover = rng.choice(sorted(conflict_pair))
+    current = roles[mover] if roles is not None else None
+    return {mover: BoothRole.COUNTER if current == BoothRole.PROMOTION else BoothRole.PROMOTION}
+
+
+def plan_staffing_adjustment(
     *,
-    tick: int,
-    choice: IncidentResponse,
+    choice: StaffingAdjustment,
     concept: BoothConcept,
     agent_ids: Sequence[str],
     location_id: str,
-    rest_target_agent_id: str | None = None,
-) -> list[Event]:
-    """R3 T3 — 돌발 대응 선택에 따른 마지막 Tick Event (§4.6).
+    conflict_pair: tuple[str, str],
+    roles: RoleAssignment | None,
+    agent_states: Mapping[str, tuple[int, int]],
+    rng: random.Random,
+    tick: int = CLOSING_TICK,
+) -> BoothInterventionPlan:
+    """개입 ③ — R3 T3에 적용할 조치 (§4.6). R3 T3은 항상 5명 FESTIVAL이다.
 
-    EMERGENCY_MEETING은 FESTIVAL 대신 5명 MEETING(성과 집계 없음), ROTATE_REST는
-    rest_target_agent_id를 뺀 FESTIVAL, PUSH_THROUGH는 5명 FESTIVAL.
+    ``agent_states``는 SUGGEST_REST 대상 선정용 (stress, fatigue)이다.
     """
-    if choice == IncidentResponse.EMERGENCY_MEETING:
-        return [
-            build_forced_meeting(
-                tick=tick,
-                participant_agent_ids=agent_ids,
-                location_id=location_id,
-                title="긴급 대책 회의",
-                description=_concept_description(concept),
-            )
-        ]
-    if choice == IncidentResponse.ROTATE_REST:
-        if rest_target_agent_id is None:
-            raise ValueError("ROTATE_REST requires rest_target_agent_id")
-        participants = [agent_id for agent_id in agent_ids if agent_id != rest_target_agent_id]
-    elif choice == IncidentResponse.PUSH_THROUGH:
-        participants = list(agent_ids)
-    else:
-        raise ValueError(f"unknown IncidentResponse: {choice}")
-    return [
-        build_forced_festival(
-            tick=tick,
-            participant_agent_ids=participants,
-            location_id=location_id,
-            title="부스 운영 마무리",
-            description=_concept_description(concept),
+    festival = _festival(
+        tick=tick, concept=concept, agent_ids=agent_ids, location_id=location_id, title="부스 운영 마무리"
+    )
+    current_roles = None if roles is None else dict(roles)
+    if choice == StaffingAdjustment.SUGGEST_REST:
+        target = select_rest_target(agent_states)
+        return BoothInterventionPlan(
+            events=(festival,),
+            injections=_notice(
+                tick,
+                target,
+                "suggest_rest",
+                "조정관이 너에게 지쳤으면 이번에는 쉬어도 된다고 했다. 쉴지는 네가 정한다.",
+            ),
+            non_mandatory_agent_ids=frozenset({target}),
+            roles=current_roles,
         )
-    ]
+    if choice == StaffingAdjustment.SWAP_ROLES:
+        changes = swap_conflict_roles(roles=roles, conflict_pair=conflict_pair, rng=rng)
+        injections = merge_injections(
+            *(
+                _notice(
+                    tick,
+                    agent_id,
+                    "booth_role",
+                    f"조정관 공지: 지금부터 너는 {ROLE_LABELS[role]}({role.value}) 담당이다.",
+                )
+                for agent_id, role in changes.items()
+            )
+        )
+        new_roles = None if current_roles is None else {**current_roles, **changes}
+        return BoothInterventionPlan(events=(festival,), injections=injections, roles=new_roles)
+    if choice == StaffingAdjustment.MEDIATE:
+        injections = merge_injections(
+            *(
+                _notice(
+                    tick,
+                    agent_id,
+                    "mediate",
+                    "조정관이 책임 공방을 벌인 두 사람 사이를 중재하며, 책임을 따지기보다 "
+                    "남은 운영을 함께 마무리하자고 이야기했다.",
+                    memory_type="conversation",
+                )
+                for agent_id in conflict_pair
+            )
+        )
+        return BoothInterventionPlan(events=(festival,), injections=injections, roles=current_roles)
+    if choice == StaffingAdjustment.WATCH:
+        return BoothInterventionPlan(events=(festival,), roles=current_roles)
+    raise ValueError(f"unknown StaffingAdjustment: {choice}")
 
 
-def plan_final_tick_llm_overrides(
-    *, tick: int, choice: IncidentResponse, rest_target_agent_id: UUID | None = None
-) -> dict[tuple[int, UUID], object]:
-    """ROTATE_REST일 때만 대상 Agent의 R3 T3 행동을 REST로 강제한다 (도전과제 1 REST 재사용)."""
-    if choice == IncidentResponse.ROTATE_REST:
-        if rest_target_agent_id is None:
-            raise ValueError("ROTATE_REST requires rest_target_agent_id")
-        return {(tick, rest_target_agent_id): _build_forced_rest_response}
-    return {}
+# ─── 부스 담당 인원 (§4.7) ───────────────────────────────────────────────────
 
 
-# ─── 성과·엔딩 ───────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class BoothStaffingRecord:
+    tick: int
+    staff_count: int
+    vacant: bool
+
+
+def record_booth_staffing(
+    *, tick: int, event_type: str, action_types: Mapping[str, ActionType]
+) -> BoothStaffingRecord | None:
+    """운영 Tick의 부스 담당 인원을 기록한다. 기록 대상이 아니면 None.
+
+    ``action_types``는 그 Tick Event 참여자의 행동이다. FESTIVAL이면 AVOID가 아닌
+    인원을 부스 담당 인원으로 세고, 0명이면 공백이다. MEETING으로 바뀐 운영 Tick은
+    공백이다. 그 외(R2 T2 돌발, R3 T2 공방)는 기록하지 않는다.
+    """
+    if tick not in OPERATION_TICKS:
+        return None
+    kind = event_type.upper()
+    if kind == "MEETING":
+        return BoothStaffingRecord(tick=tick, staff_count=0, vacant=True)
+    if kind != "FESTIVAL":
+        return None
+    staff = sum(1 for action in action_types.values() if action != ActionType.AVOID)
+    return BoothStaffingRecord(tick=tick, staff_count=staff, vacant=staff == 0)
+
+
+def count_vacant_ticks(records: Sequence[BoothStaffingRecord]) -> int:
+    return sum(1 for record in records if record.vacant)
+
+
+# ─── 성과 (§4.8) ────────────────────────────────────────────────────────────
+
+
+def _counts_toward_performance(tick: int, event_type: str) -> bool:
+    kind = event_type.upper()
+    return (tick in PREPARATION_TICKS and kind == "GROUP_PROJECT") or (
+        tick in OPERATION_TICKS and kind == "FESTIVAL"
+    )
 
 
 def calculate_booth_performance(
-    participant_valences: Sequence[tuple[str, ReactionValence]],
+    participant_valences: Sequence[tuple[int, str, ReactionValence]],
     *,
+    vacant_tick_count: int,
     step: int = BOOTH_PERFORMANCE_STEP,
+    vacancy_penalty: int = BOOTH_VACANCY_PENALTY,
 ) -> int:
-    """(event_type, reaction.valence) 목록 중 GROUP_PROJECT·FESTIVAL만 집계한다 (§4.8)."""
-    return calculate_project_progress(
+    """(tick, event_type, reaction.valence) 중 R1 준비 GROUP_PROJECT와 운영 FESTIVAL만
+    집계하고, 부스 공백 Tick마다 성과를 낮춘다. 회의·돌발·책임 공방은 집계하지 않는다."""
+    progress = calculate_project_progress(
         [
             valence
-            for event_type, valence in participant_valences
-            if event_type.upper() in BOOTH_PERFORMANCE_EVENT_TYPES
+            for tick, event_type, valence in participant_valences
+            if _counts_toward_performance(tick, event_type)
         ],
         step=step,
     )
+    return max(_PERFORMANCE_MIN, progress - vacant_tick_count * vacancy_penalty)
+
+
+# ─── 엔딩·챕터 기록 (§4.10) ─────────────────────────────────────────────────
+
+
+class FestivalEnding(StrEnum):
+    POPULAR = "POPULAR"
+    COMPLETED = "COMPLETED"
+    HALTED = "HALTED"
+
+
+ENDING_GRADES: dict[FestivalEnding, ChapterGrade] = {
+    FestivalEnding.POPULAR: ChapterGrade.GOOD,
+    FestivalEnding.COMPLETED: ChapterGrade.MIXED,
+    FestivalEnding.HALTED: ChapterGrade.BAD,
+}
+
+
+def _mean(values: Sequence[int]) -> float:
+    if not values:
+        raise ValueError("values must not be empty")
+    return sum(values) / len(values)
 
 
 def evaluate_festival_ending(
     *,
     booth_performance: int,
+    vacant_tick_count: int,
     directional_affections: Sequence[int],
     agent_stress_levels: Sequence[int],
     initial_satisfaction_levels: Sequence[int],
     final_satisfaction_levels: Sequence[int],
-) -> ChallengeEnding:
-    """§4.9: 성과 미달·번아웃이면 BAD, 관계·만족도(시작 대비 평균 상승)까지
-    충족하면 PERFECT, 그 외 NORMAL."""
-    performance_ok = booth_performance >= BOOTH_PERFORMANCE_THRESHOLD
-    stress_ok = all(stress < FESTIVAL_STRESS_LIMIT for stress in agent_stress_levels)
-    if not performance_ok or not stress_ok:
-        return ChallengeEnding.BAD
+) -> FestivalEnding:
+    """성과 미달·공백 초과면 HALTED. 번아웃 없음·관계·만족도 상승까지 충족하면 POPULAR.
+    번아웃은 HALTED가 아니라 POPULAR만 막는다."""
+    if booth_performance < BOOTH_PERFORMANCE_THRESHOLD or vacant_tick_count > BOOTH_VACANCY_LIMIT:
+        return FestivalEnding.HALTED
+    no_burnout = all(stress < FESTIVAL_STRESS_LIMIT for stress in agent_stress_levels)
+    relationship_ok = _mean(directional_affections) >= FESTIVAL_AFFECTION_AVG_THRESHOLD
+    satisfaction_rose = _mean(final_satisfaction_levels) > _mean(initial_satisfaction_levels)
+    if no_burnout and relationship_ok and satisfaction_rose:
+        return FestivalEnding.POPULAR
+    return FestivalEnding.COMPLETED
 
-    relationship_ok = bool(directional_affections) and (
-        sum(directional_affections) / len(directional_affections)
-        >= FESTIVAL_AFFECTION_AVG_THRESHOLD
+
+def build_festival_record(
+    *, ending: FestivalEnding, interventions: Sequence[InterventionRecord]
+) -> ChapterRecord:
+    return ChapterRecord(
+        chapter=4,
+        ending=ending.value,
+        grade=ENDING_GRADES[ending],
+        interventions=tuple(interventions),
     )
-    satisfaction_ok = (
-        bool(initial_satisfaction_levels)
-        and bool(final_satisfaction_levels)
-        and sum(final_satisfaction_levels) / len(final_satisfaction_levels)
-        > sum(initial_satisfaction_levels) / len(initial_satisfaction_levels)
-    )
-    if relationship_ok and satisfaction_ok:
-        return ChallengeEnding.PERFECT
-    return ChallengeEnding.NORMAL
+
+
+# ─── 업적 (§4.11, 기획 확정분만) ─────────────────────────────────────────────
+
+
+class FestivalAchievement(StrEnum):
+    SHOW_MUST_GO_ON = "SHOW_MUST_GO_ON"  # 쇼는 계속 되어야 한다
+    BOOTH_LEFT_EMPTY = "BOOTH_LEFT_EMPTY"  # 여기 비었잖아
+    FESTIVAL_IS_OVER = "FESTIVAL_IS_OVER"  # 축제는 끝났다
+
+
+def evaluate_festival_achievements(
+    *,
+    ending: FestivalEnding,
+    vacant_tick_count: int,
+    peak_stress_levels: Sequence[int],
+) -> frozenset[FestivalAchievement]:
+    """``peak_stress_levels``는 run 동안 Agent별 stress 최대값이다.
+
+    R2 T2 돌발과 R3 T2 공방은 Tick 계획상 항상 주입되므로, 「쇼는 계속 되어야 한다」는
+    정상 종료된 run에서 공백 0회 + POPULAR로 판정한다.
+    """
+    achieved: set[FestivalAchievement] = set()
+    if vacant_tick_count == 0 and ending == FestivalEnding.POPULAR:
+        achieved.add(FestivalAchievement.SHOW_MUST_GO_ON)
+    if vacant_tick_count >= 1:
+        achieved.add(FestivalAchievement.BOOTH_LEFT_EMPTY)
+    if any(stress >= FESTIVAL_STRESS_LIMIT for stress in peak_stress_levels):
+        achieved.add(FestivalAchievement.FESTIVAL_IS_OVER)
+    return frozenset(achieved)

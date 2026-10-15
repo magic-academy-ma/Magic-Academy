@@ -28,6 +28,7 @@ manual_tick.py의 프로덕션 Tick 루프(Memory 검색/저장, WebSocket, Snap
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -137,12 +138,18 @@ def run_forced_event_round(
     block: Block,
     event: ChallengeEvent,
     runtime: AgentRuntime,
+    non_mandatory_agent_ids: Collection[UUID] = (),
 ) -> ForcedEventRoundResult:
     """강제 Event를 DB에 기록하고, 참여 Agent만 Agent Runtime으로 실행한 뒤
     Reaction 효과와 Event 기본 효과를 모두 DB에 커밋한다.
 
     ``runtime``은 이미 필요한 LLMClient(``ChallengeLLMOverride`` 포함 가능)로
     구성되어 전달되어야 한다 — 이 함수는 LLM 선택에 관여하지 않는다.
+
+    ``non_mandatory_agent_ids``의 Agent는 이 Event 일정을 비필수(``is_mandatory=False``)로
+    받는다(CHAPTER 4 SUGGEST_REST 등). Runtime 경로는 한 번 실행에 일정 1개만 쓰므로
+    필수·비필수 그룹을 따로 실행하고 결과를 합친다 — 두 그룹 사이의 TALK 충돌
+    해소는 일어나지 않는다.
     """
     participant_agent_ids = [UUID(agent_id) for agent_id in event.participant_agent_ids]
 
@@ -154,14 +161,6 @@ def run_forced_event_round(
         participant_agent_ids=participant_agent_ids,
     )
 
-    schedule = ScheduleSummary(
-        event_id=db_event.id,
-        schedule_type=EventType(event.event_type.lower()),
-        is_mandatory=True,
-        location_id=db_event.location_id,
-        start_tick=tick_number,
-        end_tick=tick_number,
-    )
     service = SimulationTickService(
         RuntimeInputAdapter(
             RuntimeOrchestrator(
@@ -171,25 +170,41 @@ def run_forced_event_round(
             )
         )
     )
-    batch = service.run_runtime_phase(
-        db,
-        simulation_id=simulation_id,
-        run_id=run_id,
-        tick_number=tick_number,
-        block=block,
-        preselected_agent_ids=participant_agent_ids,
-        schedule=schedule,
-        events=[db_event],
-        event_participants={db_event.id: db_participants},
+    groups = (
+        (True, [a for a in participant_agent_ids if a not in non_mandatory_agent_ids]),
+        (False, [a for a in participant_agent_ids if a in non_mandatory_agent_ids]),
     )
+    results: list[AgentRuntimeResult] = []
+    for is_mandatory, agent_ids in groups:
+        if not agent_ids:
+            continue
+        batch = service.run_runtime_phase(
+            db,
+            simulation_id=simulation_id,
+            run_id=run_id,
+            tick_number=tick_number,
+            block=block,
+            preselected_agent_ids=agent_ids,
+            schedule=ScheduleSummary(
+                event_id=db_event.id,
+                schedule_type=EventType(event.event_type.lower()),
+                is_mandatory=is_mandatory,
+                location_id=db_event.location_id,
+                start_tick=tick_number,
+                end_tick=tick_number,
+            ),
+            events=[db_event],
+            event_participants={db_event.id: db_participants},
+        )
+        results.extend(batch.results)
 
     evaluate_and_apply_policy(
         db,
         simulation_id=simulation_id,
         run_id=run_id,
         tick_number=tick_number,
-        runtime_results=batch.results,
+        runtime_results=tuple(results),
     )
     _apply_event_base_effects(db, run_id=str(run_id), event=event)
 
-    return ForcedEventRoundResult(runtime_results=batch.results)
+    return ForcedEventRoundResult(runtime_results=tuple(results))
