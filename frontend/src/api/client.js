@@ -64,13 +64,13 @@ export async function getUserPersonaConfig(simulationId, { token } = {}) {
   return response.data;
 }
 
-// 아직 User Persona가 설정되지 않았으면 404 RESOURCE_NOT_FOUND를 던진다.
+// 아직 User Persona가 설정되지 않았으면 null을 반환한다.
 export async function getUserPersona(simulationId, { token } = {}) {
   const response = await apiRequest(
     `/v1/simulations/${simulationId}/user-persona`,
     { token }
   );
-  return response.data;
+  return response.data ?? null;
 }
 
 export async function setUserPersona(simulationId, payload, { token } = {}) {

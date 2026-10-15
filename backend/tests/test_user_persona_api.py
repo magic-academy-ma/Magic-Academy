@@ -85,8 +85,8 @@ def test_config_and_persona_api_contract(client) -> None:
     missing = client.get(
         f"/v1/simulations/{simulation_id}/user-persona", headers=headers
     )
-    assert missing.status_code == 404
-    assert missing.json()["code"] == "RESOURCE_NOT_FOUND"
+    assert missing.status_code == 200
+    assert missing.json() == {"data": None}
 
     saved = client.post(
         f"/v1/simulations/{simulation_id}/user-persona",

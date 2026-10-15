@@ -61,11 +61,11 @@ export default function UserPersonaSetup({
 
         setConfig(configResult);
 
-        try {
-          const persona = await getUserPersona(simulationId, { token });
+        const persona = await getUserPersona(simulationId, { token });
 
-          if (cancelled) return;
+        if (cancelled) return;
 
+        if (persona) {
           setSelectedAgentId(persona.agent_id);
           setMbtiType(persona.mbti_type);
 
@@ -80,12 +80,7 @@ export default function UserPersonaSetup({
 
           // 이미 설정된 Persona를 발견한 경우 상위 컴포넌트에도 알린다.
           onSavedRef.current?.(persona);
-        } catch (personaError) {
-          if (personaError.status !== 404) {
-            throw personaError;
-          }
-
-          // 404 = 아직 User Persona가 설정되지 않음.
+        } else {
           setSelectedAgentId("");
           setMbtiType("");
           setBigFive(null);

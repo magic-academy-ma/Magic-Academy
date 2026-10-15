@@ -80,7 +80,7 @@ function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {
     if (url.endsWith('/v1/simulations') && options.method === 'POST') return createSimHandler()
     if (url.endsWith('/agents')) return agentsHandler()
     if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
-    if (url.includes('/user-persona')) return response({}, 404) // 아직 미설정 (정상 상태)
+    if (url.includes('/user-persona')) return response({ data: null }) // 아직 미설정 (정상 상태)
     if (url.includes('/v1/shares') && (!options.method || options.method === 'GET')) return response([])
     return response({}, 404)
   })
