@@ -119,12 +119,23 @@ def test_memory_relationship_and_decision_explanation(client):
             retry_count=0, failure_reason=None, model="mock", prompt_version="test",
             idempotency_key=f"api-test:1:{source_id}", result_fingerprint="0" * 64,
         ))
+        latest_result_id = uuid7()
+        db.add(RuntimeResult(
+            id=latest_result_id, run_id="api-test-2", tick_number=2, agent_id=source_id,
+            status="PROPOSED", action_type="REST",
+            intent={
+                "utterance": "기숙사에서 쉴게.",
+                "motivation_summary": "다음 일정을 위해 휴식한다.",
+            },
+            retry_count=0, failure_reason=None, model="mock", prompt_version="test",
+            idempotency_key=f"api-test-2:2:{source_id}", result_fingerprint="1" * 64,
+        ))
         db.commit()
 
     memories = test_client.get(f"/v1/agents/{source_id}/memories", headers=headers)
     relationships = test_client.get(f"/v1/agents/{source_id}/relationships", headers=headers)
     explanation = test_client.get(f"/v1/agents/{source_id}/decision-explanation?tick=1", headers=headers)
-    behavior = test_client.get(f"/v1/agents/{source_id}/behavior-log?limit=5", headers=headers)
+    behavior = test_client.get(f"/v1/agents/{source_id}/behavior-log?limit=1", headers=headers)
     assert memories.status_code == 200 and memories.json()[0]["content"] == "기억"
     assert relationships.status_code == 200 and relationships.json()[0]["trust"] == 3
     assert explanation.status_code == 200
@@ -142,12 +153,12 @@ def test_memory_relationship_and_decision_explanation(client):
     assert behavior.status_code == 200
     assert behavior.json() == [
         {
-            "id": behavior.json()[0]["id"],
-            "tick_number": 1,
+            "id": str(latest_result_id),
+            "tick_number": 2,
             "status": "PROPOSED",
-            "action_type": "STUDY",
-            "utterance": "도서관에서 공부할게.",
-            "motivation_summary": "시험 준비를 위해 공부한다.",
+            "action_type": "REST",
+            "utterance": "기숙사에서 쉴게.",
+            "motivation_summary": "다음 일정을 위해 휴식한다.",
         }
     ]
 
