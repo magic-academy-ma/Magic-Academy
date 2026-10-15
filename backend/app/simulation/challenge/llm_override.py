@@ -1,24 +1,55 @@
-"""도전과제 모드 — 특정 (tick, Agent)에서만 스크립트된 행동을 강제하는 LLMClient 래퍼.
+"""스토리모드 — 특정 (tick, Agent)의 runtime 입력에 정보를 주입하는 LLMClient 래퍼.
 
-docs/04-feature-specs/challenge-mode-team-revival.md §6: 실제 LLMClient를 감싸고,
-지정된 (tick_number, agent_id) 조합에서만 스크립트된 응답을 반환한다. 그 외 모든
-Agent·Tick은 실제 LLMClient로 위임되어 완전 자율성이 유지된다.
-backend/tests/slice5_campaign.py의 CanonicalCampaignLLM 패턴을 일반화한 것이다.
+docs/04-feature-specs/challenge-mode-team-revival.md §4.1/§6: 컨트롤러는 Agent의
+행동(Intent)을 직접 정하지 않는다. 지정된 (tick_number, agent_id)에서 runtime
+입력의 ``memories`` 앞에 조정관 공지·대화 기억 같은 정보를 덧붙인 뒤, 항상 실제
+LLMClient로 위임한다. 정보를 받은 Agent가 어떻게 행동할지는 Agent Runtime이 정한다.
 
-override 값은 정적 응답(dict 등) 또는 ``Callable[[AgentRuntimeInput], object]``
-둘 다 허용한다 — 콜러블은 강제 REST의 target_location_id처럼 그 Tick의 실제
-runtime_input을 알아야 만들 수 있는 응답에 쓴다.
+주입된 기억은 이번 입력에만 들어가고 DB에 저장되지 않는다 — 여러 Tick에 걸쳐
+알려야 하는 정보는 Tick마다 따로 주입한다.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from uuid import UUID
+from typing import Any
 
 from app.simulation.agent_runtime import AgentRuntimeInput, LLMClient
+from app.simulation.event_master import IMPACT_LEVEL_TO_IMPORTANCE, ImpactLevel
 
-OverrideValue = object | Callable[[AgentRuntimeInput], object]
+InjectionKey = tuple[int, str]
+Injections = dict[InjectionKey, list[dict[str, Any]]]
+
+
+def build_injected_memory(
+    *,
+    tick: int,
+    agent_id: str,
+    kind: str,
+    content: str,
+    memory_type: str = "observation",
+) -> dict[str, Any]:
+    """runtime 입력 ``memories``와 같은 모양(manual_tick.py 참고)의 주입용 기억 1건.
+    memory_type은 DB 값(observation/conversation/reflection/plan)을 쓰고, kind는 같은
+    (tick, agent)에 여러 건을 주입해도 id가 겹치지 않게 하는 구분자다."""
+    return {
+        "id": f"challenge:{kind}:{tick}:{agent_id}",
+        "content": content,
+        "memory_type": memory_type,
+        "importance": IMPACT_LEVEL_TO_IMPORTANCE[ImpactLevel.HIGH],
+        "created_tick": tick,
+        "event_id": None,
+    }
+
+
+def merge_injections(*plans: Mapping[InjectionKey, Sequence[dict[str, Any]]]) -> Injections:
+    """여러 계획의 주입을 (tick, agent) 단위로 이어 붙인다."""
+    merged: Injections = {}
+    for plan in plans:
+        for key, memories in plan.items():
+            merged.setdefault(key, []).extend(memories)
+    return merged
 
 
 class ChallengeLLMOverride:
@@ -26,16 +57,16 @@ class ChallengeLLMOverride:
         self,
         real_client: LLMClient,
         *,
-        overrides: Mapping[tuple[int, UUID], OverrideValue],
+        injections: Mapping[InjectionKey, Sequence[dict[str, Any]]],
     ) -> None:
         self._real_client = real_client
-        self._overrides = dict(overrides)
+        self._injections = {key: list(memories) for key, memories in injections.items()}
 
     def generate(self, runtime_input: AgentRuntimeInput) -> object:
-        key = (runtime_input.tick_number, runtime_input.agent.agent_id)
-        if key in self._overrides:
-            override = self._overrides[key]
-            if callable(override):
-                return override(runtime_input)
-            return deepcopy(override)
+        key = (runtime_input.tick_number, str(runtime_input.agent.agent_id))
+        injected = self._injections.get(key)
+        if injected:
+            runtime_input = runtime_input.model_copy(
+                update={"memories": [*deepcopy(injected), *runtime_input.memories]}
+            )
         return self._real_client.generate(runtime_input)
