@@ -91,7 +91,7 @@ def test_run_forced_event_round_persists_event_and_applies_effects(db):
         )
     )
     assert db_event is not None
-    assert db_event.title == "조별 과제 (A·B 충돌)"
+    assert db_event.title == "전술 연습 (의견 충돌)"
     participant_ids = {
         p.agent_id
         for p in db.scalars(select(EventParticipant).where(EventParticipant.event_id == db_event.id))
