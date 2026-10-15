@@ -23,17 +23,6 @@ from app.simulation.challenge.record import (
 PROJECT_PROGRESS_THRESHOLD = 70  # 임시값 — 플레이테스트 후 조정
 AFFECTION_AVG_THRESHOLD = 0  # 임시값 — 플레이테스트 후 조정
 
-# CHAPTER 4(festival_booth.py)가 개편 전까지 쓰는 값. CHAPTER 2 판정에는 쓰지 않는다.
-STRESS_LIMIT = 90  # 임시값 — 플레이테스트 후 조정
-
-
-class ChallengeEnding(StrEnum):
-    """CHAPTER 4(festival_booth.py) 개편 전까지 남겨 두는 기존 엔딩."""
-
-    PERFECT = "PERFECT"
-    NORMAL = "NORMAL"
-    BAD = "BAD"
-
 
 class TeamRevivalEnding(StrEnum):
     UNITED = "UNITED"
