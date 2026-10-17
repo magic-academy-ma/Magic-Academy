@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -16,6 +17,9 @@ class FakeSession:
     def refresh(self, simulation, *, with_for_update: bool) -> None:
         assert with_for_update is True
         self.refresh_count += 1
+
+    def scalar(self, query):
+        return None
 
     def flush(self) -> None:
         self.flush_count += 1
@@ -38,7 +42,7 @@ def test_update_simulation_status_accepts_documented_transitions(
     new_status: str,
 ) -> None:
     db = FakeSession()
-    simulation = SimpleNamespace(status=current_status)
+    simulation = SimpleNamespace(id=uuid4(), status=current_status)
 
     updated = update_simulation_status(db, simulation, new_status)
 
@@ -61,7 +65,7 @@ def test_update_simulation_status_rejects_invalid_transitions(
     new_status: str,
 ) -> None:
     db = FakeSession()
-    simulation = SimpleNamespace(status=current_status)
+    simulation = SimpleNamespace(id=uuid4(), status=current_status)
 
     with pytest.raises(InvalidSimulationStatusTransitionError):
         update_simulation_status(db, simulation, new_status)
