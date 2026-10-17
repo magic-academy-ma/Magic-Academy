@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.domain.models import Simulation
+from app.domain.models import RumorChallengeRun, Simulation
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ def skip_night(db: Session, simulation: Simulation) -> NightSkipOutcome:
 
     ``docs/04-feature-specs/mvp-tick-event-policy.md`` §3.1 매트릭스를 구현한다.
     """
+    if db.scalar(select(RumorChallengeRun.id).where(RumorChallengeRun.simulation_id == simulation.id)):
+        raise NightSkipNotAllowedError("스토리모드는 챕터에서 진행합니다.")
     locked = db.scalar(
         select(
             text("pg_try_advisory_xact_lock(hashtextextended(:simulation_id, 0))")

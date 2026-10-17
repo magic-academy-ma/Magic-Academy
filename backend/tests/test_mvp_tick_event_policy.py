@@ -294,6 +294,8 @@ class _FakeSession:
         self.flush_count = 0
 
     def scalar(self, *_args, **_kwargs) -> bool:
+        if "rumor_challenge_runs" in str(_args[0]):
+            return None
         return self._lock
 
     def refresh(self, _obj, *, with_for_update: bool = False) -> None:

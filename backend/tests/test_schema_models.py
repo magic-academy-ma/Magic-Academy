@@ -14,6 +14,7 @@ class SchemaModelTests(unittest.TestCase):
             set(Base.metadata.tables),
             {
                 "users",
+                "rumor_challenge_runs",
                 "simulations",
                 "simulation_shares",
                 "share_imports",
