@@ -92,13 +92,13 @@ def persist_event_batch(session: Session, batch: EventBatch) -> dict:
     for event in batch.events:
         if event.event_type != "CURSE_SPREAD":
             continue
-        carrier_until = [agents[agent_id].cursed_until_tick for agent_id in event.participant_agent_ids
-                         if agent_id not in newly_cursed and agents[agent_id].cursed_until_tick is not None]
+        carrier_until = [until for agent_id in event.participant_agent_ids
+                         if agent_id not in newly_cursed and (until := agents[agent_id].cursed_until_tick) is not None]
         if not carrier_until:
             continue
         for agent_id in newly_cursed & set(event.participant_agent_ids):
             agent = agents[agent_id]
-            agent.cursed_until_tick = max(agent.cursed_until_tick or 0, max(carrier_until))
+            agent.cursed_until_tick = max(agent.cursed_until_tick or 0, *carrier_until)
 
     saved_events = []
     for event in batch.events:

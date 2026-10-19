@@ -71,7 +71,7 @@ def grant_free_tick_achievements(
     achieved = tick_achievements({k: v for k, v in before.items() if k in after}, after)
     if not achieved:
         return set()
-    return grant_achievements(db, db.get(User, simulation.owner_id), achieved)
+    return grant_achievements(db, db.get_one(User, simulation.owner_id), achieved)
 
 
 def grant_inspector_achievements(
@@ -110,13 +110,14 @@ def grant_event_witness_achievements(
 
 def list_achievements(db: Session, owner: User) -> list[dict]:
     """카탈로그 순서대로 전체 업적과 이 계정의 달성 여부를 돌려준다."""
-    achieved_at = dict(
-        db.execute(
+    achieved_at = {
+        achievement_id: at
+        for achievement_id, at in db.execute(
             select(UserAchievement.achievement_id, UserAchievement.achieved_at).where(
                 UserAchievement.user_id == owner.id
             )
-        ).all()
-    )
+        )
+    }
     return [
         {
             "id": achievement.id,
