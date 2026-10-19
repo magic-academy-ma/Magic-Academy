@@ -642,3 +642,23 @@ class AgentMemory(TimestampMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))
+
+
+class RumorChallengeRun(TimestampMixin, Base):
+    __tablename__ = "rumor_challenge_runs"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "start_request_id", name="uq_rumor_start_request"),
+        UniqueConstraint("simulation_id", name="uq_rumor_simulation"),
+        CheckConstraint("revision >= 0", name="ck_rumor_revision"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    owner_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    simulation_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), ForeignKey("simulations.id"), nullable=False)
+    start_request_id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    seed: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    private_state: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    receipts: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    pending: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    intervention_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

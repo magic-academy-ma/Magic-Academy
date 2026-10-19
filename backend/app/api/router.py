@@ -14,7 +14,10 @@ from app.api.user_persona import router as user_persona_router
 from app.api.websockets import router as websockets_router
 from app.api.world_map import router as world_map_router
 
+from app.api.rumor_challenge import router as rumor_router
+
 api_router = APIRouter()
+api_router.include_router(rumor_router)
 api_router.include_router(auth_router)
 api_router.include_router(events_router)
 api_router.include_router(agents_router)
