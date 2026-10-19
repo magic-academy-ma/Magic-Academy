@@ -58,7 +58,11 @@ describe("StoryModePage", () => {
       if (path === "/v1/story/chapters/team-revival/run-2") return { data: teamRevivalRun };
       if (path === "/v1/simulations/sim-2/agents") return [];
       if (path === "/v1/story/story-1/chapter/complete") {
-        return { data: story({ chapter: 3, records: [record(1, "MIXED", "MISUNDERSTANDING"), record(2, "GOOD", "UNITED")] }) };
+        return { data: story({
+          chapter: 3,
+          records: [record(1, "MIXED", "MISUNDERSTANDING"), record(2, "GOOD", "UNITED")],
+          new_achievements: [{ id: "CHAPTER2_CLEAR", name: "CHAPTER 2 클리어" }],
+        }) };
       }
       throw new Error(`unexpected ${path}`);
     });
@@ -70,6 +74,15 @@ describe("StoryModePage", () => {
 
     expect(await screen.findByRole("heading", { name: "동아리를 폐부에서 구하기" })).toBeInTheDocument();
     expect(screen.getByText("서로의 갈등을 해결하고 팀이 다시 하나가 되었다.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "새 업적" })).toHaveTextContent("CHAPTER 2 클리어");
+  });
+
+  it("does not show the achievement notice when nothing new was earned", async () => {
+    apiRequest.mockResolvedValueOnce({ data: story({ chapter: 2, new_achievements: [] }) });
+    render(<StoryModePage auth={auth} onBack={vi.fn()} />);
+
+    expect(await screen.findByRole("heading", { name: "무너진 팀을 다시 살려라" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "새 업적" })).not.toBeInTheDocument();
   });
 
   it("shows the four records and the final ending", async () => {

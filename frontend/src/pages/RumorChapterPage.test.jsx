@@ -55,7 +55,7 @@ it('도입 → 시작 → 관찰 → 조사 → 요청 → 진행 → 엔딩까�
       const tick = current.current_tick + 1;
       current = { ...current, current_tick: tick, needs_intervention: tick === 1, revision: current.revision + 1,
         observations: [{ actor: 's1', tick, action: 'TALK', status: 'PROPOSED' }] };
-      if (tick === 2) current = { ...current, current_tick: 9, status: 'completed', ending: 'MISUNDERSTANDING', achievements: [{ id: 'CHAPTER1_CLEAR', label: '챌린지 1 클리어' }] };
+      if (tick === 2) current = { ...current, current_tick: 9, status: 'completed', ending: 'MISUNDERSTANDING', achievements: [{ id: 'CHAPTER1_CLEAR', label: 'CHAPTER 1 클리어' }] };
     } else if (path.endsWith('/investigate')) {
       current = { ...current, revision: current.revision + 1, inquiries_remaining: 2,
         statements: [{ actor: 's1', tick: 1, text: '금지 마법 소문' }], information: [{ id: 'R0', text: '금지 마법 소문', confirmed: false }] };
@@ -75,7 +75,7 @@ it('도입 → 시작 → 관찰 → 조사 → 요청 → 진행 → 엔딩까�
   expect(request.body.request_id).toBeTruthy();
   await userEvent.click(await screen.findByRole('button', { name: '다음 틱 관찰' }));
   expect(await screen.findByText('챕터 종료')).toBeInTheDocument();
-  expect(screen.getByText('챌린지 1 클리어')).toBeInTheDocument();
+  expect(screen.getByText('CHAPTER 1 클리어')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '개입 제출' })).not.toBeInTheDocument();
 });
 

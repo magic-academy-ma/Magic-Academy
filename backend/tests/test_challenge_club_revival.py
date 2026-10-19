@@ -5,6 +5,7 @@ import pytest
 from app.simulation.challenge.club_revival import (
     CLUB_MIN_MEMBERS,
     CLUB_REPUTATION_THRESHOLD,
+    ClubAchievement,
     ClubEnding,
     FinalStrategy,
     InternalConflictChoice,
@@ -14,6 +15,7 @@ from app.simulation.challenge.club_revival import (
     apply_recruitment_strategy,
     build_closure_warning_event,
     build_club_record,
+    evaluate_club_achievements,
     evaluate_club_ending,
     plan_final_event,
     plan_internal_conflict_events,
@@ -207,4 +209,45 @@ def test_observe_choice_is_recorded_as_watch():
     assert (
         record_choice(RecruitmentStrategy.EXPERIENCE_EVENT.value)
         == RecruitmentStrategy.EXPERIENCE_EVENT.value
+    )
+
+
+# ─── 업적 (§5) ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("ending", "achievement"),
+    [
+        (ClubEnding.REVIVAL, {ClubAchievement.GLORY_DAYS}),
+        (ClubEnding.CONDITIONAL, {ClubAchievement.MEMBERS_FIRST}),
+        (ClubEnding.ONE_MEMBER, {ClubAchievement.CLUB_OF_ONE}),
+        (ClubEnding.CLOSED, set()),
+    ],
+)
+def test_club_ending_achievements(ending, achievement):
+    assert evaluate_club_achievements(
+        ending=ending, initial_member_affections=[0, 0], final_member_affections=[0, 0]
+    ) == achievement
+
+
+def test_catastrophe_when_initial_members_relationship_worsened():
+    assert ClubAchievement.CATASTROPHE in evaluate_club_achievements(
+        ending=ClubEnding.CLOSED,
+        initial_member_affections=[10, 0],
+        final_member_affections=[5, 4],
+    )
+
+
+@pytest.mark.parametrize("final", [[5, 5], [10, 0], [20, 0]])
+def test_no_catastrophe_when_relationship_held_or_improved(final):
+    assert ClubAchievement.CATASTROPHE not in evaluate_club_achievements(
+        ending=ClubEnding.CONDITIONAL,
+        initial_member_affections=[10, 0],
+        final_member_affections=final,
+    )
+
+
+def test_no_catastrophe_without_start_snapshot():
+    assert ClubAchievement.CATASTROPHE not in evaluate_club_achievements(
+        ending=ClubEnding.CLOSED, initial_member_affections=[], final_member_affections=[-5, -5]
     )

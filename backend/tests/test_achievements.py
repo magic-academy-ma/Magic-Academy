@@ -12,8 +12,15 @@ from app.domain.achievements import ACHIEVEMENTS, ACHIEVEMENTS_BY_ID, Achievemen
 from app.domain.models import User, UserAchievement
 from app.main import app
 from app.services.achievements import grant_achievements, list_achievements
+from app.simulation.challenge.club_revival import ClubAchievement
 from app.simulation.challenge.evaluation import TeamRevivalAchievement
 from app.simulation.challenge.festival_booth import FestivalAchievement
+from app.simulation.challenge.record import (
+    INDECISIVE_THRESHOLD_SECONDS,
+    InterventionRecord,
+    chapter_achievements,
+    ending_achievements,
+)
 from app.simulation.challenge.rumor import ACHIEVEMENTS as RUMOR_ACHIEVEMENTS
 
 # ─── 카탈로그 ────────────────────────────────────────────────────────────────
@@ -30,6 +37,21 @@ def test_catalog_matches_spec_counts_and_unique_ids():
 def test_catalog_contains_ids_already_judged_by_chapters():
     judged = {*RUMOR_ACHIEVEMENTS, *TeamRevivalAchievement, *FestivalAchievement}
     assert judged <= ACHIEVEMENTS_BY_ID.keys()
+
+
+def test_every_story_achievement_has_a_judgement():
+    slow = [InterventionRecord("1", "WATCH", INDECISIVE_THRESHOLD_SECONDS)]
+    judged = {
+        *RUMOR_ACHIEVEMENTS,
+        *TeamRevivalAchievement,
+        *ClubAchievement,
+        *FestivalAchievement,
+        *ending_achievements(cleared_chapters=4, semester_completed=True),
+    }
+    for chapter in range(1, 5):
+        judged |= chapter_achievements(chapter=chapter, status="completed", interventions=slow)
+    story = {a.id for a in ACHIEVEMENTS if a.mode == AchievementMode.STORY}
+    assert judged == story
 
 
 def test_grant_rejects_unknown_id_before_touching_db():

@@ -1,7 +1,7 @@
 ---
 title: "FR-TBD 스토리모드 CHAPTER 4 — 축제 부스 운영하기"
 status: draft
-updated: 2026-10-15
+updated: 2026-10-19
 ---
 
 # FR-TBD 스토리모드 CHAPTER 4 — 축제 부스 운영하기
@@ -155,8 +155,8 @@ MEDIUM 티어(`policy-engine.md` §6, 기존 Registry 값)를 재사용하고 �
 
 | 업적 | 상태 | 판정 |
 | --- | --- | --- |
-| 챌린지 4 클리어 | 기획 확정 | run 정상 종료 |
-| 쇼는 계속 되어야 한다 | 기획 확정 | R2 T2 돌발과 R3 T2 공방이 모두 발생했는데도 부스 공백 Tick 0회이고 `POPULAR` 달성 |
+| CHAPTER 4 클리어 | 기획 확정 | run 정상 종료 |
+| 쇼는 계속되어야 한다 | 기획 확정 | R2 T2 돌발과 R3 T2 공방이 모두 발생했는데도 부스 공백 Tick 0회이고 `POPULAR` 달성 |
 | 여기 비었잖아 | 기획 확정 | 부스 공백 Tick 1회 이상 |
 | 축제는 끝났다 | 기획 확정 | 종료 시점까지 stress 한계값 이상인 Agent가 1명 이상 나옴 |
 | 쉼표도 운영이다 | 신규 제안 | `SUGGEST_REST`를 받은 Agent가 R3 T3에 실제로 쉬고, `POPULAR` 달성 |

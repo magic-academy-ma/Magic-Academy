@@ -43,7 +43,7 @@ test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async (
     }
   }
   await expect(page.getByRole('heading', { name: '챕터 종료' })).toBeVisible();
-  await expect(page.getByText('챌린지 1 클리어', { exact: true })).toBeVisible();
+  await expect(page.getByText('CHAPTER 1 클리어', { exact: true })).toBeVisible();
   await page.screenshot({ path: '/private/tmp/rumor-chapter-ending.png', fullPage: true });
 });
 

@@ -68,9 +68,8 @@ def start_chapter(
 def complete_chapter(
     story_id: UUID, db: Session = Depends(get_db), owner: User = Depends(require_user_role)
 ) -> dict:
-    return {
-        "data": story_mode.story_response(story_mode.complete_current_chapter(db, owner, story_id))
-    }
+    story, new_achievements = story_mode.complete_current_chapter(db, owner, story_id)
+    return {"data": story_mode.story_response(story, new_achievements)}
 
 
 def _chapter_response(run: StoryChapterRun, record, extra: dict) -> dict:

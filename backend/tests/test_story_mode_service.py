@@ -6,9 +6,10 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.domain.models import Relationship, StoryChapterRun, User
+from app.domain.models import Relationship, StoryChapterRun, User, UserAchievement
 from app.services.festival_booth_chapter import (
     advance_festival_booth,
+    festival_booth_achievements,
     festival_booth_record,
     start_festival_booth,
 )
@@ -21,6 +22,7 @@ from app.services.story_mode import (
 from app.services.team_revival_chapter import (
     advance_team_revival,
     start_team_revival,
+    team_revival_achievements,
     team_revival_record,
 )
 from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
@@ -163,10 +165,12 @@ def test_story_moves_through_chapters_in_order_and_ends_with_final(db, owner, ru
     db.commit()
 
     story = start_current_chapter(db, owner, story.id)
-    _play_team_revival(db, owner, runtime, UUID(story.chapter_run_ids["2"]))
-    story = complete_current_chapter(db, owner, story.id)
+    team_run = _play_team_revival(db, owner, runtime, UUID(story.chapter_run_ids["2"]))
+    story, granted = complete_current_chapter(db, owner, story.id)
     assert story.chapter == 3
     assert story.records["2"]["chapter"] == 2
+    assert "CHAPTER2_CLEAR" in granted
+    assert granted == team_revival_achievements(db, team_run)
 
     story.records = {**story.records, "3": {**good, "chapter": 3}}
     story.chapter = 4
@@ -174,8 +178,16 @@ def test_story_moves_through_chapters_in_order_and_ends_with_final(db, owner, ru
 
     story = start_current_chapter(db, owner, story.id)
     chapter_four = db.get(StoryChapterRun, UUID(story.chapter_run_ids["4"]))
-    _play_festival_booth(db, owner, runtime, chapter_four)
-    story = complete_current_chapter(db, owner, story.id)
+    chapter_four = _play_festival_booth(db, owner, runtime, chapter_four)
+    story, granted = complete_current_chapter(db, owner, story.id)
+    assert {"CHAPTER4_CLEAR", "ENDING_UNLOCKED", "ENDING_CLEAR"} <= granted
+    assert granted - {"ENDING_UNLOCKED", "ENDING_CLEAR"} <= festival_booth_achievements(chapter_four)
+    stored = set(
+        db.scalars(select(UserAchievement.achievement_id).where(UserAchievement.user_id == owner.id))
+    )
+    assert {"CHAPTER2_CLEAR", "CHAPTER4_CLEAR", "ENDING_CLEAR"} <= stored
+    # FINAL 이후에는 다시 완료해도 아무것도 지급하지 않는다.
+    assert complete_current_chapter(db, owner, story.id)[1] == frozenset()
 
     assert story.chapter == 5
     assert story.status == "completed"
