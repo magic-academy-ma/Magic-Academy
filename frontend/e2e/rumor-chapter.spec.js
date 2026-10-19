@@ -10,8 +10,9 @@ test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async (
   await page.getByLabel('표시 이름').fill('소문 조정관');
   await page.getByLabel('비밀번호').fill(password);
   await page.getByRole('button', { name: '가입하고 로그인' }).click();
-  await page.getByRole('button', { name: '거짓 소문의 확산을 막아라' }).click();
-  await page.getByRole('button', { name: 'CHAPTER 1 시작' }).click();
+  await page.getByRole('button', { name: '스토리모드', exact: true }).click();
+  await page.getByRole('button', { name: '임시 조정관 임명을 받아들인다' }).click();
+  await page.getByRole('button', { name: '사건을 맡는다' }).click();
   await page.getByRole('button', { name: '다음 틱 관찰' }).click();
   await expect(page.getByText('1라운드 · 1 / 9틱')).toBeVisible();
   await page.getByLabel('대화 상대').selectOption({ label: '에단' });
@@ -28,7 +29,7 @@ test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async (
   await page.getByLabel('아이디', { exact: true }).fill(username);
   await page.getByLabel('비밀번호').fill(password);
   await page.getByRole('button', { name: '로그인', exact: true }).click();
-  await page.getByRole('button', { name: '거짓 소문의 확산을 막아라' }).click();
+  await page.getByRole('button', { name: '스토리모드', exact: true }).click();
   await expect(page.getByText('1라운드 · 1 / 9틱')).toBeVisible();
   await expect(page.getByText(/^확인된 사실 —/)).toBeVisible();
   await page.getByLabel('개입 방식').selectOption('PUBLISH_FACT');
@@ -54,8 +55,9 @@ test('모바일 폭에서도 조사와 개입을 사용할 수 있다', async ({
   await page.getByLabel('표시 이름').fill('모바일 조정관');
   await page.getByLabel('비밀번호').fill('Rumor-e2e-test-password!');
   await page.getByRole('button', { name: '가입하고 로그인' }).click();
-  await page.getByRole('button', { name: '거짓 소문의 확산을 막아라' }).click();
-  await page.getByRole('button', { name: 'CHAPTER 1 시작' }).click();
+  await page.getByRole('button', { name: '스토리모드', exact: true }).click();
+  await page.getByRole('button', { name: '임시 조정관 임명을 받아들인다' }).click();
+  await page.getByRole('button', { name: '사건을 맡는다' }).click();
   await page.getByRole('button', { name: '다음 틱 관찰' }).click();
   await expect(page.getByLabel('질문 주제')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

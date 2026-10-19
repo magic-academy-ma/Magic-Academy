@@ -18,11 +18,28 @@ const base = {
 };
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
-it('메인 화면에서 CHAPTER 1로 진입한다', async () => {
-  const onRumorChapter = vi.fn();
-  render(<MainPage displayName="조정관" onRumorChapter={onRumorChapter} />);
-  await userEvent.click(screen.getByRole('button', { name: '거짓 소문의 확산을 막아라' }));
-  expect(onRumorChapter).toHaveBeenCalledOnce();
+it('메인 화면에는 챕터별 버튼 없이 스토리모드 진입만 있다', async () => {
+  const onStoryMode = vi.fn();
+  render(<MainPage displayName="조정관" onStoryMode={onStoryMode} />);
+  expect(screen.queryByRole('button', { name: '거짓 소문의 확산을 막아라' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: '스토리모드' }));
+  expect(onStoryMode).toHaveBeenCalledOnce();
+});
+
+it('스토리모드에서는 받은 run을 열고, 끝나면 활동 기록을 남기고 계속한다', async () => {
+  const onComplete = vi.fn();
+  apiRequest.mockImplementation(async (path) => {
+    if (path.includes('/simulations/')) return base.agents;
+    if (path === '/v1/challenges/rumor/run-1') {
+      return { data: { ...base, current_tick: 9, status: 'completed', ending: 'RESOLVED' } };
+    }
+    throw new Error(`unexpected ${path}`);
+  });
+  render(<RumorChapterPage auth={auth} onBack={vi.fn()} runId="run-1" onComplete={onComplete} />);
+  await userEvent.click(await screen.findByRole('button', { name: '활동 기록 남기고 계속' }));
+  expect(onComplete).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('button', { name: 'CHAPTER 1 시작' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '새 챕터 시작' })).not.toBeInTheDocument();
 });
 
 it('도입 → 시작 → 관찰 → 조사 → 요청 → 진행 → 엔딩까지 연결한다', async () => {

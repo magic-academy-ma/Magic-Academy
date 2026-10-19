@@ -2,7 +2,8 @@
 
 docs/04-feature-specs/challenge-mode-team-revival.md §4.1/§4.8:
 - 모든 개입 지점에 WATCH(지켜본다)를 두고, 선택 결과와 선택에 걸린 시간을 기록한다.
-- 챕터마다 GOOD/MIXED/BAD 등급의 활동 기록을 남긴다. FINAL 엔딩 집계는 범위 밖이다.
+- 챕터마다 GOOD/MIXED/BAD 등급의 활동 기록을 남긴다.
+- FINAL 엔딩: GOOD 4개 이상이면 BEST, BAD 4개 이상이면 BAD, 그 외 NORMAL.
 """
 
 from __future__ import annotations
@@ -46,3 +47,26 @@ def is_indecisive(interventions: Sequence[InterventionRecord]) -> bool:
     return any(
         record.elapsed_seconds >= INDECISIVE_THRESHOLD_SECONDS for record in interventions
     )
+
+
+# ─── FINAL — 「한 학기의 기록」 ──────────────────────────────────────────────
+
+STORY_CHAPTER_COUNT = 4
+FINAL_BEST_GOOD_COUNT = 4
+FINAL_BAD_BAD_COUNT = 4
+
+
+class FinalEnding(StrEnum):
+    BEST = "BEST"
+    NORMAL = "NORMAL"
+    BAD = "BAD"
+
+
+def evaluate_final_ending(grades: Sequence[ChapterGrade]) -> FinalEnding:
+    if len(grades) != STORY_CHAPTER_COUNT:
+        raise ValueError(f"FINAL requires {STORY_CHAPTER_COUNT} chapter records, got {len(grades)}")
+    if sum(1 for grade in grades if grade == ChapterGrade.GOOD) >= FINAL_BEST_GOOD_COUNT:
+        return FinalEnding.BEST
+    if sum(1 for grade in grades if grade == ChapterGrade.BAD) >= FINAL_BAD_BAD_COUNT:
+        return FinalEnding.BAD
+    return FinalEnding.NORMAL

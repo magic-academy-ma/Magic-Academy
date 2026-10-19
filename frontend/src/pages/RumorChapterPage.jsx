@@ -11,7 +11,7 @@ const KINDS = { TRANSFER: '소문 전달', TESTIFY: '실제 증언', CORRECT: '�
 const ENDINGS = { RESOLVED: '진실을 밝혀 소문을 완전히 해소했습니다.',
   MISUNDERSTANDING: '소문은 진정되었지만 일부 오해가 남았습니다.', SPREAD: '소문이 학교 전체로 확산되었습니다.' };
 
-export default function RumorChapterPage({ auth, onBack }) {
+export default function RumorChapterPage({ auth, onBack, runId: storyRunId, onComplete }) {
   const [run, setRun] = useState(null);
   const [agents, setAgents] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -31,13 +31,13 @@ export default function RumorChapterPage({ auth, onBack }) {
     setLoading(true);
     setError('');
     try {
-      const result = await apiRequest(`${ROOT}/current`, { token });
+      const result = await apiRequest(storyRunId ? `${ROOT}/${storyRunId}` : `${ROOT}/current`, { token });
       setRun(result.data);
       pendingRequest.current = null;
       startRequest.current = null;
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [token]);
+  }, [token, storyRunId]);
   useEffect(() => { load(); }, [load]); // 서버의 진행 기록으로 이어하기
   const runId = run?.id;
   const simulationId = run?.simulation_id;
@@ -102,7 +102,7 @@ export default function RumorChapterPage({ auth, onBack }) {
       <p>학생들의 진술을 비교하고 출처를 추적하세요. 당사자나 교수에게 사실을 확인하고, 소문이 학교 전체로 퍼지기 전에 대응하는 것이 목표입니다.</p>
       {run && <p>{run.incident}</p>}
       <p>부탁을 받은 학생이 증언하거나 정정할지는 스스로 결정합니다.</p>
-      {!run && <button className="main-cta-primary" disabled={loading} onClick={start}>CHAPTER 1 시작</button>}
+      {!run && !storyRunId && <button className="main-cta-primary" disabled={loading} onClick={start}>CHAPTER 1 시작</button>}
     </section>
     {error && <p role="alert">{error}</p>}
     {loading && <p role="status">진행 기록을 확인하고 있습니다…</p>}
@@ -150,8 +150,9 @@ export default function RumorChapterPage({ auth, onBack }) {
         <h3>제출한 개입</h3><ul>{run.interventions.map((i, n) => <li key={n}>{i.tick}틱 · {run.choices.find(c => c.value === i.choice)?.label} · {i.target && i.target !== 'all' ? name(i.target) : '전체 상황'} — 실제 반응은 관찰 기록에서 확인하세요.</li>)}</ul>
       </section>
       {completed && <section className="panel rumor-ending"><h2>챕터 종료</h2><p>{ENDINGS[run.ending]}</p><h3>달성 업적</h3>
-        <ul>{run.achievements.map(a => <li key={a.id}>{a.label}</li>)}</ul><button disabled={loading} onClick={start}>새 챕터 시작</button></section>}
-      {run.busy && <button disabled={loading} onClick={start}>새 챕터 시작</button>}
+        <ul>{run.achievements.map(a => <li key={a.id}>{a.label}</li>)}</ul>
+        {onComplete ? <button disabled={loading} onClick={onComplete}>활동 기록 남기고 계속</button> : <button disabled={loading} onClick={start}>새 챕터 시작</button>}</section>}
+      {run.busy && !storyRunId && <button disabled={loading} onClick={start}>새 챕터 시작</button>}
     </>}
     {relationships && selectedAgent && <RelationshipModal selectedAgent={selectedAgent} agents={agents} auth={auth} onSelectAgent={a => setSelected(a.id)} onClose={() => setRelationships(false)} />}
   </main>;
