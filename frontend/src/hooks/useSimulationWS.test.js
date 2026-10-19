@@ -36,6 +36,15 @@ describe('useSimulationWS', () => {
     expect(result.current.eventLog[0]).toMatchObject({ id: 'event-2', tick: 2 })
   })
 
+  it('keeps the event type so the player can open a magic discovery event', () => {
+    const { result } = renderHook(() => useSimulationWS('simulation-1', 'token'))
+    const socket = MockWebSocket.instances[0]
+
+    act(() => socket.emit({ type: 'EVENT_CREATED', data: { event_id: 'event-1', event_type: 'MAGICAL_DISCOVERY', title: '마법 발견', tick_number: 1 } }))
+
+    expect(result.current.eventLog[0]).toMatchObject({ id: 'event-1', event_type: 'MAGICAL_DISCOVERY' })
+  })
+
   it('stores the action and resolved location from AGENT_ACTION_UPDATED', () => {
     const { result } = renderHook(() => useSimulationWS('simulation-1', 'token'))
     const socket = MockWebSocket.instances[0]

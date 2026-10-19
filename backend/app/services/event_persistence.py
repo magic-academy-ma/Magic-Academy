@@ -61,6 +61,9 @@ def persist_event_batch(session: Session, batch: EventBatch) -> dict:
         raise ValueError("missing status requires STUDENT_MISSING Event")
     if any(agents[agent_id].agent_type not in ("student", "user_persona") for agent_id in batch.missing_agent_ids):
         raise ValueError("STUDENT_MISSING requires a Student")
+    spread_targets = {agent_id for event in batch.events if event.event_type == "CURSE_SPREAD" for agent_id in event.participant_agent_ids}
+    if not set(batch.cursed_agent_ids) <= spread_targets:
+        raise ValueError("cursed status requires CURSE_SPREAD Event")
     for effect in batch.resolved_effects:
         state = states.get(effect.source_agent_id)
         if effect.source_agent_id not in agents or state is None:
@@ -83,6 +86,19 @@ def persist_event_batch(session: Session, batch: EventBatch) -> dict:
             raise ValueError("missing Agent is not active")
         agent.active_status = "inactive_temporary"
         agent.inactive_until_tick = batch.tick_number + DURATION_TICKS
+    # 감염된 Agent의 저주는 옮긴 Agent와 같은 Tick에 끝난다 (achievements.md §5.2).
+    # 옮긴 Agent의 저주가 이번 Tick에 끝났으면 감염은 일어나지 않는다.
+    newly_cursed = set(batch.cursed_agent_ids)
+    for event in batch.events:
+        if event.event_type != "CURSE_SPREAD":
+            continue
+        carrier_until = [agents[agent_id].cursed_until_tick for agent_id in event.participant_agent_ids
+                         if agent_id not in newly_cursed and agents[agent_id].cursed_until_tick is not None]
+        if not carrier_until:
+            continue
+        for agent_id in newly_cursed & set(event.participant_agent_ids):
+            agent = agents[agent_id]
+            agent.cursed_until_tick = max(agent.cursed_until_tick or 0, max(carrier_until))
 
     saved_events = []
     for event in batch.events:

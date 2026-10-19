@@ -6,15 +6,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from uuid import uuid4
+from collections.abc import Iterable, Mapping
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.domain.achievements import ACHIEVEMENTS, ACHIEVEMENTS_BY_ID
-from app.domain.models import User, UserAchievement
+from app.domain.models import (
+    Agent,
+    Event,
+    EventParticipant,
+    RumorChallengeRun,
+    Simulation,
+    User,
+    UserAchievement,
+)
+from app.services.simulations import require_owned_simulation
+from app.simulation.free_mode_achievements import (
+    AgentStatus,
+    event_witness_achievements,
+    inspector_achievements,
+    tick_achievements,
+)
 
 
 def grant_achievements(db: Session, owner: User, achievement_ids: Iterable[str]) -> set[str]:
@@ -32,6 +47,65 @@ def grant_achievements(db: Session, owner: User, achievement_ids: Iterable[str])
         .returning(UserAchievement.achievement_id)
     )
     return set(db.scalars(statement).all())
+
+
+def _is_story_simulation(db: Session, simulation_id: UUID) -> bool:
+    return db.scalar(
+        select(RumorChallengeRun.id).where(RumorChallengeRun.simulation_id == simulation_id)
+    ) is not None
+
+
+def grant_free_tick_achievements(
+    db: Session,
+    simulation: Simulation,
+    before: Mapping[str, AgentStatus],
+    agent_statuses: Iterable[dict],
+) -> set[str]:
+    """자유 모드 Tick 저장 직후 저주 업적을 판정해 지급한다 (achievements.md §5.1)."""
+    if _is_story_simulation(db, simulation.id):
+        return set()
+    after = {
+        item["agent_id"]: AgentStatus(item["active_status"], item["cursed_until_tick"] is not None)
+        for item in agent_statuses
+    }
+    achieved = tick_achievements({k: v for k, v in before.items() if k in after}, after)
+    if not achieved:
+        return set()
+    return grant_achievements(db, db.get(User, simulation.owner_id), achieved)
+
+
+def grant_inspector_achievements(
+    db: Session, owner: User, simulation_id: UUID, agent_id: UUID
+) -> set[str]:
+    """플레이어가 Inspector를 연 Agent가 돌아온 학생이면 귀환 목격 업적을 지급한다."""
+    simulation = require_owned_simulation(db, simulation_id, owner)
+    agent = db.get(Agent, agent_id)
+    if agent is None or agent.simulation_id != simulation.id or _is_story_simulation(db, simulation.id):
+        return set()
+    was_missing = db.scalar(
+        select(EventParticipant.id)
+        .join(Event, Event.id == EventParticipant.event_id)
+        .where(
+            Event.simulation_id == simulation.id,
+            Event.event_type == "student_missing",
+            EventParticipant.agent_id == agent.id,
+        )
+        .limit(1)
+    ) is not None
+    return grant_achievements(
+        db, owner, inspector_achievements(was_missing=was_missing, active_status=agent.active_status)
+    )
+
+
+def grant_event_witness_achievements(
+    db: Session, owner: User, simulation_id: UUID, event_id: UUID
+) -> set[str]:
+    """플레이어가 Event Log에서 누른 이벤트가 마법 발견이면 발견 목격 업적을 지급한다."""
+    simulation = require_owned_simulation(db, simulation_id, owner)
+    event = db.get(Event, event_id)
+    if event is None or event.simulation_id != simulation.id or _is_story_simulation(db, simulation.id):
+        return set()
+    return grant_achievements(db, owner, event_witness_achievements(event.event_type))
 
 
 def list_achievements(db: Session, owner: User) -> list[dict]:

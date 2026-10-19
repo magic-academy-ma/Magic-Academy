@@ -141,3 +141,95 @@ def test_http_lists_achievements_for_current_user(db):
     data = response.json()["data"]
     assert len(data) == len(ACHIEVEMENTS)
     assert {item["id"] for item in data if item["achieved"]} == {"ENDING_CLEAR"}
+
+
+# ─── 자유 모드 지급 요청 (실DB) ─────────────────────────────────────────────
+
+
+def _free_simulation(db: Session):
+    from app.domain.models import Agent, AgentState, Simulation
+    from app.services.fixtures import seed_slice_zero
+
+    owner = _user(db)
+    simulation = Simulation(id=uuid4(), owner_id=owner.id, name="free mode")
+    db.add(simulation)
+    db.flush()
+    seed_slice_zero(db, simulation.id)
+    student = db.scalar(select(Agent).where(Agent.simulation_id == simulation.id, Agent.fixture_key == "student-01"))
+    location_id = db.scalar(select(AgentState.location_id).where(AgentState.agent_id == student.id))
+    db.commit()
+    return owner, simulation, student, location_id
+
+
+def _event(db: Session, simulation, location_id, event_type, agent):
+    from app.domain.models import Event, EventParticipant
+
+    event = Event(id=uuid4(), simulation_id=simulation.id, location_id=location_id, event_type=event_type,
+                  title=event_type, status="completed", simulation_day=1)
+    db.add(event)
+    db.flush()
+    db.add(EventParticipant(id=uuid4(), event_id=event.id, agent_id=agent.id))
+    db.commit()
+    return event
+
+
+def _post(db: Session, owner: User, path: str, body: dict):
+    def session():
+        yield db
+
+    app.dependency_overrides[get_db] = session
+    app.dependency_overrides[require_user_role] = lambda: owner
+    try:
+        with TestClient(app) as client:
+            return client.post(path, json=body)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_inspecting_returned_student_grants_return_witness(db):
+    owner, simulation, student, location_id = _free_simulation(db)
+    body = {"simulation_id": str(simulation.id), "agent_id": str(student.id)}
+
+    assert _post(db, owner, "/v1/achievements/free/inspector", body).json()["data"]["new_achievements"] == []
+
+    _event(db, simulation, location_id, "student_missing", student)
+    response = _post(db, owner, "/v1/achievements/free/inspector", body)
+    assert response.status_code == 200
+    assert response.json()["data"]["new_achievements"] == ["MISSING_STUDENT_RETURN"]
+
+
+def test_opening_magical_discovery_event_grants_discovery_witness(db):
+    owner, simulation, student, location_id = _free_simulation(db)
+    other = _event(db, simulation, location_id, "curse_spread", student)
+    discovery = _event(db, simulation, location_id, "magical_discovery", student)
+
+    def post(event):
+        return _post(db, owner, "/v1/achievements/free/event",
+                     {"simulation_id": str(simulation.id), "event_id": str(event.id)})
+
+    assert post(other).json()["data"]["new_achievements"] == []
+    assert post(discovery).json()["data"]["new_achievements"] == ["MAGIC_DISCOVERY"]
+
+
+def test_witness_request_rejects_other_users_simulation(db):
+    _, simulation, student, _ = _free_simulation(db)
+    stranger = _user(db)
+    response = _post(db, stranger, "/v1/achievements/free/inspector",
+                     {"simulation_id": str(simulation.id), "agent_id": str(student.id)})
+    assert response.status_code == 403
+
+
+def test_tick_grants_curse_achievements_to_simulation_owner(db):
+    from app.services.achievements import grant_free_tick_achievements
+    from app.simulation.free_mode_achievements import AgentStatus
+
+    owner, simulation, student, _ = _free_simulation(db)
+    before = {str(student.id): AgentStatus("inactive_temporary", False), "b": AgentStatus("active", False)}
+    after = [
+        {"agent_id": str(student.id), "active_status": "active", "cursed_until_tick": 7},
+        {"agent_id": "b", "active_status": "active", "cursed_until_tick": None},
+    ]
+    assert grant_free_tick_achievements(db, simulation, before, after) == {"CURSE_TRIGGERED"}
+    db.commit()
+    achieved = {item["id"] for item in list_achievements(db, owner) if item["achieved"]}
+    assert achieved == {"CURSE_TRIGGERED"}

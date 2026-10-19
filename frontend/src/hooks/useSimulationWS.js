@@ -69,6 +69,7 @@ export function useSimulationWS(simulationId, token, { onReconnect } = {}) {
               return [
                 {
                   id: data.event_id,
+                  event_type: data.event_type,
                   description,
                   involved_agents: data.participant_agent_ids ?? [],
                   tick: data.tick_number,
