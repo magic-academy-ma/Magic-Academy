@@ -146,6 +146,20 @@ describe('Slice 0 UI', () => {
     expect(document.querySelectorAll('[data-agent-id]')).toHaveLength(5)
   })
 
+  it('asks for the return-witness achievement only when the player picks a student', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    const inspectorCalls = () => fetchMock.mock.calls.filter(([url]) => url.endsWith('/v1/achievements/free/inspector'))
+    expect(inspectorCalls()).toHaveLength(0)
+
+    await userEvent.click(screen.getByRole('button', { name: /아델/ }))
+    const adel = agents.find((agent) => agent.name === '아델')
+    expect(inspectorCalls()).toHaveLength(1)
+    expect(JSON.parse(inspectorCalls()[0][1].body)).toEqual({ simulation_id: simulation.id, agent_id: adel.id })
+
+    await userEvent.click(screen.getByRole('button', { name: /에단/ }))
+    expect(inspectorCalls()).toHaveLength(1)
+  })
+
   it('toggles pause UI and opens the selected agent Inspector modal', async () => {
     await setupSimulationWithAgents()
 

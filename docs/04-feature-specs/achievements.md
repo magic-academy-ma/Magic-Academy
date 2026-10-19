@@ -16,11 +16,10 @@ updated: 2026-10-19
 - 전체 업적 목록(ID, 이름, 종류, 달성 조건)
 - 계정별 업적 저장과 조회, MyPage 업적 화면(§6)
 - 스토리모드 챕터 판정 결과를 지급으로 연결하는 일(§6)
+- 자유 모드 업적의 세부 판정 기준과 지급(§5)
 
 **제외**
 - 업적 달성 알림
-- 자유 모드의 판정 결과를 지급으로 연결하는 일(별도 이슈)
-- 자유 모드 업적의 세부 판정 기준
 
 ## 3. 업적 종류
 
@@ -101,8 +100,6 @@ updated: 2026-10-19
 
 ## 5. 자유 모드
 
-세부 판정은 아직 정하지 않았다.
-
 | ID | 업적 | 종류 | 달성 조건 |
 | --- | --- | --- | --- |
 | `MISSING_STUDENT_RETURN` | 실종된 학생의 귀환 목격 | 관찰 | 돌아온 학생의 Inspector를 연다 |
@@ -110,6 +107,35 @@ updated: 2026-10-19
 | `CURSE_TRIGGERED` | 저주 이벤트 발생 | 관찰 | 저주 이벤트를 발생시킨다 |
 | `CURSE_SPREAD` | 저주 확산 | 관찰 | 3명 이상이 저주에 감염된다 |
 | `CURSE_LIFTED` | 저주 해결 | 관찰 | 저주를 해결한다 |
+
+자유 모드 업적은 스토리모드(챕터 run이 있는 Simulation)에서는 지급하지 않는다. 판정은 `app/simulation/free_mode_achievements.py`를 쓴다.
+
+### 5.1 세부 판정
+
+| ID | 판정 | 판정 시점 |
+| --- | --- | --- |
+| `MISSING_STUDENT_RETURN` | 플레이어가 돌아온 학생을 직접 골라 Inspector를 연다. 돌아온 학생은 이 Simulation에서 `STUDENT_MISSING` 이벤트로 실종됐다가 지금 `active`로 복귀한 학생이다. 오른쪽 Inspector 패널(학생 목록·지도·Event Log·관계 보기에서 선택)과 상단 「Inspector 열기」 모달을 모두 인정한다. 화면 진입 때 자동으로 선택된 학생은 인정하지 않는다 | Inspector를 열 때(지급 요청 API) |
+| `MAGIC_DISCOVERY` | 플레이어가 Event Log에서 마법 발견(`MAGICAL_DISCOVERY`) 이벤트를 직접 누른다. 로그에 표시만 된 것은 인정하지 않는다 | 이벤트를 누를 때(지급 요청 API) |
+| `CURSE_TRIGGERED` | 실종됐던 학생이 돌아와 저주가 처음 걸린다 | 그 Tick 저장 |
+| `CURSE_SPREAD` | Tick 저장 후 저주 상태인 Agent가 동시에 3명 이상이다(누적 아님) | 그 Tick 저장 |
+| `CURSE_LIFTED` | 저주를 처음 가져온 학생(돌아온 학생)의 저주가 끝나, 그 저주로 감염된 Agent의 저주가 모두 함께 풀린다 | 그 Tick 저장 |
+
+### 5.2 저주 감염 규칙
+
+- 돌아온 학생은 복귀 시점부터 3 Tick 동안 저주 상태다(`slice-5-integration.md` §2).
+- `CURSE_SPREAD` 이벤트의 대상은 저주 상태가 된다. 감염된 Agent의 저주는 그 저주를 옮긴 Agent와 같은 Tick에 끝난다. 그래서 저주를 처음 가져온 학생의 3 Tick이 지나면 그 학생에게서 퍼진 저주가 모두 함께 풀린다.
+- 저주를 옮긴 Agent의 저주가 그 Tick에 끝나면 감염은 일어나지 않는다.
+
+### 5.3 지급 요청 API
+
+Inspector 열기와 이벤트 누르기는 프론트 동작이라 프론트가 지급을 요청한다. 서버는 조건을 다시 확인하고, 조건에 맞지 않으면 지급하지 않고 빈 목록을 돌려준다.
+
+| API | 본문 | 확인하는 것 |
+| --- | --- | --- |
+| `POST /v1/achievements/free/inspector` | `simulation_id`, `agent_id` | 내 Simulation의 Agent인지, 돌아온 학생인지 |
+| `POST /v1/achievements/free/event` | `simulation_id`, `event_id` | 내 Simulation의 이벤트인지, 마법 발견 이벤트인지 |
+
+응답: `{"data": {"new_achievements": [...]}}` — 이번에 처음 달성한 업적 ID만 담는다.
 
 ## 6. 저장과 조회
 
@@ -122,4 +148,5 @@ updated: 2026-10-19
   - 「우유부단하시네요」는 그 챕터의 개입 기록으로 판정해 함께 지급한다.
   - 엔딩 스토리: CHAPTER 4를 완료해 FINAL 단계에 도달하면 `ENDING_UNLOCKED`, 학기가 완료되면 `ENDING_CLEAR`를 지급한다. 지금은 FINAL 도달과 학기 완료가 같은 시점이라 두 업적이 함께 지급된다.
   - 완료 응답의 `new_achievements`에 이번에 처음 달성한 업적만 담고, 다음 화면(다음 챕터 도입 또는 FINAL) 상단에 「업적 달성」으로 보여 준다.
+- 자유 모드 지급 시점: §5.1. Tick 판정은 Tick 저장(`manual_tick.advance_manual_tick`)과 한 transaction으로 commit한다.
 - 화면: MyPage 메뉴의 '업적' 탭. 그룹별로 보여 주고, 달성하지 않은 업적도 조건과 함께 흐리게 보여 준다.

@@ -1,13 +1,14 @@
 import "./EventLogPanel.css";
 
-export default function EventLogPanel({ eventLog = [], agentNames = {}, onAgentSelect }) {
-  function handleItemClick(involvedAgents) {
-    const firstId = involvedAgents?.[0];
+export default function EventLogPanel({ eventLog = [], agentNames = {}, onAgentSelect, onEventOpen }) {
+  function handleItemClick(event) {
+    onEventOpen?.(event);
+    const firstId = event.involved_agents?.[0];
     if (firstId && onAgentSelect) onAgentSelect(firstId);
   }
 
-  function handleItemKeyDown(e, involvedAgents) {
-    if (e.key === "Enter" || e.key === " ") handleItemClick(involvedAgents);
+  function handleItemKeyDown(e, event) {
+    if (e.key === "Enter" || e.key === " ") handleItemClick(event);
   }
 
   return (
@@ -26,10 +27,10 @@ export default function EventLogPanel({ eventLog = [], agentNames = {}, onAgentS
               <li
                 key={event.id}
                 className={`event-log-item${clickable ? " clickable" : ""}`}
-                onClick={() => handleItemClick(event.involved_agents)}
+                onClick={() => handleItemClick(event)}
                 role={clickable ? "button" : undefined}
                 tabIndex={clickable ? 0 : undefined}
-                onKeyDown={(e) => handleItemKeyDown(e, event.involved_agents)}
+                onKeyDown={(e) => handleItemKeyDown(e, event)}
               >
                 <span className="event-tick">Tick {event.tick}</span>
                 <span className="event-description">{event.description}</span>
