@@ -9,6 +9,7 @@ from app.domain.models import Agent, ClubChallengeRun, Simulation, User
 from app.services.club_challenge import (
     ClubChallengeChoiceError,
     advance_club_challenge,
+    club_chapter_record,
     start_club_challenge,
 )
 from app.simulation.agent_runtime import AgentRuntime, MockLLMClient
@@ -86,6 +87,15 @@ def test_full_club_challenge_is_persisted_and_completed(db: Session, owner: User
     assert stored.reputation == 80
     assert stored.status == "completed"
     assert stored.ending == "CONDITIONAL"
+    assert [(item["point"], item["choice"]) for item in stored.interventions] == [
+        ("3", "REASSIGN_ROLES"),
+        ("6", "PROFESSOR_REFERRAL"),
+        ("9", "SAFE_OPERATION"),
+    ]
+    record = club_chapter_record(stored)
+    assert record.chapter == 3
+    assert record.grade == "MIXED"
+    assert len(record.interventions) == 3
     assert stored_simulation.current_tick == 9
     assert stored_simulation.status == "completed"
     assert len(tick_three_result.runtime_results) == 2

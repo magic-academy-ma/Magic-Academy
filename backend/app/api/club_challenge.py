@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import asdict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +15,7 @@ from app.services.club_challenge import (
     ClubChallengeCompletedError,
     ClubChallengeNotFoundError,
     advance_club_challenge,
+    club_chapter_record,
     club_member_agents,
     get_owned_club_challenge,
     start_club_challenge,
@@ -76,6 +78,7 @@ def _response(db: Session, run: ClubChallengeRun, runtime_results=()) -> dict:
             .order_by(Agent.fixture_key)
         )
     )
+    chapter_record = club_chapter_record(run)
     return {
         "id": str(run.id),
         "simulation_id": str(run.simulation_id),
@@ -87,6 +90,7 @@ def _response(db: Session, run: ClubChallengeRun, runtime_results=()) -> dict:
         "reputation": run.reputation,
         "choices": run.choices,
         "ending": run.ending,
+        "chapter_record": asdict(chapter_record) if chapter_record else None,
         "next_choice_options": _choice_options(next_tick),
         "next_story": _story(next_tick),
         "member_agent_ids": [

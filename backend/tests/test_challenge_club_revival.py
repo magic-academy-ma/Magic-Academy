@@ -13,11 +13,14 @@ from app.simulation.challenge.club_revival import (
     apply_internal_conflict_choice,
     apply_recruitment_strategy,
     build_closure_warning_event,
+    build_club_record,
     evaluate_club_ending,
     plan_final_event,
     plan_internal_conflict_events,
     plan_recruitment_event,
+    record_choice,
 )
+from app.simulation.challenge.record import WATCH, ChapterGrade, InterventionRecord
 from app.simulation.policy.models import AgentSnapshot
 from app.simulation.policy.registries.event_policy import build_event_effect_candidates
 
@@ -179,3 +182,29 @@ def test_observing_negative_conflict_can_leave_one_member():
         choice=InternalConflictChoice.OBSERVE,
         negative_reaction=True,
     ) == (1, 40)
+
+
+@pytest.mark.parametrize(
+    ("ending", "grade"),
+    [
+        (ClubEnding.REVIVAL, ChapterGrade.GOOD),
+        (ClubEnding.CONDITIONAL, ChapterGrade.MIXED),
+        (ClubEnding.ONE_MEMBER, ChapterGrade.BAD),
+        (ClubEnding.CLOSED, ChapterGrade.BAD),
+    ],
+)
+def test_club_record_is_chapter_three_with_story_grade(ending, grade):
+    interventions = [InterventionRecord("3", WATCH, 12.0)]
+    record = build_club_record(ending=ending, interventions=interventions)
+    assert record.chapter == 3
+    assert record.ending == ending.value
+    assert record.grade == grade
+    assert record.interventions == tuple(interventions)
+
+
+def test_observe_choice_is_recorded_as_watch():
+    assert record_choice(InternalConflictChoice.OBSERVE.value) == WATCH
+    assert (
+        record_choice(RecruitmentStrategy.EXPERIENCE_EVENT.value)
+        == RecruitmentStrategy.EXPERIENCE_EVENT.value
+    )

@@ -103,6 +103,9 @@ class ClubChallengeRun(TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="in_progress")
     ending: Mapped[str | None] = mapped_column(String(20))
+    interventions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
