@@ -54,6 +54,8 @@ RANDOM_INCIDENT_EFFECTS: dict[str, tuple[tuple[str, int], ...]] = {
     "INGREDIENT_SHORTAGE": (("stress", 5),),
     "CUSTOMER_RUSH": (("fatigue", 5),),
     "RIVAL_BOOTH_ISSUE": (("stress", 5),),
+    # 챌린지3 폐부 경고도 기존 MEDIUM 상태 티어를 재사용한다.
+    "CLUB_CLOSURE_WARNING": (("stress", 5),),
 }
 
 # Magic Layer 특수 Event → typed state signal 매핑 (slice-5-integration.md §2,

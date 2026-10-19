@@ -11,7 +11,7 @@ const STATUS_CHIP = {
   ENDED:   { label: 'ENDED',   cls: 'sim-status--ended' },
 };
 
-export default function MainPage({ displayName, onStart, onMyPage, onRumorChapter, simulations = [] }) {
+export default function MainPage({ displayName, onStart, onStoryMode, onMyPage, simulations = [] }) {
   const cards = simulations.length > 0 ? simulations : PLACEHOLDER_SIMS;
 
   return (
@@ -47,16 +47,14 @@ export default function MainPage({ displayName, onStart, onMyPage, onRumorChapte
             <button type="button" className="main-cta-outline" onClick={onMyPage}>
               기록 보기
             </button>
+            <button type="button" className="main-cta-outline" onClick={onStoryMode}>
+              스토리모드
+            </button>
           </div>
         </div>
       </section>
 
       <main className="main-content">
-        <section className="panel">
-          <h2>스토리모드 · CHAPTER 1</h2>
-          <p>학생자치위원회의 임시 조정관이 되어 소문의 출처와 진실을 확인하세요.</p>
-          <button type="button" className="main-cta-outline" onClick={onRumorChapter}>거짓 소문의 확산을 막아라</button>
-        </section>
         <div>
           <div className="section-header">
             <span className="section-title">이어서 관찰하기</span>
@@ -91,6 +89,30 @@ export default function MainPage({ displayName, onStart, onMyPage, onRumorChapte
                 </div>
               );
             })}
+
+            <div
+              className="sim-card sim-card--challenge"
+              role="button"
+              tabIndex={0}
+              onClick={onStoryMode}
+              onKeyDown={(e) => e.key === 'Enter' && onStoryMode()}
+              aria-label="스토리모드 사람을 움직이는 마법"
+            >
+              <div className="sim-card__thumb">
+                <div className="sim-card__thumb-img" />
+                <div className="sim-card__thumb-overlay" />
+                <div className="sim-card__thumb-status">
+                  <span className="sim-status sim-status--challenge">STORY</span>
+                </div>
+                <div className="sim-card__thumb-preview">
+                  <span>▶ 스토리모드</span>
+                </div>
+              </div>
+              <div className="sim-card__body">
+                <div className="sim-card__name">사람을 움직이는 마법</div>
+                <div className="sim-card__meta">CHAPTER 1~4 · FINAL</div>
+              </div>
+            </div>
 
             <div
               className="sim-card sim-card--new"

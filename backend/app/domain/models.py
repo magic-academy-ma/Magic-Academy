@@ -70,6 +70,111 @@ class Simulation(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ClubChallengeRun(TimestampMixin, Base):
+    __tablename__ = "club_challenge_runs"
+    __table_args__ = (
+        UniqueConstraint("simulation_id", name="uq_club_challenge_runs_simulation"),
+        CheckConstraint("current_tick BETWEEN 0 AND 9", name="ck_club_challenge_runs_tick"),
+        CheckConstraint("member_count >= 0", name="ck_club_challenge_runs_members"),
+        CheckConstraint("reputation BETWEEN 0 AND 100", name="ck_club_challenge_runs_reputation"),
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')",
+            name="ck_club_challenge_runs_status",
+        ),
+        CheckConstraint(
+            "ending IS NULL OR ending IN ('REVIVAL', 'CONDITIONAL', 'ONE_MEMBER', 'CLOSED')",
+            name="ck_club_challenge_runs_ending",
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    current_tick: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    member_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="2")
+    reputation: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="40")
+    choices: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="in_progress")
+    ending: Mapped[str | None] = mapped_column(String(20))
+    interventions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StoryRun(TimestampMixin, Base):
+    """스토리모드 한 학기: CHAPTER 1~4를 차례로 진행하고 FINAL 엔딩을 남긴다."""
+
+    __tablename__ = "story_runs"
+    __table_args__ = (
+        CheckConstraint("chapter BETWEEN 1 AND 5", name="ck_story_runs_chapter"),
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')", name="ck_story_runs_status"
+        ),
+        CheckConstraint(
+            "final_ending IS NULL OR final_ending IN ('BEST', 'NORMAL', 'BAD')",
+            name="ck_story_runs_final_ending",
+        ),
+        Index("idx_story_runs_owner_created", "owner_id", text("created_at DESC")),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    owner_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    # 지금 맡고 있는 챕터. 5는 네 챕터를 모두 마친 FINAL 단계다.
+    chapter: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="1")
+    chapter_run_ids: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    records: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="in_progress")
+    final_ending: Mapped[str | None] = mapped_column(String(10))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StoryChapterRun(TimestampMixin, Base):
+    """CHAPTER 2·4 진행 상태. 챕터별 세부 상태는 state JSONB에 둔다."""
+
+    __tablename__ = "story_chapter_runs"
+    __table_args__ = (
+        UniqueConstraint("simulation_id", name="uq_story_chapter_runs_simulation"),
+        CheckConstraint("chapter IN (2, 4)", name="ck_story_chapter_runs_chapter"),
+        CheckConstraint("current_tick BETWEEN 0 AND 9", name="ck_story_chapter_runs_tick"),
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')", name="ck_story_chapter_runs_status"
+        ),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    simulation_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("simulations.id", ondelete="RESTRICT", onupdate="RESTRICT"),
+        nullable=False,
+    )
+    chapter: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    seed: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    current_tick: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    interventions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="in_progress")
+    ending: Mapped[str | None] = mapped_column(String(20))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SimulationConfig(TimestampMixin, Base):
     __tablename__ = "simulation_configs"
     __table_args__ = (
