@@ -27,7 +27,7 @@ TOPICS = {'RUMOR': '들은 소문', 'SOURCE': '누구에게 들었나', 'OBSERVE
 ACHIEVEMENTS = dict(zip(
     ('CHAPTER1_CLEAR', 'FIRST_SENTENCE', 'HEARD_AND_SEEN', 'FAN_THE_FLAME', 'SILENT_WITNESS',
      'THREE_RUMORS', 'AHEAD_OF_RUMOR', 'SELF_CORRECTION', 'INDECISIVE'),
-    ('챌린지 1 클리어', '소문의 첫 문장', '들은 것과 본 것', '불씨를 키운 사람', '침묵을 깬 증인',
+    ('CHAPTER 1 클리어', '소문의 첫 문장', '들은 것과 본 것', '불씨를 키운 사람', '침묵을 깬 증인',
      '말이 말을 낳고', '소문보다 한발 먼저', '되돌리는 한마디', '우유부단하시네요')))
 
 

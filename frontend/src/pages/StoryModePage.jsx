@@ -24,6 +24,15 @@ function RecordList({ records }) {
   </ol>;
 }
 
+// 방금 끝낸 챕터에서 처음 달성한 업적 — 챕터 완료 응답에만 담긴다.
+function NewAchievements({ achievements = [] }) {
+  if (achievements.length === 0) return null;
+  return <section className="story-achievements" aria-label="새 업적">
+    <p className="story-eyebrow">업적 달성</p>
+    <ul>{achievements.map((achievement) => <li key={achievement.id}>{achievement.name}</li>)}</ul>
+  </section>;
+}
+
 export default function StoryModePage({ auth, onBack }) {
   const token = auth.access_token;
   const [story, setStory] = useState(undefined);
@@ -75,6 +84,7 @@ export default function StoryModePage({ auth, onBack }) {
     return <main className="story-page">
       <button type="button" className="story-back" onClick={onBack}>← 메인으로</button>
       <section className="story-card">
+        <NewAchievements achievements={story.new_achievements} />
         <p className="story-eyebrow">FINAL</p>
         <h1>한 학기의 기록</h1>
         {FINAL_INTRO.map((text) => <p key={text}>{text}</p>)}
@@ -98,6 +108,7 @@ export default function StoryModePage({ auth, onBack }) {
     return <main className="story-page">
       <button type="button" className="story-back" onClick={onBack}>← 메인으로</button>
       <section className="story-card">
+        <NewAchievements achievements={story.new_achievements} />
         <RecordList records={story.records} />
         <p className="story-eyebrow">CHAPTER {story.chapter} · {chapter.theme}</p>
         <h1>{chapter.title}</h1>

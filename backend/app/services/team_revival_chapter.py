@@ -66,12 +66,17 @@ from app.simulation.challenge.controller import (
 from app.simulation.challenge.evaluation import (
     TeamRevivalEnding,
     build_team_revival_record,
+    evaluate_team_revival_achievements,
     evaluate_team_revival_ending,
 )
 from app.simulation.challenge.forced_events import build_forced_group_project
 from app.simulation.challenge.llm_override import merge_injections
 from app.simulation.challenge.progress import calculate_project_progress
-from app.simulation.challenge.record import ChapterRecord, InterventionRecord
+from app.simulation.challenge.record import (
+    ChapterRecord,
+    InterventionRecord,
+    chapter_achievements,
+)
 
 CHAPTER = 2
 ROUND1_TRIGGER_TICK = 1
@@ -355,3 +360,24 @@ def team_revival_response(run: StoryChapterRun) -> dict:
         "round_title": ROUND_TITLES[min(3, (max(1, run.current_tick) - 1) // 3 + 1)],
         "total_ticks": TOTAL_TICKS,
     }
+
+
+def team_revival_achievements(db: Session, run: StoryChapterRun) -> frozenset[str]:
+    if run.ending is None:
+        return frozenset()
+    interventions = [InterventionRecord(**item) for item in run.interventions]
+    return chapter_achievements(
+        chapter=CHAPTER,
+        status=run.status,
+        interventions=interventions,
+        achieved=evaluate_team_revival_achievements(
+            ending=TeamRevivalEnding(run.ending),
+            interventions=interventions,
+            initial_affections=run.state["initial_affections"],
+            final_affections=list(
+                directional_affections(
+                    db, run.simulation_id, _roster(run.state).all_agent_ids
+                ).values()
+            ),
+        ),
+    )

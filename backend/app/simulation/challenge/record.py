@@ -8,7 +8,7 @@ docs/04-feature-specs/challenge-mode-team-revival.md §4.1/§4.8:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -16,6 +16,10 @@ WATCH = "WATCH"
 
 # 공통 업적 「우유부단하시네요」: 사용자 개입에서 결정에 5분 이상 사용
 INDECISIVE_THRESHOLD_SECONDS = 5 * 60
+INDECISIVE = "INDECISIVE"
+
+# 챕터 run이 정상 종료된 상태. 중단(ABORTED)된 run은 이 상태가 되지 않는다.
+RUN_COMPLETED = "completed"
 
 
 class ChapterGrade(StrEnum):
@@ -49,6 +53,25 @@ def is_indecisive(interventions: Sequence[InterventionRecord]) -> bool:
     )
 
 
+def chapter_achievements(
+    *,
+    chapter: int,
+    status: str,
+    interventions: Sequence[InterventionRecord],
+    achieved: Iterable[str] = (),
+) -> frozenset[str]:
+    """챕터 run 하나로 얻는 업적 ID. ``achieved``는 챕터별 판정 결과다.
+
+    run이 중단(ABORTED) 없이 끝나야 클리어이고, 끝나지 않은 run은 아무 업적도 주지 않는다.
+    """
+    if status != RUN_COMPLETED:
+        return frozenset()
+    ids = {f"CHAPTER{chapter}_CLEAR", *achieved}
+    if is_indecisive(interventions):
+        ids.add(INDECISIVE)
+    return frozenset(ids)
+
+
 # ─── FINAL — 「한 학기의 기록」 ──────────────────────────────────────────────
 
 STORY_CHAPTER_COUNT = 4
@@ -70,3 +93,13 @@ def evaluate_final_ending(grades: Sequence[ChapterGrade]) -> FinalEnding:
     if sum(1 for grade in grades if grade == ChapterGrade.BAD) >= FINAL_BAD_BAD_COUNT:
         return FinalEnding.BAD
     return FinalEnding.NORMAL
+
+
+def ending_achievements(*, cleared_chapters: int, semester_completed: bool) -> frozenset[str]:
+    """엔딩 스토리 해금: 챕터 1~4 모두 클리어(FINAL 도달). 클리어: 학기 완료."""
+    ids: set[str] = set()
+    if cleared_chapters >= STORY_CHAPTER_COUNT:
+        ids.add("ENDING_UNLOCKED")
+        if semester_completed:
+            ids.add("ENDING_CLEAR")
+    return frozenset(ids)

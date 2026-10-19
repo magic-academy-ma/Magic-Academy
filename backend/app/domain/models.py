@@ -106,6 +106,10 @@ class ClubChallengeRun(TimestampMixin, Base):
     interventions: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
+    # 시작 회원끼리의 방향성 affection — 「파국이다!」 판정 기준
+    initial_member_affections: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
