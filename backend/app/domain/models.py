@@ -175,6 +175,25 @@ class StoryChapterRun(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class UserAchievement(Base):
+    """계정이 달성한 업적. 같은 업적은 한 번만 남기고 최초 달성 시각을 유지한다."""
+
+    __tablename__ = "user_achievements"
+    __table_args__ = (
+        UniqueConstraint("user_id", "achievement_id", name="uq_user_achievements_user_achievement"),
+    )
+
+    id: Mapped[PythonUUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[PythonUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # app.domain.achievements 카탈로그의 업적 ID
+    achievement_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    achieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SimulationConfig(TimestampMixin, Base):
     __tablename__ = "simulation_configs"
     __table_args__ = (
