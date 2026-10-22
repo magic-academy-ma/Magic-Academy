@@ -170,8 +170,14 @@ def trace_tick(function):
         simulation = bound.get('simulation')
         metadata = {
             'simulation_id': str(snapshot.simulation_id if snapshot else simulation.id),
-            'tick_number': snapshot.current_tick if snapshot else simulation.current_tick + 1,
         }
-        with observation('tick.engine' if snapshot else 'tick', metadata=metadata):
-            return await function(*args, **kwargs)
+        if snapshot is not None:
+            metadata['tick_number'] = snapshot.current_tick
+        with observation('tick.engine' if snapshot else 'tick', metadata=metadata) as span:
+            result = await function(*args, **kwargs)
+            if simulation is not None:
+                # The returned number reflects the locked refresh and completed
+                # execution. Failed calls must not publish a guessed tick number.
+                span.update(metadata={'tick_number': result.current_tick})
+            return result
     return wrapped

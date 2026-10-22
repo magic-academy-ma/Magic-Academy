@@ -100,7 +100,8 @@ def test_recording_failure_does_not_change_result(monkeypatch):
     assert AgentRuntime(MockLLMClient()).run(inp) == expected
 
 
-def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch):
+@pytest.mark.parametrize("cache_tokens", [None, (0, 0), (3, 4)])
+def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch, cache_tokens):
     from types import SimpleNamespace
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
     from app.simulation.anthropic_llm_client import AnthropicLLMClient
@@ -109,13 +110,21 @@ def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch):
     monkeypatch.setattr(tracing, '_create_transport', lambda settings: exporter)
     monkeypatch.setattr(tracing, '_client', None)
     tracing.configure_tracing(Settings(_env_file=None, langfuse_enabled=True,
-        langfuse_public_key='pk-local-tracing-test', langfuse_secret_key='sk-local-tracing-test',
+        langfuse_public_key=f'pk-local-tracing-test-{cache_tokens}', langfuse_secret_key='sk-local-tracing-test',
         langfuse_base_url='http://localhost:1'))
     inp = make_runtime_input()
     inp.memories.append({'content': 'private-memory-do-not-export'})
+    expected_usage = {'input': 12, 'output': 5}
+    provider_usage = {'input_tokens': 12, 'output_tokens': 5}
+    if cache_tokens is not None:
+        cache_fields = dict(zip(
+            ('cache_read_input_tokens', 'cache_creation_input_tokens'), cache_tokens
+        ))
+        provider_usage.update(cache_fields)
+        expected_usage.update(cache_fields)
     client = AnthropicLLMClient(model='test-model', max_tokens=100,
         client=FakeAnthropic(SimpleNamespace(parsed_output=valid_response(inp),
-            usage=SimpleNamespace(input_tokens=12, output_tokens=5))))
+            usage=SimpleNamespace(**provider_usage))))
     with tracing.observation('tick'):
         AgentRuntime(client).run(inp)
         with pytest.raises(ValueError):
@@ -132,7 +141,7 @@ def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch):
     assert 'private-exception-message' not in str([s.attributes for s in spans])
     import json
     usage = json.loads(names['anthropic.generate'].attributes['langfuse.observation.usage_details'])
-    assert usage == {'input': 12, 'output': 5}
+    assert usage == expected_usage
     assert all(not span.events for span in spans)
     assert all("public_key" not in (span.instrumentation_scope.attributes or {}) for span in spans)
 
@@ -280,3 +289,88 @@ def test_sdk_export_transport_failure_keeps_runtime_result(monkeypatch):
         langfuse_base_url='http://localhost:1'))
     assert AgentRuntime(MockLLMClient()).run(inp) == expected
     tracing.shutdown_tracing()
+
+
+async def test_manual_tick_trace_uses_refreshed_tick_under_concurrent_execution(recorder):
+    import asyncio
+    from types import SimpleNamespace
+    from app.simulation.tick_engine import TickEngine, TickEvent, WorldSnapshot
+
+    lock = asyncio.Lock()
+    committed = SimpleNamespace(current_tick=5)
+
+    @tracing.trace_tick
+    async def advance(db, simulation):
+        async with lock:
+            # Both callers hold stale pre-lock objects; the locked refresh is authoritative.
+            await asyncio.sleep(0)
+            simulation.current_tick = committed.current_tick
+            current_tick = simulation.current_tick + 1
+            async def unused_runtime(*args):
+                pytest.fail('Empty participant tick must not call runtime')
+            await TickEngine(unused_runtime).run_tick(
+                [], TickEvent('event', 'class', set()),
+                WorldSnapshot(simulation.id, current_tick),
+            )
+            committed.current_tick = simulation.current_tick = current_tick
+            return SimpleNamespace(current_tick=current_tick)
+
+    results = await asyncio.gather(*(
+        advance(None, SimpleNamespace(id='simulation', current_tick=0))
+        for _ in range(2)
+    ))
+    roots = [s for s in recorder.spans if s['fields']['name'] == 'tick']
+    engines = [s for s in recorder.spans if s['fields']['name'] == 'tick.engine']
+    assert [r.current_tick for r in results] == [6, 7]
+    assert [metadata(s)['tick_number'] for s in roots] == [6, 7]
+    assert all('tick_number' not in s['fields']['metadata'] for s in roots)
+    assert all(metadata(s)['status'] == 'completed' for s in roots)
+    assert all(metadata(s)['tick_number'] == metadata(s['parent'])['tick_number'] for s in engines)
+    assert recorder.current.get() is None
+
+
+async def test_manual_tick_lock_rejection_does_not_read_unlocked_tick(recorder):
+    from types import SimpleNamespace
+    from app.services.manual_tick import advance_manual_tick, TickAlreadyRunningError
+
+    class UnlockedSimulation:
+        id = 'simulation'
+        @property
+        def current_tick(self):
+            pytest.fail('Tracing must not read current_tick before the DB lock')
+
+    db = SimpleNamespace(scalar=lambda statement: False)
+    with pytest.raises(TickAlreadyRunningError):
+        await advance_manual_tick(db, UnlockedSimulation(), runtime=AgentRuntime(MockLLMClient()))
+    root = recorder.spans[0]
+    assert metadata(root)['status'] == 'failed'
+    assert 'tick_number' not in metadata(root)
+
+
+@pytest.mark.parametrize('mutate_tick', [False, True])
+async def test_failed_manual_tick_does_not_publish_an_uncommitted_tick(recorder, mutate_tick):
+    from types import SimpleNamespace
+    error = ValueError('original failure')
+    simulation = SimpleNamespace(id='simulation', current_tick=0)
+
+    @tracing.trace_tick
+    async def advance(db, simulation):
+        if mutate_tick:
+            simulation.current_tick = 9
+        raise error
+
+    with pytest.raises(ValueError) as caught:
+        await advance(None, simulation)
+    assert caught.value is error
+    assert metadata(recorder.spans[0])['status'] == 'failed'
+    assert 'tick_number' not in metadata(recorder.spans[0])
+
+
+async def test_trace_tick_preserves_invalid_call_contract(recorder):
+    @tracing.trace_tick
+    async def advance(db, simulation):
+        pytest.fail('Invalid call must not enter the function')
+
+    with pytest.raises(TypeError):
+        await advance()
+    assert recorder.spans == []
