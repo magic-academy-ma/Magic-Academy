@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
     anthropic_api_key: str | None = None
+    langfuse_enabled: bool = False
+    langfuse_public_key: str | None = Field(default=None, repr=False)
+    langfuse_secret_key: str | None = Field(default=None, repr=False)
+    langfuse_base_url: str | None = None
     agent_runtime_model: str = "claude-haiku-4-5-20251001"
     agent_runtime_max_tokens: int = Field(default=4096, gt=0)
     agent_tick_llm_quota: int = Field(default=12, gt=0)
@@ -37,6 +41,11 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("langfuse_enabled", mode="before")
+    @classmethod
+    def parse_langfuse_enabled(cls, value):
+        return str(value).strip().lower() in {"true", "1", "yes", "on"}
 
     @property
     def cors_origin_list(self) -> list[str]:
