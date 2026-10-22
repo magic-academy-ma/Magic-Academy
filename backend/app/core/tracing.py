@@ -11,6 +11,62 @@ logger = logging.getLogger(__name__)
 _client = None
 
 
+def _create_transport(settings):
+    from base64 import b64encode
+    from importlib.metadata import version
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+    authorization = b64encode(
+        f"{settings.langfuse_public_key}:{settings.langfuse_secret_key}".encode()
+    ).decode("ascii")
+    return OTLPSpanExporter(
+        endpoint=settings.langfuse_base_url.rstrip("/") + "/api/public/otel/v1/traces",
+        headers={
+            "Authorization": "Basic " + authorization,
+            "x-langfuse-sdk-name": "python",
+            "x-langfuse-sdk-version": version("langfuse"),
+            "x-langfuse-ingestion-version": "4",
+        },
+        timeout=5,
+    )
+
+
+def _create_exporter(settings):
+    from opentelemetry.sdk.trace import ReadableSpan
+    from opentelemetry.sdk.trace.export import SpanExporter
+    from opentelemetry.sdk.util.instrumentation import InstrumentationScope
+
+    transport = _create_transport(settings)
+
+    class CredentialFreeScopeExporter(SpanExporter):
+        def export(self, spans):
+            sanitized = []
+            for span in spans:
+                scope = span.instrumentation_scope
+                # SDK project routing has already run. The public key is needed
+                # for authentication only, never as exported scope metadata.
+                sanitized.append(ReadableSpan(
+                    name=span.name, context=span.context, parent=span.parent,
+                    resource=span.resource, attributes=span.attributes,
+                    events=span.events, links=span.links, kind=span.kind,
+                    status=span.status, start_time=span.start_time,
+                    end_time=span.end_time,
+                    instrumentation_scope=InstrumentationScope(
+                        name=scope.name, version=scope.version,
+                        schema_url=scope.schema_url,
+                    ) if scope else None,
+                ))
+            return transport.export(sanitized)
+
+        def shutdown(self):
+            transport.shutdown()
+
+        def force_flush(self, timeout_millis=30000):
+            return transport.force_flush(timeout_millis)
+
+    return CredentialFreeScopeExporter()
+
+
 def _create_client(settings):
     from langfuse import Langfuse
     from opentelemetry.sdk.trace import TracerProvider
@@ -20,6 +76,7 @@ def _create_client(settings):
         secret_key=settings.langfuse_secret_key,
         base_url=settings.langfuse_base_url,
         debug=False,
+        span_exporter=_create_exporter(settings),
         tracer_provider=TracerProvider(),
         # Export only our manual SDK observations, never provider auto-instrumentation.
         should_export_span=lambda span: span.instrumentation_scope.name == 'langfuse-sdk',

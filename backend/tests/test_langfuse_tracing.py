@@ -102,15 +102,11 @@ def test_recording_failure_does_not_change_result(monkeypatch):
 
 def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch):
     from types import SimpleNamespace
-    import langfuse
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
     from app.simulation.anthropic_llm_client import AnthropicLLMClient
     from tests.test_anthropic_llm_client import FakeAnthropic
     exporter = InMemorySpanExporter()
-    sdk = langfuse.Langfuse
-    def local_sdk(**kwargs):
-        return sdk(**kwargs, span_exporter=exporter)
-    monkeypatch.setattr(langfuse, 'Langfuse', local_sdk)
+    monkeypatch.setattr(tracing, '_create_transport', lambda settings: exporter)
     monkeypatch.setattr(tracing, '_client', None)
     tracing.configure_tracing(Settings(_env_file=None, langfuse_enabled=True,
         langfuse_public_key='pk-local-tracing-test', langfuse_secret_key='sk-local-tracing-test',
@@ -138,6 +134,7 @@ def test_real_sdk_exports_parent_hierarchy_usage_and_no_raw_data(monkeypatch):
     usage = json.loads(names['anthropic.generate'].attributes['langfuse.observation.usage_details'])
     assert usage == {'input': 12, 'output': 5}
     assert all(not span.events for span in spans)
+    assert all("public_key" not in (span.instrumentation_scope.attributes or {}) for span in spans)
 
 
 @pytest.mark.parametrize('enabled,url', [('', ''), ('invalid', ''), (True, 'file:///tmp/a'), (True, 'http://['), (True, 'https://user:pass@example.com')])
@@ -270,13 +267,11 @@ def test_initialization_failure_is_safe_and_does_not_log_secret(monkeypatch, cap
 
 
 def test_sdk_export_transport_failure_keeps_runtime_result(monkeypatch):
-    import langfuse
     from opentelemetry.sdk.trace.export import SpanExporter
     class FailingExporter(SpanExporter):
         def export(self, spans):
             raise ConnectionError('simulated-export-failure')
-    sdk = langfuse.Langfuse
-    monkeypatch.setattr(langfuse, 'Langfuse', lambda **kwargs: sdk(**kwargs, span_exporter=FailingExporter()))
+    monkeypatch.setattr(tracing, '_create_transport', lambda settings: FailingExporter())
     monkeypatch.setattr(tracing, '_client', None)
     inp = make_runtime_input()
     expected = AgentRuntime(MockLLMClient()).run(inp)

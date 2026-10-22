@@ -113,7 +113,8 @@ SDK 초기화는 서버 lifespan에서 한 번 수행하고 종료 시 flush/shu
 제외: 사용자 입력, 메모리, 프롬프트, LLM 응답 전문, 이름/성격/상태 본문,
 예외 메시지·스택, 키/인증 토큰. 예외 타입명만 failure_type으로 기록합니다. 수동 계측만 사용하며 provider 자동 계측과
 LangChain callback을 등록하지 않습니다. 별도 tracer provider와 SDK scope 필터로
-자동 계측 span을 export하지 않습니다. Mock은 `provider=mock`인 호출 시도로
+자동 계측 span을 export하지 않습니다. SDK가 scope에 추가하는 public key도
+export 직전에 제거하며, 키는 Cloud 인증 헤더에만 사용합니다. Mock은 `provider=mock`인 호출 시도로
 구분하고 Generation을 만들지 않습니다. 토큰 누락 시 사용량을 기록하지 않으며
 비용은 애플리케이션에서 계산하지 않습니다. Cloud가 모델 가격으로 표시하는
 비용은 Langfuse 측 추산일 수 있습니다.
