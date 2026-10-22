@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
@@ -104,7 +105,11 @@ class RuntimeOrchestrator:
         with ThreadPoolExecutor(
             max_workers=self.MAX_CONCURRENT_RUNTIMES
         ) as executor:
-            proposed_results = tuple(executor.map(self._runtime.run, runtime_inputs))
+            futures = [
+                executor.submit(copy_context().run, self._runtime.run, runtime_input)
+                for runtime_input in runtime_inputs
+            ]
+            proposed_results = tuple(future.result() for future in futures)
         resolution = resolve_talk_conflicts(proposed_results)
         results = resolution.runtime_results
         save_result = self._result_sink.save_batch(results)

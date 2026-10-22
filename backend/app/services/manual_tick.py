@@ -32,6 +32,7 @@ from app.repositories.memory_repository import (
 )
 from app.repositories.simulation_snapshots import SimulationConfigRepository
 from app.services.database_dialogue_results import DatabaseDialogueSink
+from app.core.tracing import trace_tick
 from app.services.database_runtime_results import DatabaseRuntimeResultSink
 from app.services.event_frequency_history import build_event_parameters
 from app.services.event_magic_phase import (
@@ -481,6 +482,7 @@ def _build_event_batch(
     )
 
 
+@trace_tick
 async def advance_manual_tick(
     db: Session,
     simulation: Simulation,
