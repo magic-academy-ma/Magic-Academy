@@ -137,6 +137,18 @@ export 직전에 제거하며, 키는 Cloud 인증 헤더에만 사용합니다.
 
 Cloud 수신은 API 키 없이 자동 검증하지 않습니다. 자동 테스트는 가짜 provider와
 메모리 exporter로 외부 호출 없이 계층/사용량/실패 격리를 검증합니다.
+
+현재 검증 범위:
+
+- 검증 완료: Langfuse Cloud 인증, Mock Tick의 실제 Cloud 수신, Tick → Agent →
+  호출 시도 계층, 원문·키 제외, 격리된 테스트 DB에서 전체 회귀 테스트.
+- 미검증: 실제 Anthropic Generation 및 실제 Claude 응답의 토큰 사용량.
+  `ANTHROPIC_API_KEY`가 없어 유료 모델 호출은 수행하지 않았습니다.
+  가짜 provider 응답 기반 Generation·사용량 테스트와 실제 API 검증은 구분합니다.
+- 별도 로컬 환경 문제: 기존 PostgreSQL 비밀번호 인증 불일치로 일반 Compose
+  backend 기동이 실패했습니다. 기존 DB·볼륨·자격증명은 변경하지 않았으며,
+  격리된 테스트 DB의 검증 결과를 사용합니다.
+
 공식 참고: [SDK 개요](https://langfuse.com/docs/observability/sdk/overview),
 [v5 호환성](https://langfuse.com/docs/observability/sdk/upgrade-path/python-v4-to-v5),
 [수동 계측](https://langfuse.com/docs/observability/sdk/instrumentation).
