@@ -140,11 +140,19 @@ Cloud 수신은 API 키 없이 자동 검증하지 않습니다. 자동 테스�
 
 현재 검증 범위:
 
-- 검증 완료: Langfuse Cloud 인증, Mock Tick의 실제 Cloud 수신, Tick → Agent →
-  호출 시도 계층, 원문·키 제외, 격리된 테스트 DB에서 전체 회귀 테스트.
-- 미검증: 실제 Anthropic Generation 및 실제 Claude 응답의 토큰 사용량.
-  `ANTHROPIC_API_KEY`가 없어 유료 모델 호출은 수행하지 않았습니다.
-  가짜 provider 응답 기반 Generation·사용량 테스트와 실제 API 검증은 구분합니다.
+- 검증 완료: Langfuse Cloud 인증, Mock Tick 및 실제 Anthropic Generation의
+  Cloud 수신을 Observations API v2로 조회하여 확인했습니다.
+- 실제 Claude 검증: DB를 사용하지 않는 TickEngine → AgentRuntime →
+  AnthropicLLMClient 경로에서 합성 Agent 1명으로 요청 1회를 실행했습니다.
+  모델 `claude-haiku-4-5-20251001`, 입력 3,721 / 출력 365 tokens,
+  Generation 지연 10.714초, HTTP 200, RuntimeStatus `PROPOSED`, retry_count 0.
+  Cloud의 모델·토큰 수가 실제 API 응답과 일치하고 부모·자식 연결이 정상임을 확인했습니다.
+- 원문·키 제외: Cloud 조회에서 input/output 전문, 프롬프트, 합성 Agent 입력,
+  행동 설명 원문, API 키 및 SDK scope public key가 없는 것을 확인했습니다.
+- 검증 한계: 실제 API 검증은 단일 Agent의 성공 경로 1회입니다. SDK 재시도는
+  비활성화하고 Runtime quota는 1로 제한했습니다. 실제 유료 재시도·실패 경로와
+  다중 Agent 호출은 추가 실행하지 않았으며, 해당 분기는 자동 테스트로 검증합니다.
+  DB 없는 실행이므로 일반 Compose/API와 기존 DB를 통한 전체 실행을 의미하지 않습니다.
 - 별도 로컬 환경 문제: 기존 PostgreSQL 비밀번호 인증 불일치로 일반 Compose
   backend 기동이 실패했습니다. 기존 DB·볼륨·자격증명은 변경하지 않았으며,
   격리된 테스트 DB의 검증 결과를 사용합니다.
