@@ -84,3 +84,25 @@ def build_forced_meeting(
         title=title,
         description=description,
     )
+
+
+def build_forced_festival(
+    *,
+    tick: int,
+    participant_agent_ids: Sequence[str],
+    location_id: str,
+    impact_level: ImpactLevel = ImpactLevel.MEDIUM,
+    title: str = "축제",
+    description: str = "",
+) -> Event:
+    """도전과제2(challenge-mode-festival-booth.md §4.3) 축제 당일 부스 운영 Event."""
+    return _forced_event(
+        event_type="FESTIVAL",
+        key_prefix="challenge_festival",
+        tick=tick,
+        participant_agent_ids=participant_agent_ids,
+        location_id=location_id,
+        impact_level=impact_level,
+        title=title,
+        description=description,
+    )
