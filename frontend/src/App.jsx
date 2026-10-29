@@ -18,6 +18,7 @@ import BrandingPage from "./pages/BrandingPage.jsx";
 import MainPage from "./pages/MainPage.jsx";
 import SavePage from "./pages/SavePage.jsx";
 import MyPage from "./pages/MyPage.jsx";
+import ClubChallengePage from "./pages/ClubChallengePage.jsx";
 import "./App.css";
 
 const ACTION_LABELS = {
@@ -443,7 +444,14 @@ export default function App() {
     <MainPage
       displayName={auth.user.display_name}
       onStart={() => setScreen("branding")}
+      onChallenge={() => setScreen("club-challenge")}
       onMyPage={() => setScreen("my-page")}
+    />
+  );
+  if (screen === "club-challenge") return (
+    <ClubChallengePage
+      token={auth.access_token}
+      onBack={() => setScreen("main")}
     />
   );
   if (screen === "my-page") return (

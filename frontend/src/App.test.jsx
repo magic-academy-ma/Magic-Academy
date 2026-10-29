@@ -105,6 +105,18 @@ async function completeOnboarding() {
 }
 
 describe('Slice 0 UI', () => {
+  it('opens the club revival challenge from the main page', async () => {
+    createFetchMock()
+    render(<App />)
+    await login()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: '동아리를 폐부에서 구하기 도전과제 시작' })
+    )
+
+    expect(screen.getByText(/STORY CHALLENGE 3/)).toBeInTheDocument()
+  })
+
   it('logs in, enrolls, completes persona setup, and renders six API agents', async () => {
     createFetchMock()
     render(<App />)

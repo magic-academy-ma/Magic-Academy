@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.agents import router as agents_router
 from app.api.auth import router as auth_router
+from app.api.club_challenge import router as club_challenge_router
 from app.api.dialogues import router as dialogues_router
 from app.api.events import router as events_router
 from app.api.simulation_history import router as simulation_history_router
@@ -16,6 +17,7 @@ from app.api.world_map import router as world_map_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
+api_router.include_router(club_challenge_router)
 api_router.include_router(events_router)
 api_router.include_router(agents_router)
 api_router.include_router(simulations_router)
