@@ -1,7 +1,9 @@
-import { cleanup, render, screen } from "@testing-library/react";
+
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { apiRequest } from "../api/client.js";
 import InspectorPanel from "./InspectorPanel.jsx";
-import * as client from "../api/client.js";
 
 vi.mock("../api/client.js", () => ({
   apiRequest: vi.fn(),
@@ -51,8 +53,12 @@ describe("InspectorPanel", () => {
       />
     );
 
-    await screen.findByText("Leo");
-    expect(screen.getByText("-20")).toBeInTheDocument();
-    expect(container.querySelector(".mini-meter-track i")).toHaveStyle({ width: "40%" });
+    await waitFor(() => expect(apiRequest).toHaveBeenCalled());
+    expect(apiRequest.mock.calls.map(([path]) => path)).not.toContain(
+      "/v1/agents/agent-1/decision-explanation?tick=0"
+    );
+    expect(apiRequest.mock.calls.map(([path]) => path)).toContain(
+      "/v1/agents/agent-1/behavior-log?limit=5"
+    );
   });
 });

@@ -10,6 +10,7 @@ from app.api.schemas import (
     AgentResponse,
     AgentStateDetailResponse,
     AgentStateResponse,
+    BehaviorLogResponse,
     DecisionExplanationDetailResponse,
     LocationResponse,
     MemoryResponse,
@@ -177,6 +178,33 @@ def list_agent_relationships(db: Session, agent_id: UUID, owner: User) -> list[R
             updated_at=relationship.updated_at,
         )
         for relationship, target in rows
+    ]
+
+
+def list_agent_behavior_log(
+    db: Session, agent_id: UUID, owner: User, limit: int
+) -> list[BehaviorLogResponse]:
+    _require_owned_agent(db, agent_id, owner)
+    results = db.scalars(
+        select(RuntimeResult)
+        .where(RuntimeResult.agent_id == agent_id)
+        .order_by(
+            RuntimeResult.tick_number.desc(),
+            RuntimeResult.created_at.desc(),
+            RuntimeResult.id.desc(),
+        )
+        .limit(limit)
+    ).all()
+    return [
+        BehaviorLogResponse(
+            id=result.id,
+            tick_number=result.tick_number,
+            status=result.status,
+            action_type=result.action_type,
+            utterance=result.intent.get("utterance"),
+            motivation_summary=result.intent.get("motivation_summary"),
+        )
+        for result in results
     ]
 
 

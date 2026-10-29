@@ -78,10 +78,14 @@ export default function InspectorPanel({ agent, simulationId, token, currentTick
     setLoading(true);
     setError("");
     const request = (path) => apiRequest(path, { token, signal: controller.signal });
+    const tick = Number(currentTick);
+    const explanationRequest = Number.isFinite(tick) && tick > 0
+      ? request(`/v1/agents/${agent.id}/decision-explanation?tick=${tick}`)
+      : Promise.resolve(null);
     Promise.allSettled([
       request(`/v1/agents/${agent.id}`),
       request(`/v1/agents/${agent.id}/state`),
-      request(`/v1/agents/${agent.id}/decision-explanation?tick=${Number.isFinite(Number(currentTick)) ? currentTick : 0}`),
+      explanationRequest,
       request(`/v1/agents/${agent.id}/behavior-log?limit=5`),
       request(`/v1/agents/${agent.id}/memories?limit=10`),
       request(`/v1/agents/${agent.id}/relationships`),
