@@ -281,3 +281,40 @@ def test_database_failure_rolls_back_prior_writes(db):
     assert db.get(Event, batch.events[0].id) is None
     assert get_event_result(db, ids[0], 1) is None
     assert db.scalar(select(AgentState.stress).where(AgentState.agent_id == ids[1])) == batch.resolved_effects[0].before
+
+
+def test_curse_spread_target_shares_carrier_expiry(db):
+    """감염된 Agent는 옮긴 Agent와 같은 Tick에 풀리고, 옮긴 쪽 저주가 끝나는 Tick엔 감염되지 않는다."""
+    ids = setup_simulation(db)
+    other = db.scalar(select(Agent).where(Agent.simulation_id == ids[0], Agent.fixture_key == "student-02"))
+    late = db.scalar(select(Agent).where(Agent.simulation_id == ids[0], Agent.fixture_key == "student-03"))
+    batch = make_batch(db, *ids, missing_agent_ids=[ids[1]])
+    special = batch.events[0].model_copy(update={"event_type": "STUDENT_MISSING", "source": "magic_layer"})
+    persist_event_batch(db, batch.model_copy(update={"events": (special,)}))
+    carrier = db.get(Agent, ids[1])
+
+    def spread(tick, target):
+        event = special.model_copy(update={"id": uuid4(), "event_type": "CURSE_SPREAD",
+                                           "participant_agent_ids": (ids[1], target.id)})
+        return batch.model_copy(update={"tick_number": tick, "events": (event,), "resolved_effects": (),
+                                        "missing_agent_ids": (), "cursed_agent_ids": (target.id,)})
+
+    for tick in range(2, 8):
+        db.get(Simulation, ids[0]).current_tick = tick - 1
+        db.flush()
+        if tick == 5:
+            persist_event_batch(db, spread(tick, other))
+            assert other.cursed_until_tick == carrier.cursed_until_tick == 7
+        elif tick == 7:
+            persist_event_batch(db, spread(tick, late))
+            assert (carrier.cursed_until_tick, other.cursed_until_tick, late.cursed_until_tick) == (None, None, None)
+        else:
+            persist_event_batch(db, batch.model_copy(update={
+                "tick_number": tick, "events": (), "resolved_effects": (), "missing_agent_ids": ()}))
+
+
+def test_cursed_status_requires_curse_spread_event(db):
+    ids = setup_simulation(db)
+    batch = make_batch(db, *ids, cursed_agent_ids=[ids[1]])
+    with pytest.raises(ValueError, match="CURSE_SPREAD"):
+        persist_event_batch(db, batch)

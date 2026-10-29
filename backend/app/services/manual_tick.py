@@ -41,6 +41,7 @@ from app.services.event_magic_phase import (
     EventParameters,
     run_event_and_magic_phase,
 )
+from app.services.achievements import grant_free_tick_achievements
 from app.services.event_persistence import persist_event_batch
 from app.services.execution_metadata import (
     ExecutionMetadataInput,
@@ -70,6 +71,7 @@ from app.simulation.event_master import (
     SCHEDULED_EVENT_TYPES,
     ScheduledEventInput,
 )
+from app.simulation.free_mode_achievements import AgentStatus
 from app.simulation.magic_layer import STUDENT_MISSING_STREAK_TICKS, AgentSnapshot as MagicAgentSnapshot
 from app.simulation.policy.models import (
     AgentSnapshot as PolicyAgentSnapshot,
@@ -470,6 +472,12 @@ def _build_event_batch(
         for event in result.special_events
         for agent_id in event.missing_agent_ids
     )
+    cursed_agent_ids = tuple(dict.fromkeys(
+        UUID(agent_id)
+        for event in result.special_events
+        if event.location_id is not None
+        for agent_id in event.newly_cursed_agent_ids
+    ))
     return EventBatch(
         simulation_id=simulation_id,
         run_id=str(run_id),
@@ -480,6 +488,7 @@ def _build_event_batch(
         events=tuple(event_writes),
         resolved_effects=tuple(state_deltas),
         missing_agent_ids=missing_agent_ids,
+        cursed_agent_ids=cursed_agent_ids,
     )
 
 
@@ -715,7 +724,15 @@ async def advance_manual_tick(
         tick_number=current_tick,
         result=event_and_magic_result,
     )
+    # 저장이 Agent 상태를 바꾸기 전에 저주 업적 판정용 상태를 남긴다.
+    statuses_before = {
+        str(agent.id): AgentStatus(agent.active_status, agent.cursed_until_tick is not None)
+        for agent in agents
+    }
     event_batch_result = persist_event_batch(db, event_batch)
+    grant_free_tick_achievements(
+        db, simulation, statuses_before, event_batch_result["agent_statuses"]
+    )
     first_result = batch.results[0]
     record_execution_metadata(
         db,

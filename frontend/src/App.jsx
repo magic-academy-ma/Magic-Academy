@@ -317,6 +317,8 @@ export default function App() {
   const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
   const [recentShare, setRecentShare] = useState(null);
   const refreshAgentsSilentlyRef = useRef(null);
+  // 이번 접속에서 이미 받은 자유 모드 목격 업적 — 받은 뒤에는 지급 요청을 보내지 않는다.
+  const freeAchievedRef = useRef(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
   const [agentTypeFilter, setAgentTypeFilter] = useState("전체");
@@ -541,9 +543,44 @@ export default function App() {
     }
   }
 
+  // 자유 모드 목격 업적 지급 요청 (achievements.md §5.3). 조건 확인은 서버가 한다.
+  function reportFreeAchievement(achievementId, path, body) {
+    if (freeAchievedRef.current.has(achievementId)) return;
+    apiRequest(`/v1/achievements/free/${path}`, {
+      token: auth.access_token,
+      method: "POST",
+      body: JSON.stringify({ simulation_id: simulation.id, ...body }),
+    })
+      .then((result) => {
+        if (result?.data?.new_achievements?.includes(achievementId)) {
+          freeAchievedRef.current.add(achievementId);
+        }
+      })
+      .catch((requestError) => console.error("[App] 업적 지급 요청 실패", requestError));
+  }
+
+  // 플레이어가 직접 학생을 골라 Inspector에 띄울 때만 쓴다(화면 진입 시 자동 선택 제외).
+  function inspectAgent(agent) {
+    setSelectedAgent(agent);
+    if (agent && agent.agent_type !== "professor") {
+      reportFreeAchievement("MISSING_STUDENT_RETURN", "inspector", { agent_id: agent.id });
+    }
+  }
+
+  function openInspectorModal() {
+    setShowInspectorModal(true);
+    if (selectedAgent) inspectAgent(selectedAgent);
+  }
+
+  function handleEventOpen(event) {
+    if (event.event_type?.toLowerCase() === "magical_discovery") {
+      reportFreeAchievement("MAGIC_DISCOVERY", "event", { event_id: event.id });
+    }
+  }
+
   function handleEventAgentSelect(agentId) {
     const agent = agents.find((a) => a.id === agentId);
-    if (agent) setSelectedAgent(agent);
+    if (agent) inspectAgent(agent);
   }
 
   return (
@@ -565,7 +602,7 @@ export default function App() {
           <button type="button" onClick={handleNightSkip}>
             밤 스킵
           </button>
-          <button type="button" className="topbar-action" onClick={() => setShowInspectorModal(true)}>Inspector 열기</button>
+          <button type="button" className="topbar-action" onClick={openInspectorModal}>Inspector 열기</button>
         </div>
         <div className="header-right">
           <button type="button" className="topbar-action header-save" onClick={() => setScreen("save")}>저장</button>
@@ -619,7 +656,7 @@ export default function App() {
                   data-agent-id={agent.id}
                   className={selectedAgent?.id === agent.id ? "agent active" : "agent"}
                   key={agent.id}
-                  onClick={() => setSelectedAgent(agent)}
+                  onClick={() => inspectAgent(agent)}
                 >
                   <span className="agent-portrait" data-agent-name={agent.name} aria-hidden="true" />
                   <span className="agent-list-copy"><b>{agent.name}</b><small data-location={locationLabel(agent.location)}>{agent.mbti_type}</small></span>
@@ -877,7 +914,7 @@ export default function App() {
                 agentActions={agentActions}
                 simulationId={simulation.id}
                 token={auth.access_token}
-                onAgentSelect={setSelectedAgent}
+                onAgentSelect={inspectAgent}
               />
             </div>
 
@@ -890,6 +927,7 @@ export default function App() {
             eventLog={eventLog}
             agentNames={agentNameById}
             onAgentSelect={handleEventAgentSelect}
+            onEventOpen={handleEventOpen}
           />
         </>
         )}
@@ -912,7 +950,7 @@ export default function App() {
           selectedAgent={selectedAgent}
           agents={agents}
           auth={auth}
-          onSelectAgent={(agent) => setSelectedAgent(agent)}
+          onSelectAgent={inspectAgent}
           onClose={() => setShowRelationshipModal(false)}
         />
       )}

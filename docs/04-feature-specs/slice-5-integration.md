@@ -101,6 +101,10 @@ Tick N+4~N+6 : 접촉 시 CURSE_SPREAD 후보 발생 가능
 Tick N+6 : CURSED 자동 해제
 ```
 
+**CURSE_SPREAD 감염 규칙 (2026-10-19 확정, `achievements.md` §5.2):**
+
+CURSE_SPREAD 대상은 CURSED가 되고, `cursed_until_tick`은 저주를 옮긴 Agent의 값을 그대로 따른다. 저주를 처음 가져온 학생의 CURSED가 끝나는 Tick에 그 학생에게서 퍼진 CURSED가 모두 함께 해제된다. 옮긴 Agent의 CURSED가 그 Tick에 끝나면 감염은 일어나지 않는다.
+
 
 ---
 

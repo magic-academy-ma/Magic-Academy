@@ -103,6 +103,8 @@ class EventBatch(Contract):
     resolved_effects: tuple[StateDelta, ...] = ()
     memories: tuple[MemoryWrite, ...] = ()
     missing_agent_ids: tuple[UUID, ...] = ()
+    # CURSE_SPREAD로 새로 저주에 걸리는 대상 (achievements.md §5.2).
+    cursed_agent_ids: tuple[UUID, ...] = ()
 
     @model_validator(mode="after")
     def validate_unique_targets(self):
@@ -114,4 +116,6 @@ class EventBatch(Contract):
             raise ValueError("duplicate Event ID")
         if len(set(self.missing_agent_ids)) != len(self.missing_agent_ids):
             raise ValueError("duplicate missing Agent")
+        if len(set(self.cursed_agent_ids)) != len(self.cursed_agent_ids):
+            raise ValueError("duplicate cursed Agent")
         return self
