@@ -852,8 +852,12 @@ def test_manual_tick_reinjects_tick_n_memory_into_tick_n_plus_one_runtime(client
     assert (first.current_tick, second.current_tick) == (1, 2)
     assert all(second.retrieval_traces.values())
     second_tick_inputs = [item for item in runtime_inputs if item.tick_number == 2]
-    # AFTERNOON 자유 시간에는 활성 Student 5명만 Runtime을 실행한다.
-    assert len(second_tick_inputs) == len(second.runtime_results) == 5
+    # 검증 실패 재시도 시 같은 Agent의 LLM 입력이 둘 이상 기록될 수 있다.
+    # AFTERNOON 자유 시간에 Runtime을 실행한 고유 Agent는 Student 5명이다.
+    assert {item.agent.agent_id for item in second_tick_inputs} == {
+        result.agent_id for result in second.runtime_results
+    }
+    assert len(second.runtime_results) == 5
     assert all(item.memories for item in second_tick_inputs)
     assert {
         memory["created_tick"]

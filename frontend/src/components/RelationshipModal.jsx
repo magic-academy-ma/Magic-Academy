@@ -166,9 +166,6 @@ export default function RelationshipModal({
       const x1a = p1.x + ux * r1 + ox,            y1a = p1.y + uy * r1 + oy;
       const x2a = p2.x - ux * (r2 + ARROW_GAP) + ox, y2a = p2.y - uy * (r2 + ARROW_GAP) + oy;
 
-      const x1b = p2.x - ux * r2 - ox,            y1b = p2.y - uy * r2 - oy;
-      const x2b = p1.x + ux * (r1 + ARROW_GAP) - ox, y2b = p1.y + uy * (r1 + ARROW_GAP) - oy;
-
       const lineProps = {
         stroke,
         strokeWidth: sw,
@@ -179,12 +176,8 @@ export default function RelationshipModal({
       };
 
       return [
-        <line key={`${idx}-ab`} className={`edge-base edge-${type}`}
+        <line key={`${idx}-directed`} className={`edge-base edge-${type}`}
           x1={x1a} y1={y1a} x2={x2a} y2={y2a}
-          markerEnd={`url(#arr-${type})`} {...lineProps}
-        />,
-        <line key={`${idx}-ba`} className={`edge-base edge-${type}`}
-          x1={x1b} y1={y1b} x2={x2b} y2={y2b}
           markerEnd={`url(#arr-${type})`} {...lineProps}
         />,
       ];

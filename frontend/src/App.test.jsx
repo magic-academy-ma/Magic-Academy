@@ -80,7 +80,7 @@ function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {
     if (url.endsWith('/v1/simulations') && options.method === 'POST') return createSimHandler()
     if (url.endsWith('/agents')) return agentsHandler()
     if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
-    if (url.includes('/user-persona')) return response({}, 404) // 아직 미설정 (정상 상태)
+    if (url.includes('/user-persona')) return response({ data: null }) // 아직 미설정 (정상 상태)
     if (url.includes('/v1/shares') && (!options.method || options.method === 'GET')) return response([])
     return response({}, 404)
   })
@@ -355,7 +355,7 @@ describe('Slice 0 UI', () => {
         action_type: 'STUDY',
         utterance: '오늘도 열심히 공부하자',
         motivation_summary: '학업 성취 욕구가 높음',
-        decision_explanation: { influencing_factors: [{ source: 'mood', description: '기분이 좋음', direction: 'positive' }] },
+        decision_explanation: { influencing_factors: [{ source: 'STATE', description: '기분이 좋음', direction: 'SUPPORT' }] },
         retry_count: 0,
         failure_reason: null,
       }],
@@ -363,11 +363,24 @@ describe('Slice 0 UI', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
 
-    expect(await screen.findByText('STUDY')).toBeInTheDocument()
+    expect(await screen.findByText('공부')).toBeInTheDocument()
+    expect(screen.queryByText('STUDY')).not.toBeInTheDocument()
     expect(screen.getByText('“오늘도 열심히 공부하자”')).toBeInTheDocument()
     expect(screen.getByText('정상 진행')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '결과 닫기' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '다음 Tick 실행' })).toBeInTheDocument()
+
+    const summary = screen.getByLabelText('Tick 실행 요약')
+    expect(summary).toHaveTextContent('이전 Tick0')
+    expect(summary).toHaveTextContent('현재 Tick1')
+    expect(summary).toHaveTextContent('Day1')
+    expect(summary).toHaveTextContent('완료')
+
+    const agentCard = screen.getByRole('group', { name: `${agents[0].name} 행동 결과` })
+    expect(agentCard).toHaveAttribute('open')
+    expect(within(agentCard).getByText('판단 근거')).toBeInTheDocument()
+    expect(within(agentCard).getByText('상태')).toBeInTheDocument()
+    expect(within(agentCard).getByText(/지지/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: '결과 닫기' }))
     expect(screen.queryByRole('heading', { name: '실행 결과' })).not.toBeInTheDocument()
@@ -437,6 +450,29 @@ describe('Slice 0 UI', () => {
 
     expect(await screen.findByText('재시도 실패 → Fallback 적용')).toBeInTheDocument()
     expect(screen.getByText('재시도 3회 실패 — 사유: LLM_TIMEOUT')).toBeInTheDocument()
+  })
+
+  it('renders WAIT_FALLBACK as a talk adjustment instead of a retry failure', async () => {
+    const fetchMock = await setupSimulationWithAgents()
+    fetchMock.mockImplementationOnce(() => response(tickResult({
+      agent_results: [{
+        agent_id: agents[0].id,
+        agent_name: agents[0].name,
+        runtime_status: 'FALLBACK',
+        action_type: 'WAIT',
+        utterance: null,
+        motivation_summary: '대화 상대가 서로 일치하지 않아 이번 Tick에는 대기한다.',
+        decision_explanation: { influencing_factors: [] },
+        retry_count: 0,
+        failure_reason: 'WAIT_FALLBACK',
+      }],
+    })))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
+
+    expect(await screen.findByText('대화 상대 불일치 → 대기 전환')).toBeInTheDocument()
+    expect(screen.getByText('서로 대화를 선택하지 않아 이번 Tick에는 대기합니다.')).toBeInTheDocument()
+    expect(screen.queryByText(/재시도 0회 실패/)).not.toBeInTheDocument()
   })
 
   it('renders relationship_deltas as delta badges on the relationship graph', async () => {

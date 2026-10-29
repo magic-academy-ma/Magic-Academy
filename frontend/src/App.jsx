@@ -21,6 +21,50 @@ import MyPage from "./pages/MyPage.jsx";
 import ClubChallengePage from "./pages/ClubChallengePage.jsx";
 import "./App.css";
 
+const ACTION_LABELS = {
+  ATTEND_CLASS: "수업 참석",
+  TEACH_CLASS: "수업 진행",
+  STUDY: "공부",
+  TALK: "대화",
+  EAT: "식사",
+  MOVE: "이동",
+  REST: "휴식",
+  PARTICIPATE_EVENT: "이벤트 참여",
+  HELP: "도움",
+  AVOID: "회피",
+  WAIT: "대기",
+};
+
+const FACTOR_SOURCE_LABELS = {
+  STATE: "상태",
+  PERSONALITY: "성격",
+  RELATIONSHIP: "관계",
+  MEMORY: "기억",
+  SCHEDULE: "일정",
+  LOCATION: "위치",
+  EVENT: "사건",
+};
+
+const FACTOR_DIRECTION_LABELS = {
+  SUPPORT: "지지",
+  OPPOSE: "반대",
+};
+
+function CollapsibleAgentResult({ className, label, initiallyOpen, children }) {
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
+
+  return (
+    <details
+      className={className}
+      aria-label={label}
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+    >
+      {children}
+    </details>
+  );
+}
+
 function AuthPanel({ onLogin, notice }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({
@@ -661,14 +705,28 @@ export default function App() {
 
               {tickSucceeded && (
                 <div className="tick-result">
-                  <h3>실행 결과</h3>
+                  <div className="tick-result-title">
+                    <div>
+                      <span className="tick-result-eyebrow">TICK REPORT</span>
+                      <h3>실행 결과</h3>
+                    </div>
+                    <span className="tick-complete-badge">완료</span>
+                  </div>
 
-                  <p>이전 Tick: {tickResult.previous_tick}</p>
-                  <p>현재 Tick: {tickResult.current_tick}</p>
-                  <p>현재 Day: {tickResult.current_day}</p>
-                  <p>상태: {tickResult.status}</p>
+                  <div className="tick-summary" aria-label="Tick 실행 요약">
+                    <div><span>이전 Tick</span><strong>{tickResult.previous_tick}</strong></div>
+                    <div><span>현재 Tick</span><strong>{tickResult.current_tick}</strong></div>
+                    <div><span>Day</span><strong>{tickResult.current_day}</strong></div>
+                    <div><span>상태</span><strong>완료</strong></div>
+                  </div>
 
-                  <h4>Agent 행동</h4>
+                  <div className="tick-section-heading">
+                    <div>
+                      <span className="tick-result-eyebrow">AGENT ACTIONS</span>
+                      <h4>Agent 행동</h4>
+                    </div>
+                    <span>{agentResults.length}명</span>
+                  </div>
 
                   {agentResults.length === 0 ? (
                     <p className="message">
@@ -676,52 +734,83 @@ export default function App() {
                       없습니다.
                     </p>
                   ) : (
-                    <ul className="agent-result-list">
-										  {agentResults.map((agentResult) => {
-										    const status = agentResult.runtime_status;
-										    return (
-										      <li key={agentResult.agent_id} className={`agent-result status-${status?.toLowerCase()}`}>
-										        <b>{agentResult.agent_name ?? agentResult.agent_id}</b>
-										        <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
-										          {status?.toUpperCase() === "PROPOSED" && "정상 진행"}
-										          {status?.toUpperCase() === "FALLBACK" && "재시도 실패 → Fallback 적용"}
-										          {status?.toUpperCase() === "SKIPPED" && "이번 Tick 미참여"}
-										        </span>
-										        {status?.toUpperCase() === "SKIPPED" ? (
-										          <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
-										        ) : (
-										          <>
-										            <span className="action-type">{agentResult.action_type}</span>
-										            {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
-										            {agentResult.motivation_summary && (
-										              <p className="motivation">{agentResult.motivation_summary}</p>
-										            )}
-										            {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
-										              <ul className="influencing-factors">
-										                {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
-										                  <li key={idx}>
-										                    [{factor.source}] {factor.description} ({factor.direction})
-										                  </li>
-										                ))}
-										              </ul>
-										            )}
-										          </>
-										        )}
-										        {status?.toUpperCase() === "FALLBACK" && (
-										          <p className="fallback-info">
-										            재시도 {agentResult.retry_count}회 실패
-										            {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
-										          </p>
-										        )}
-										      </li>
-										    );
-										  })}
-										</ul>
+                    <div className="agent-result-list">
+                      {agentResults.map((agentResult, index) => {
+                        const status = agentResult.runtime_status?.toUpperCase();
+                        const isTalkFallback = agentResult.failure_reason === "WAIT_FALLBACK";
+                        const statusLabel = status === "PROPOSED"
+                          ? "정상 진행"
+                          : status === "FALLBACK"
+                            ? isTalkFallback
+                              ? "대화 상대 불일치 → 대기 전환"
+                              : "재시도 실패 → Fallback 적용"
+                            : "이번 Tick 미참여";
+                        const agentName = agentResult.agent_name ?? agentResult.agent_id;
+                        return (
+                          <CollapsibleAgentResult
+                            key={agentResult.agent_id}
+                            className={`agent-result status-${status?.toLowerCase()}`}
+                            label={`${agentName} 행동 결과`}
+                            initiallyOpen={index === 0 || status === "FALLBACK"}
+                          >
+                            <summary>
+                              <span className="agent-result-name">{agentName}</span>
+                              {agentResult.action_type && (
+                                <span className="action-type">
+                                  {ACTION_LABELS[agentResult.action_type] ?? agentResult.action_type}
+                                </span>
+                              )}
+                              <span className={`runtime-status runtime-status-${status?.toLowerCase()}`}>
+                                {statusLabel}
+                              </span>
+                            </summary>
+
+                            <div className="agent-result-body">
+                              {status === "SKIPPED" ? (
+                                <p className="message">비활성 상태로 이번 Tick에서 행동하지 않았습니다.</p>
+                              ) : (
+                                <>
+                                  {agentResult.utterance && <p className="utterance">“{agentResult.utterance}”</p>}
+                                  {agentResult.motivation_summary && (
+                                    <p className="motivation">{agentResult.motivation_summary}</p>
+                                  )}
+                                  {agentResult.decision_explanation?.influencing_factors?.length > 0 && (
+                                    <section className="decision-factors">
+                                      <h5>판단 근거</h5>
+                                      <ul className="influencing-factors">
+                                        {agentResult.decision_explanation.influencing_factors.map((factor, idx) => (
+                                          <li key={idx}>
+                                            <span>{FACTOR_SOURCE_LABELS[factor.source] ?? factor.source}</span>
+                                            {factor.description} ({FACTOR_DIRECTION_LABELS[factor.direction] ?? factor.direction})
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </section>
+                                  )}
+                                </>
+                              )}
+                              {status === "FALLBACK" && isTalkFallback && (
+                                <p className="fallback-info talk-adjustment">
+                                  서로 대화를 선택하지 않아 이번 Tick에는 대기합니다.
+                                </p>
+                              )}
+                              {status === "FALLBACK" && !isTalkFallback && (
+                                <p className="fallback-info" role="alert">
+                                  재시도 {agentResult.retry_count}회 실패
+                                  {agentResult.failure_reason && ` — 사유: ${agentResult.failure_reason}`}
+                                </p>
+                              )}
+                            </div>
+                          </CollapsibleAgentResult>
+                        );
+                      })}
+                    </div>
                   )}
 
                   {tickResult.relationship_deltas?.length > 0 && (
                     <section className="relationship-delta-summary">
                       <h4>관계 변화</h4>
+                      <span>{tickResult.relationship_deltas.length}건의 변화가 반영되었습니다.</span>
                     </section>
                   )}
 
