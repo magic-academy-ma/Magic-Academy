@@ -1,14 +1,22 @@
-import { render, waitFor } from "@testing-library/react";
+
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiRequest } from "../api/client.js";
 import InspectorPanel from "./InspectorPanel.jsx";
 
-vi.mock("../api/client.js", () => ({ apiRequest: vi.fn() }));
+vi.mock("../api/client.js", () => ({
+  apiRequest: vi.fn(),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const agent = {
   id: "agent-1",
-  name: "아델",
+  name: "Adel",
   agent_type: "student",
   mbti_type: "ISTJ",
   profile: {},
@@ -16,17 +24,31 @@ const agent = {
 };
 
 describe("InspectorPanel", () => {
-  afterEach(() => vi.clearAllMocks());
+  it("keeps signed relationship values instead of clamping them to zero", async () => {
+    client.apiRequest.mockImplementation((path) => {
+      if (path.endsWith("/relationships")) {
+        return Promise.resolve([
+          {
+            target_agent_id: "agent-2",
+            target_agent_name: "Leo",
+            affection: -20,
+            closeness: -40,
+            trust: -10,
+            tension: 30,
+            rivalry: 20,
+            dependency: 10,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
 
-  it("Tick 0에서는 존재하지 않는 판단 설명을 요청하지 않는다", async () => {
-    apiRequest.mockResolvedValue([]);
-
-    render(
+    const { container } = render(
       <InspectorPanel
         agent={agent}
         simulationId="simulation-1"
         token="token"
-        currentTick={0}
+        currentTick={1}
         onClose={() => {}}
       />
     );
