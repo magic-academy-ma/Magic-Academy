@@ -6,6 +6,7 @@ test_event_magic_policy_integration.py 참고).
 """
 
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -22,7 +23,9 @@ from app.domain.models import (
 )
 from app.services.fixtures import seed_slice_zero
 from app.simulation.agent_runtime import AgentRuntime, Block, MockLLMClient
+from app.simulation.challenge import round_driver
 from app.simulation.challenge.controller import build_round1_trigger_event
+from app.simulation.challenge.festival_booth import BoothConcept, build_opening_event
 from app.simulation.challenge.round_driver import run_forced_event_round
 
 
@@ -105,3 +108,52 @@ def test_run_forced_event_round_persists_event_and_applies_effects(db):
         assert state.stress == min(100, stress_before[agent_id] + 3)
         # MockLLMClient는 CLASS Event가 없으면 REST + FATIGUE_DOWN/LOW(-2)를 반환한다.
         assert state.fatigue == max(0, fatigue_before[agent_id] - 2)
+
+
+def test_non_mandatory_agents_run_in_separate_batch_with_relaxed_schedule(monkeypatch):
+    """CHAPTER 4 SUGGEST_REST: 지정 Agent만 is_mandatory=False 일정으로 실행되고,
+    두 배치의 결과가 합쳐져 정책 적용에 한 번에 들어간다(DB 없이 경로만 검증)."""
+
+    agent_ids = [uuid4() for _ in range(3)]
+    location_id = uuid4()
+    event = build_opening_event(
+        concept=BoothConcept.FOOD,
+        agent_ids=[str(agent_id) for agent_id in agent_ids],
+        location_id=str(location_id),
+    )
+    db_event = SimpleNamespace(id=uuid4(), location_id=location_id)
+    monkeypatch.setattr(
+        round_driver, "_persist_forced_event", lambda db, **kwargs: (db_event, [])
+    )
+    monkeypatch.setattr(round_driver, "_apply_event_base_effects", lambda db, **kwargs: None)
+    applied = {}
+    monkeypatch.setattr(
+        round_driver,
+        "evaluate_and_apply_policy",
+        lambda db, **kwargs: applied.update(results=kwargs["runtime_results"]),
+    )
+    calls = []
+
+    def fake_run_runtime_phase(self, db, **kwargs):
+        calls.append((tuple(kwargs["preselected_agent_ids"]), kwargs["schedule"].is_mandatory))
+        return SimpleNamespace(results=tuple(kwargs["preselected_agent_ids"]))
+
+    monkeypatch.setattr(round_driver.SimulationTickService, "run_runtime_phase", fake_run_runtime_phase)
+
+    rested = sorted(agent_ids)[1]
+    result = round_driver.run_forced_event_round(
+        None,
+        simulation_id=uuid4(),
+        run_id=uuid4(),
+        tick_number=9,
+        simulation_day=3,
+        block=Block.EVENING,
+        event=event,
+        runtime=AgentRuntime(MockLLMClient(), model="test-round-driver"),
+        non_mandatory_agent_ids={rested},
+    )
+
+    mandatory = tuple(a for a in sorted(agent_ids) if a != rested)
+    assert calls == [(mandatory, True), ((rested,), False)]
+    assert set(result.runtime_results) == set(agent_ids)
+    assert applied["results"] == result.runtime_results
