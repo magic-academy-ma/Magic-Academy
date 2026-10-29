@@ -10,6 +10,12 @@ from app.simulation.challenge.forced_events import (
     build_forced_group_project,
     build_forced_meeting,
 )
+from app.simulation.challenge.record import (
+    WATCH,
+    ChapterGrade,
+    ChapterRecord,
+    InterventionRecord,
+)
 from app.simulation.event_master import Event, EventMaster, ImpactLevel
 
 CLUB_MIN_MEMBERS = 3
@@ -221,3 +227,31 @@ def evaluate_club_ending(
     if reputation >= CLUB_REPUTATION_THRESHOLD and relationship_ok:
         return ClubEnding.REVIVAL
     return ClubEnding.CONDITIONAL
+
+
+# ─── 활동 기록 (스토리모드 공통, record.py) ─────────────────────────────────
+
+# 스토리 기준 개별 엔딩은 정식 존속 / 조건부 존속 / 폐부 세 갈래다.
+# ONE_MEMBER는 최소 인원 미달로 폐부와 같은 결과이므로 BAD로 묶는다.
+ENDING_GRADES: dict[ClubEnding, ChapterGrade] = {
+    ClubEnding.REVIVAL: ChapterGrade.GOOD,
+    ClubEnding.CONDITIONAL: ChapterGrade.MIXED,
+    ClubEnding.ONE_MEMBER: ChapterGrade.BAD,
+    ClubEnding.CLOSED: ChapterGrade.BAD,
+}
+
+
+def record_choice(choice: str) -> str:
+    """OBSERVE(지켜보기)는 공통 기록의 WATCH로 남긴다."""
+    return WATCH if choice == InternalConflictChoice.OBSERVE else choice
+
+
+def build_club_record(
+    *, ending: ClubEnding, interventions: Sequence[InterventionRecord]
+) -> ChapterRecord:
+    return ChapterRecord(
+        chapter=3,
+        ending=ending.value,
+        grade=ENDING_GRADES[ending],
+        interventions=tuple(interventions),
+    )

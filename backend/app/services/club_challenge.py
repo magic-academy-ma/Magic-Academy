@@ -20,6 +20,7 @@ from app.simulation.agent_runtime import AgentRuntime, Block, ReactionValence
 from app.simulation.challenge.club_revival import (
     CLUB_INITIAL_MEMBERS,
     CLUB_INITIAL_REPUTATION,
+    ClubEnding,
     FinalStrategy,
     InternalConflictChoice,
     RecruitmentStrategy,
@@ -27,17 +28,24 @@ from app.simulation.challenge.club_revival import (
     apply_internal_conflict_choice,
     apply_recruitment_strategy,
     build_closure_warning_event,
+    build_club_record,
     evaluate_club_ending,
     plan_final_event,
     plan_internal_conflict_events,
     plan_recruitment_event,
+    record_choice,
 )
 from app.simulation.challenge.forced_events import (
     build_forced_group_project,
     build_forced_meeting,
 )
-from app.simulation.challenge.round_driver import ForcedEventRoundResult, run_forced_event_round
+from app.simulation.challenge.record import ChapterRecord, InterventionRecord
+from app.simulation.challenge.round_driver import (
+    ForcedEventRoundResult,
+    run_forced_event_round,
+)
 from app.simulation.event_master import Event, ImpactLevel
+
 
 class ClubChallengeNotFoundError(LookupError):
     pass
@@ -296,6 +304,21 @@ def advance_club_challenge(
     choices = dict(run.choices)
     if choice is not None:
         choices[str(next_tick)] = choice
+        # 선택지는 직전 tick이 커밋된 시점부터 열려 있었다.
+        opened_at = run.updated_at or run.created_at
+        elapsed = (
+            max(0.0, (datetime.now(timezone.utc) - opened_at).total_seconds())
+            if opened_at
+            else 0.0
+        )
+        run.interventions = [
+            *run.interventions,
+            {
+                "point": str(next_tick),
+                "choice": record_choice(choice),
+                "elapsed_seconds": elapsed,
+            },
+        ]
     run.choices = choices
     if next_tick == 3:
         negative = any(
@@ -339,3 +362,12 @@ def advance_club_challenge(
     db.commit()
     db.refresh(run)
     return run, result
+
+
+def club_chapter_record(run: ClubChallengeRun) -> ChapterRecord | None:
+    if run.ending is None:
+        return None
+    return build_club_record(
+        ending=ClubEnding(run.ending),
+        interventions=[InterventionRecord(**item) for item in run.interventions],
+    )

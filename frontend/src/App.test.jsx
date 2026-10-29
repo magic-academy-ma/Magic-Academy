@@ -82,6 +82,7 @@ function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {
     if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
     if (url.includes('/user-persona')) return response({ data: null }) // 아직 미설정 (정상 상태)
     if (url.includes('/v1/shares') && (!options.method || options.method === 'GET')) return response([])
+    if (url.endsWith('/v1/story/current')) return response({ data: null })
     return response({}, 404)
   })
 }
@@ -105,16 +106,15 @@ async function completeOnboarding() {
 }
 
 describe('Slice 0 UI', () => {
-  it('opens the club revival challenge from the main page', async () => {
+  it('opens story mode from the main page at the prologue', async () => {
     createFetchMock()
     render(<App />)
     await login()
 
-    await userEvent.click(
-      screen.getByRole('button', { name: '동아리를 폐부에서 구하기 도전과제 시작' })
-    )
+    await userEvent.click(screen.getByRole('button', { name: '스토리모드' }))
 
-    expect(screen.getByText(/STORY CHALLENGE 3/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '사람을 움직이는 마법' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '거짓 소문의 확산을 막아라' })).not.toBeInTheDocument()
   })
 
   it('logs in, enrolls, completes persona setup, and renders six API agents', async () => {

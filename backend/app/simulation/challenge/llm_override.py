@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any
 
-from app.simulation.agent_runtime import AgentRuntimeInput, LLMClient
+from app.simulation.agent_runtime import AgentRuntime, AgentRuntimeInput, LLMClient
 from app.simulation.event_master import IMPACT_LEVEL_TO_IMPORTANCE, ImpactLevel
 
 InjectionKey = tuple[int, str]
@@ -70,3 +70,17 @@ class ChallengeLLMOverride:
                 update={"memories": [*deepcopy(injected), *runtime_input.memories]}
             )
         return self._real_client.generate(runtime_input)
+
+
+def runtime_with_injections(
+    runtime: AgentRuntime, injections: Mapping[InjectionKey, Sequence[dict[str, Any]]]
+) -> AgentRuntime:
+    """요청에 쓰는 Runtime과 같은 설정으로, LLMClient만 정보 주입 래퍼로 감싼 Runtime."""
+    if not injections:
+        return runtime
+    return AgentRuntime(
+        ChallengeLLMOverride(runtime._llm_client, injections=injections),
+        model=runtime._model,
+        prompt_version=runtime._prompt_version,
+        llm_quota=runtime.llm_quota,
+    )

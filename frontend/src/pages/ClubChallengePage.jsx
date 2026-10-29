@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiRequest } from "../api/client.js";
 import InspectorPanel from "../components/InspectorPanel.jsx";
@@ -19,7 +19,7 @@ function visibleSummary(result, agentName) {
   return `${agentName}이(가) ${ACTION_LABELS[result.action_type] ?? "일반"} 행동을 선택했습니다.`;
 }
 
-export default function ClubChallengePage({ token, onBack }) {
+export default function ClubChallengePage({ token, onBack, runId, onComplete }) {
   const [intro, setIntro] = useState(0);
   const [run, setRun] = useState(null);
   const [agents, setAgents] = useState([]);
@@ -33,6 +33,21 @@ export default function ClubChallengePage({ token, onBack }) {
     setAgents(agentList);
     setSelectedAgent((current) => agentList.find((agent) => agent.id === current?.id) ?? agentList[0] ?? null);
   }
+
+  // 스토리모드에서는 이미 시작된 챕터 run을 이어서 연다.
+  useEffect(() => {
+    if (!runId) return;
+    let active = true;
+    apiRequest(`/v1/challenges/club-revival/${runId}`, { token })
+      .then(async (response) => {
+        if (!active) return;
+        setRun(response.data);
+        await loadAgents(response.data.simulation_id);
+      })
+      .catch((requestError) => { if (active) setError(requestError.message); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, token]);
 
   async function startChallenge() {
     setLoading(true);
@@ -63,6 +78,10 @@ export default function ClubChallengePage({ token, onBack }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!run && runId) {
+    return <main className="club-intro-page">{error ? <p className="message error" role="alert">{error}</p> : <p role="status">사건 기록을 불러오는 중...</p>}</main>;
   }
 
   if (!run) {
@@ -109,7 +128,7 @@ export default function ClubChallengePage({ token, onBack }) {
     </main>
     <section className="club-event-log"><h2>사건 기록</h2>{(run.agent_results ?? []).length === 0 ? <p>아직 기록된 에이전트 행동이 없습니다.</p> : run.agent_results.map((result) => { const agentName = agents.find((agent) => agent.id === result.agent_id)?.name ?? "에이전트"; return <article key={result.agent_id}><b>{agentName}</b><span>{ACTION_LABELS[result.action_type] ?? "일반 행동"}</span><p>{visibleSummary(result, agentName)}</p></article>; })}</section>
     {requiresChoice && <div className="club-choice-backdrop" role="dialog" aria-label="도전과제 선택"><section className="club-choice-modal"><p>사용자 개입</p><h2>{ROUND_TITLES[run.current_round]}</h2><p className="club-choice-story">{run.next_story}</p><div>{run.next_choice_options.map((option) => <label key={option.value} aria-label={option.label}><input type="radio" name="club-choice" value={option.value} checked={selectedChoice === option.value} onChange={(event) => setSelectedChoice(event.target.value)} /><span><strong>{option.label}</strong><small>{option.description}</small></span></label>)}</div><button type="button" onClick={advanceChallenge} disabled={loading || !selectedChoice}>{loading ? "Agent 판단 중..." : "선택하고 진행"}</button></section></div>}
-    {run.status === "completed" && <div className="club-choice-backdrop"><section className="club-choice-modal club-ending"><p>최종 결과</p><h2>{ENDING_LABELS[run.ending]}</h2><button type="button" onClick={onBack}>홈으로 돌아가기</button></section></div>}
+    {run.status === "completed" && <div className="club-choice-backdrop"><section className="club-choice-modal club-ending"><p>최종 결과</p><h2>{ENDING_LABELS[run.ending]}</h2>{onComplete ? <button type="button" onClick={onComplete}>활동 기록 남기고 계속</button> : <button type="button" onClick={onBack}>홈으로 돌아가기</button>}</section></div>}
     {error && <p className="club-game-error" role="alert">{error}</p>}
   </div>;
 }

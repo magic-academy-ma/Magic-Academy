@@ -106,4 +106,18 @@ describe("ClubChallengePage", () => {
     finishIntro();
     expect(await screen.findByRole("heading", { name: "동아리 부활" })).toBeInTheDocument();
   });
+
+  it("opens the story mode run without the intro and hands back on completion", async () => {
+    const onComplete = vi.fn();
+    apiRequest
+      .mockResolvedValueOnce({ data: { ...running, current_tick: 9, status: "completed", ending: "REVIVAL", next_choice_options: [] } })
+      .mockResolvedValueOnce([]);
+    render(<ClubChallengePage token="token" onBack={vi.fn()} runId="run-1" onComplete={onComplete} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "활동 기록 남기고 계속" }));
+
+    expect(onComplete).toHaveBeenCalledOnce();
+    expect(apiRequest).toHaveBeenCalledWith("/v1/challenges/club-revival/run-1", { token: "token" });
+    expect(screen.queryByRole("button", { name: "도전과제 시작" })).not.toBeInTheDocument();
+  });
 });
