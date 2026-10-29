@@ -255,3 +255,41 @@ def build_club_record(
         grade=ENDING_GRADES[ending],
         interventions=tuple(interventions),
     )
+
+
+# ─── 업적 (§5) ──────────────────────────────────────────────────────────────
+
+
+class ClubAchievement(StrEnum):
+    GLORY_DAYS = "GLORY_DAYS"  # 다시 전성기다!
+    CATASTROPHE = "CATASTROPHE"  # 파국이다!
+    MEMBERS_FIRST = "MEMBERS_FIRST"  # 일단 사람부터 모아
+    CLUB_OF_ONE = "CLUB_OF_ONE"  # 나 홀로 동아리
+
+
+ENDING_ACHIEVEMENTS: dict[ClubEnding, ClubAchievement] = {
+    ClubEnding.REVIVAL: ClubAchievement.GLORY_DAYS,
+    ClubEnding.CONDITIONAL: ClubAchievement.MEMBERS_FIRST,
+    ClubEnding.ONE_MEMBER: ClubAchievement.CLUB_OF_ONE,
+}
+
+
+def evaluate_club_achievements(
+    *,
+    ending: ClubEnding,
+    initial_member_affections: Sequence[int],
+    final_member_affections: Sequence[int],
+) -> frozenset[ClubAchievement]:
+    """「파국이다!」는 시작 시점 회원끼리의 방향성 affection 평균이 종료 시점에 더 낮을 때다.
+
+    두 값은 같은 회원 쌍을 같은 순서로 담는다. 회원 구성이 바뀌어도 시작 회원끼리만 비교한다.
+    """
+    achieved: set[ClubAchievement] = set()
+    if ending in ENDING_ACHIEVEMENTS:
+        achieved.add(ENDING_ACHIEVEMENTS[ending])
+    if initial_member_affections and final_member_affections:
+        initial_mean = sum(initial_member_affections) / len(initial_member_affections)
+        final_mean = sum(final_member_affections) / len(final_member_affections)
+        if final_mean < initial_mean:
+            achieved.add(ClubAchievement.CATASTROPHE)
+    return frozenset(achieved)

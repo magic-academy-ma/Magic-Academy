@@ -64,6 +64,7 @@ from app.simulation.challenge.festival_booth import (
     calculate_booth_performance,
     count_vacant_ticks,
     draw_festival_incident_subtype,
+    evaluate_festival_achievements,
     evaluate_festival_ending,
     plan_booth_setup,
     plan_incident_response,
@@ -73,7 +74,11 @@ from app.simulation.challenge.festival_booth import (
     setup_choice,
 )
 from app.simulation.challenge.llm_override import merge_injections
-from app.simulation.challenge.record import ChapterRecord, InterventionRecord
+from app.simulation.challenge.record import (
+    ChapterRecord,
+    InterventionRecord,
+    chapter_achievements,
+)
 
 CHAPTER = 4
 CHOICE_TICKS = {
@@ -343,6 +348,23 @@ def festival_booth_record(run: StoryChapterRun) -> ChapterRecord | None:
     return build_festival_record(
         ending=FestivalEnding(run.ending),
         interventions=[InterventionRecord(**item) for item in run.interventions],
+    )
+
+
+def festival_booth_achievements(run: StoryChapterRun) -> frozenset[str]:
+    if run.ending is None:
+        return frozenset()
+    return chapter_achievements(
+        chapter=CHAPTER,
+        status=run.status,
+        interventions=[InterventionRecord(**item) for item in run.interventions],
+        achieved=evaluate_festival_achievements(
+            ending=FestivalEnding(run.ending),
+            vacant_tick_count=count_vacant_ticks(
+                [BoothStaffingRecord(**record) for record in run.state["staffing"]]
+            ),
+            peak_stress_levels=list(run.state["peak_stress"].values()),
+        ),
     )
 
 

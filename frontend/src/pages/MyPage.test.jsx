@@ -109,7 +109,7 @@ describe('MyPage', () => {
 
   it('업적 탭에서 그룹별 업적과 달성 여부를 표시한다', async () => {
     const achievements = [
-      { id: 'CHAPTER1_CLEAR', name: '챌린지 1 클리어', mode: 'STORY', group: 'CHAPTER 1', kind: 'PROGRESS', condition: '챌린지 1 클리어', achieved: true, achieved_at: '2026-10-19T12:00:00+00:00' },
+      { id: 'CHAPTER1_CLEAR', name: 'CHAPTER 1 클리어', mode: 'STORY', group: 'CHAPTER 1', kind: 'PROGRESS', condition: 'CHAPTER 1 클리어', achieved: true, achieved_at: '2026-10-19T12:00:00+00:00' },
       { id: 'FIRST_SENTENCE', name: '소문의 첫 문장', mode: 'STORY', group: 'CHAPTER 1', kind: 'OBSERVATION', condition: '소문을 처음 전한 학생을 찾아낸다', achieved: false, achieved_at: null },
       { id: 'CURSE_LIFTED', name: '저주 해결', mode: 'FREE', group: '자유 모드', kind: 'OBSERVATION', condition: '저주를 해결한다', achieved: false, achieved_at: null },
     ];

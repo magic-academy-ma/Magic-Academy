@@ -47,6 +47,7 @@ def test_full_club_challenge_is_persisted_and_completed(db: Session, owner: User
     simulation, run = start_club_challenge(db, owner)
     assert run.member_count == 2
     assert run.reputation == 40
+    assert len(run.initial_member_affections) == 2
     runtime = AgentRuntime(MockLLMClient(), model="club-challenge-test")
     choices = {3: "REASSIGN_ROLES", 6: "PROFESSOR_REFERRAL", 9: "SAFE_OPERATION"}
 

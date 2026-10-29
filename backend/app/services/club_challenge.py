@@ -16,6 +16,7 @@ from app.domain.models import (
     User,
 )
 from app.services.simulations import create_simulation
+from app.services.story_chapter_common import directional_affections
 from app.simulation.agent_runtime import AgentRuntime, Block, ReactionValence
 from app.simulation.challenge.club_revival import (
     CLUB_INITIAL_MEMBERS,
@@ -29,6 +30,7 @@ from app.simulation.challenge.club_revival import (
     apply_recruitment_strategy,
     build_closure_warning_event,
     build_club_record,
+    evaluate_club_achievements,
     evaluate_club_ending,
     plan_final_event,
     plan_internal_conflict_events,
@@ -39,7 +41,11 @@ from app.simulation.challenge.forced_events import (
     build_forced_group_project,
     build_forced_meeting,
 )
-from app.simulation.challenge.record import ChapterRecord, InterventionRecord
+from app.simulation.challenge.record import (
+    ChapterRecord,
+    InterventionRecord,
+    chapter_achievements,
+)
 from app.simulation.challenge.round_driver import (
     ForcedEventRoundResult,
     run_forced_event_round,
@@ -65,6 +71,7 @@ INITIAL_CLUB_MEMBER_FIXTURE_KEYS = ("student-01", "student-02")
 def start_club_challenge(db: Session, owner: User) -> tuple[Simulation, ClubChallengeRun]:
     simulation = create_simulation(db, owner, "동아리를 폐부에서 구하기")
     simulation.status = "running"
+    students, _, _ = _participants(db, simulation.id)
     run = ClubChallengeRun(
         id=uuid7(),
         simulation_id=simulation.id,
@@ -72,6 +79,7 @@ def start_club_challenge(db: Session, owner: User) -> tuple[Simulation, ClubChal
         member_count=CLUB_INITIAL_MEMBERS,
         reputation=CLUB_INITIAL_REPUTATION,
         choices={},
+        initial_member_affections=_initial_member_affections(db, simulation.id, students),
         status="in_progress",
     )
     db.add(run)
@@ -126,6 +134,16 @@ def club_member_agents(students: list[Agent], member_count: int) -> list[Agent]:
     ]
     candidates = [agent for agent in students if agent not in initial_members]
     return (initial_members + candidates)[:member_count]
+
+
+def _initial_member_affections(
+    db: Session, simulation_id: UUID, students: list[Agent]
+) -> list[int]:
+    """시작 회원끼리의 방향성 affection. 시작·종료 시점에 같은 쌍을 같은 순서로 읽는다."""
+    member_ids = [
+        str(agent.id) for agent in club_member_agents(students, CLUB_INITIAL_MEMBERS)
+    ]
+    return list(directional_affections(db, simulation_id, member_ids).values())
 
 
 def _build_events(
@@ -370,4 +388,20 @@ def club_chapter_record(run: ClubChallengeRun) -> ChapterRecord | None:
     return build_club_record(
         ending=ClubEnding(run.ending),
         interventions=[InterventionRecord(**item) for item in run.interventions],
+    )
+
+
+def club_achievements(db: Session, run: ClubChallengeRun) -> frozenset[str]:
+    if run.ending is None:
+        return frozenset()
+    students, _, _ = _participants(db, run.simulation_id)
+    return chapter_achievements(
+        chapter=3,
+        status=run.status,
+        interventions=[InterventionRecord(**item) for item in run.interventions],
+        achieved=evaluate_club_achievements(
+            ending=ClubEnding(run.ending),
+            initial_member_affections=run.initial_member_affections,
+            final_member_affections=_initial_member_affections(db, run.simulation_id, students),
+        ),
     )

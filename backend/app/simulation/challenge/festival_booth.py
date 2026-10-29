@@ -670,7 +670,7 @@ def build_festival_record(
 
 
 class FestivalAchievement(StrEnum):
-    SHOW_MUST_GO_ON = "SHOW_MUST_GO_ON"  # 쇼는 계속 되어야 한다
+    SHOW_MUST_GO_ON = "SHOW_MUST_GO_ON"  # 쇼는 계속되어야 한다
     BOOTH_LEFT_EMPTY = "BOOTH_LEFT_EMPTY"  # 여기 비었잖아
     FESTIVAL_IS_OVER = "FESTIVAL_IS_OVER"  # 축제는 끝났다
 
@@ -683,7 +683,7 @@ def evaluate_festival_achievements(
 ) -> frozenset[FestivalAchievement]:
     """``peak_stress_levels``는 run 동안 Agent별 stress 최대값이다.
 
-    R2 T2 돌발과 R3 T2 공방은 Tick 계획상 항상 주입되므로, 「쇼는 계속 되어야 한다」는
+    R2 T2 돌발과 R3 T2 공방은 Tick 계획상 항상 주입되므로, 「쇼는 계속되어야 한다」는
     정상 종료된 run에서 공백 0회 + POPULAR로 판정한다.
     """
     achieved: set[FestivalAchievement] = set()
