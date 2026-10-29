@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
+from app.core.tracing import trace_tick
 from app.simulation.agent_runtime import (
     AgentReaction,
     AgentRuntimeResult,
@@ -127,6 +128,7 @@ class TickEngine:
         self._memory_store = memory_store
         self._running: set[str] = set()  # 실행 중인 simulation_id 집합
 
+    @trace_tick
     async def run_tick(
         self,
         agents: list[TickAgent],

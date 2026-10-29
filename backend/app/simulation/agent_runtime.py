@@ -5,6 +5,7 @@ from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
+from app.core.tracing import observation
 from app.simulation.llm_quota import LLM_QUOTA_EXCEEDED_REASON, LLMQuota
 from pydantic import (
     BaseModel,
@@ -595,7 +596,27 @@ class AgentRuntime:
             "final_result": None,
             "quota_exceeded": False,
         }
-        return self._graph.invoke(initial_state)
+        with observation("agent.runtime", as_type="agent", metadata={
+            "run_id": runtime_input.run_id,
+            "tick_number": runtime_input.tick_number,
+            "agent_id": str(runtime_input.agent.agent_id),
+            "model": self._model,
+            "prompt_version": self._prompt_version,
+        }) as span:
+            state = self._graph.invoke(initial_state)
+            result = state["final_result"]
+            if result is not None:
+                span.update(metadata={
+                    "runtime_status": result.status.value,
+                    "action_type": result.intent.action_type.value,
+                    "retry_count": result.retry_count,
+                    "failure_reason": (
+                        "quota_exceeded" if state.get("quota_exceeded") else
+                        "llm_invocation_failed" if (result.failure_reason or "").startswith("LLMInvocationError:") else
+                        "output_validation_failed" if result.failure_reason else None
+                    ),
+                })
+            return state
 
     def _build_graph(self):
         graph = StateGraph(RuntimeGraphState)
@@ -628,10 +649,10 @@ class AgentRuntime:
 
     def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
         attempt_count = state["attempt_count"] + 1
-        # 실제 LLM 호출 직전에 활동 Tick 쿼터를 원자적으로 차감한다. retry도
-        # 이 노드를 다시 통과하므로 별도 호출로 1회 추가 차감된다. 소진 시에는
-        # LLM을 호출하지 않고 quota exceeded 상태로 fallback 경로로 보낸다.
+        # 실제 LLM 호출 직전에 활동 Tick 쿼터를 원자적으로 차감한다. 
         if self._llm_quota is not None and not self._llm_quota.try_consume():
+            with observation("llm.quota", metadata={"failure_reason": "quota_exceeded"}):
+                pass
             return {
                 "attempt_count": attempt_count,
                 "current_llm_response": None,
@@ -640,28 +661,36 @@ class AgentRuntime:
                 "quota_exceeded": True,
             }
         try:
-            # Block LLM invocation during replay mode and instrument the call
             from app.simulation.replay_guard import assert_not_replay
             from app.simulation.instrumentation import increment_llm
 
             assert_not_replay("LLM generation attempted during replay")
-            increment_llm()
+            increment_llm()            
             generate_retry = getattr(self._llm_client, "generate_retry", None)
             last_failure = state["last_validation_failure"]
             is_structured_output_failure = (
                 last_failure is not None and "ValidationError" in last_failure
             )
-            if (
-                last_failure is not None
-                and (
-                    state["current_llm_response"] is not None
-                    or is_structured_output_failure
-                )
-                and callable(generate_retry)
-            ):
-                response = generate_retry(state["runtime_input"], last_failure)
-            else:
-                response = self._llm_client.generate(state["runtime_input"])
+            with observation("llm.attempt", metadata={
+                "attempt_number": attempt_count,
+                "is_retry": attempt_count > 1,
+                "provider": "mock" if isinstance(self._llm_client, MockLLMClient) else type(self._llm_client).__name__,
+            }) as span:
+                try:
+                    if (
+                        last_failure is not None
+                        and (
+                            state["current_llm_response"] is not None
+                            or is_structured_output_failure
+                        )
+                        and callable(generate_retry)
+                    ):
+                        response = generate_retry(state["runtime_input"], last_failure)
+                    else:
+                        response = self._llm_client.generate(state["runtime_input"])
+                except LLMInvocationError:
+                    span.update(metadata={"failure_reason": "llm_invocation_failed"})
+                    raise
         except LLMInvocationError as exc:
             return {
                 "attempt_count": attempt_count,
@@ -681,9 +710,14 @@ class AgentRuntime:
         if state["current_llm_response"] is None:
             return {"candidate": None}
         try:
-            candidate = validate_intent_candidate(
-                state["current_llm_response"], state["runtime_input"]
-            )
+            with observation("llm.validation") as span:
+                try:
+                    candidate = validate_intent_candidate(
+                        state["current_llm_response"], state["runtime_input"]
+                    )
+                except (ValidationError, ValueError):
+                    span.update(metadata={"failure_reason": "output_validation_failed"})
+                    raise
         except (ValidationError, ValueError) as exc:
             return {
                 "candidate": None,

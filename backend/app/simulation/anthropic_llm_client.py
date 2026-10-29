@@ -4,6 +4,7 @@ from typing import Any
 from anthropic import Anthropic
 from pydantic import ValidationError
 
+from app.core.tracing import observation
 from app.simulation.agent_runtime import (
     AgentRuntimeInput,
     IntentCandidate,
@@ -100,24 +101,39 @@ class AnthropicLLMClient:
         if correction is not None:
             content = correction + "\n" + content
         try:
-            response = self._client.messages.parse(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                system=SYSTEM_PROMPT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content,
-                    }
-                ],
-                output_format=IntentCandidate,
-            )
-            parsed_output = getattr(response, "parsed_output", None)
-            if parsed_output is None:
-                raise LLMInvocationError(
-                    "Anthropic response did not include parsed output"
+            with observation(
+                "anthropic.generate", as_type="generation", model=self._model,
+                metadata={"provider": "anthropic"},
+            ) as generation:
+                response = self._client.messages.parse(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=SYSTEM_PROMPT,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": content,
+                        }
+                    ],
+                    output_format=IntentCandidate,
                 )
-            return parsed_output
+                usage = getattr(response, "usage", None)
+                usage_details = {
+                    name: value for name, value in {
+                        "input": getattr(usage, "input_tokens", None),
+                        "output": getattr(usage, "output_tokens", None),
+                        "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", None),
+                        "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", None),
+                    }.items() if isinstance(value, int) and not isinstance(value, bool)
+                }
+                if usage_details:
+                    generation.update(usage_details=usage_details)
+                parsed_output = getattr(response, "parsed_output", None)
+                if parsed_output is None:
+                    raise LLMInvocationError(
+                        "Anthropic response did not include parsed output"
+                    )
+                return parsed_output
         except LLMInvocationError:
             raise
         except ValidationError as exc:
