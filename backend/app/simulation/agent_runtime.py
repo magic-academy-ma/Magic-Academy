@@ -219,6 +219,7 @@ class AgentRuntimeInput(StrictModel):
     memories: list[dict[str, Any]]
     events: list[EventSummary]
     schedule: ScheduleSummary
+    rumor_context: dict[str, Any] | None = None
     valid_agent_ids: list[UUID]
     valid_location_ids: list[UUID]
 
@@ -282,6 +283,18 @@ class MemoryCandidate(StrictModel):
     related_event_id: UUID | None
 
 
+# CHAPTER 1 임시값: 행동 하나에서 기록할 정보 결과 수의 상한
+RUMOR_ACTS_PER_ACTION_LIMIT = 3
+
+
+class RumorAct(StrictModel):
+    """CHAPTER 1 전용 선택적 결과. 실제 실행/보유 정보 검증은 챕터가 담당."""
+    kind: Literal["ANSWER", "TRANSFER", "TESTIFY", "CORRECT"]
+    information_id: Literal["R0", "R1", "R2", "F", "S"]
+    target: str
+    source_id: str
+
+
 class IntentCandidate(StrictModel):
     action_type: ActionType
     target_agent_id: UUID | None
@@ -292,6 +305,7 @@ class IntentCandidate(StrictModel):
     reaction: AgentReaction
     decision_explanation: DecisionExplanation
     memory_candidates: list[MemoryCandidate]
+    rumor_acts: list[RumorAct] = Field(default_factory=list, max_length=RUMOR_ACTS_PER_ACTION_LIMIT)
 
     @model_validator(mode="after")
     def validate_selected_alternative(self) -> "IntentCandidate":

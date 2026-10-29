@@ -15,6 +15,7 @@ import PersonaSelectPage from "./pages/PersonaSelectPage.jsx";
 import PersonaSetupPage from "./pages/PersonaSetupPage.jsx";
 import { useSimulationWS } from "./hooks/useSimulationWS.js";
 import BrandingPage from "./pages/BrandingPage.jsx";
+import RumorChapterPage from "./pages/RumorChapterPage.jsx";
 import MainPage from "./pages/MainPage.jsx";
 import SavePage from "./pages/SavePage.jsx";
 import MyPage from "./pages/MyPage.jsx";
@@ -440,9 +441,11 @@ export default function App() {
   }, [agents, selectedAgent]);
 
   if (!auth) return <AuthPanel onLogin={setAuth} notice={authNotice} />;
+  if (screen === "rumor-chapter") return <RumorChapterPage auth={auth} onBack={() => setScreen("main")} />;
   if (screen === "main") return (
     <MainPage
       displayName={auth.user.display_name}
+      onRumorChapter={() => setScreen("rumor-chapter")}
       onStart={() => setScreen("branding")}
       onChallenge={() => setScreen("club-challenge")}
       onMyPage={() => setScreen("my-page")}

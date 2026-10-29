@@ -23,6 +23,7 @@ from app.domain.models import (
     EventParticipant,
     Relationship,
     RuntimeResult,
+    RumorChallengeRun,
     Simulation,
     StudentProfile,
 )
@@ -495,6 +496,8 @@ async def advance_manual_tick(
     seed: int | None = None,
     memory_adapter: MemoryAdapter | None = None,
 ) -> ManualTickResult:
+    if db.scalar(select(RumorChallengeRun.id).where(RumorChallengeRun.simulation_id == simulation.id)):
+        raise TickAlreadyRunningError("스토리모드는 챕터 전용 API에서 진행하세요.")
     if (policy is None) != (policy_version is None):
         raise ValueError("policy and policy_version must be provided together")
     locked = db.scalar(

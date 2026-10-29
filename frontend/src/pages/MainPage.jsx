@@ -11,7 +11,7 @@ const STATUS_CHIP = {
   ENDED:   { label: 'ENDED',   cls: 'sim-status--ended' },
 };
 
-export default function MainPage({ displayName, onStart, onChallenge, onMyPage, simulations = [] }) {
+export default function MainPage({ displayName, onStart, onChallenge, onMyPage, onRumorChapter, simulations = [] }) {
   const cards = simulations.length > 0 ? simulations : PLACEHOLDER_SIMS;
 
   return (
@@ -55,6 +55,11 @@ export default function MainPage({ displayName, onStart, onChallenge, onMyPage, 
       </section>
 
       <main className="main-content">
+        <section className="panel">
+          <h2>스토리모드 · CHAPTER 1</h2>
+          <p>학생자치위원회의 임시 조정관이 되어 소문의 출처와 진실을 확인하세요.</p>
+          <button type="button" className="main-cta-outline" onClick={onRumorChapter}>거짓 소문의 확산을 막아라</button>
+        </section>
         <div>
           <div className="section-header">
             <span className="section-title">이어서 관찰하기</span>

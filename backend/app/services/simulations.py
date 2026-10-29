@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from uuid6 import uuid7
 
@@ -12,7 +13,7 @@ from app.api.schemas import (
     ProfessorProfileResponse,
     StudentProfileResponse,
 )
-from app.domain.models import Simulation, User
+from app.domain.models import RumorChallengeRun, Simulation, User
 from app.repositories.simulations import (
     get_simulation,
     list_agents_with_state,
@@ -64,6 +65,8 @@ def update_simulation_status(
     simulation: Simulation,
     new_status: str,
 ) -> Simulation:
+    if db.scalar(select(RumorChallengeRun.id).where(RumorChallengeRun.simulation_id == simulation.id)):
+        raise InvalidSimulationStatusTransitionError("스토리모드는 챕터에서 진행합니다.")
     db.refresh(simulation, with_for_update=True)
     if new_status not in ALLOWED_STATUS_TRANSITIONS[simulation.status]:
         raise InvalidSimulationStatusTransitionError
