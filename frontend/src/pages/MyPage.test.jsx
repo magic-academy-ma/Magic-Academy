@@ -106,4 +106,36 @@ describe('MyPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.');
     expect(screen.getByRole('button', { name: '불러오기' })).toBeEnabled();
   });
+
+  it('업적 탭에서 그룹별 업적과 달성 여부를 표시한다', async () => {
+    const achievements = [
+      { id: 'CHAPTER1_CLEAR', name: '챌린지 1 클리어', mode: 'STORY', group: 'CHAPTER 1', kind: 'PROGRESS', condition: '챌린지 1 클리어', achieved: true, achieved_at: '2026-10-19T12:00:00+00:00' },
+      { id: 'FIRST_SENTENCE', name: '소문의 첫 문장', mode: 'STORY', group: 'CHAPTER 1', kind: 'OBSERVATION', condition: '소문을 처음 전한 학생을 찾아낸다', achieved: false, achieved_at: null },
+      { id: 'CURSE_LIFTED', name: '저주 해결', mode: 'FREE', group: '자유 모드', kind: 'OBSERVATION', condition: '저주를 해결한다', achieved: false, achieved_at: null },
+    ];
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { next_cursor: null, has_more: false } }))
+      .mockImplementationOnce(() => response({ data: achievements }));
+
+    render(<MyPage auth={auth} onBack={vi.fn()} onRestore={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: '업적' }));
+
+    expect(await screen.findByText('3개 중 1개 달성')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('http://localhost:8000/v1/achievements', expect.anything());
+    expect(screen.getByRole('region', { name: 'CHAPTER 1' })).toHaveTextContent('소문의 첫 문장');
+    expect(screen.getByRole('region', { name: '자유 모드' })).toHaveTextContent('저주 해결');
+    expect(screen.getAllByText('미달성')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '업적' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('업적 조회 실패 오류를 표시한다', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({ data: [], meta: { next_cursor: null, has_more: false } }))
+      .mockImplementationOnce(() => response({}, 500));
+
+    render(<MyPage auth={auth} onBack={vi.fn()} onRestore={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: '업적' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('서버 오류가 발생했습니다.');
+  });
 });

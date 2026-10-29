@@ -19,6 +19,7 @@ class SchemaModelTests(unittest.TestCase):
                 "club_challenge_runs",
                 "story_runs",
                 "story_chapter_runs",
+                "user_achievements",
                 "simulation_shares",
                 "share_imports",
                 "locations",
@@ -60,6 +61,7 @@ class SchemaModelTests(unittest.TestCase):
         expected_names = {
             "uq_locations_simulation_code",
             "uq_users_username",
+            "uq_user_achievements_user_achievement",
             "idx_simulations_owner_created",
             "uq_agents_simulation_id_id",
             "uq_agents_simulation_fixture_key",
