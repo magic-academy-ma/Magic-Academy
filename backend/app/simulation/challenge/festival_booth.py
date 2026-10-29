@@ -17,8 +17,7 @@ from enum import StrEnum
 from itertools import combinations
 from uuid import UUID
 
-from app.simulation.agent_runtime import ReactionValence
-from app.simulation.challenge.controller import _build_forced_rest_response
+from app.simulation.agent_runtime import AgentRuntimeInput, ReactionValence
 from app.simulation.challenge.evaluation import (
     AFFECTION_AVG_THRESHOLD,
     PROJECT_PROGRESS_THRESHOLD,
@@ -37,6 +36,38 @@ from app.simulation.challenge.progress import (
 from app.simulation.event_master import Event, EventMaster, ImpactLevel
 
 BUDGET_RUMOR_SUBTYPE = "BUDGET_RUMOR"
+
+
+# CHAPTER 4 개편 전까지 남겨 두는 강제 REST 응답 — CHAPTER 2 개편으로 controller.py에서
+# 옮겨 왔다. 스토리모드 원칙(행동 직접 지정 금지)에 맞지 않아 CHAPTER 4 이슈에서
+# SUGGEST_REST로 대체하며 삭제한다. ChallengeLLMOverride가 더 이상 스크립트 응답을
+# 반환하지 않으므로 plan_final_tick_llm_overrides()의 결과는 현재 소비되지 않는다.
+def _build_forced_rest_response(runtime_input: AgentRuntimeInput) -> dict:
+    return {
+        "action_type": "REST",
+        "target_agent_id": None,
+        "target_location_id": str(runtime_input.agent.current_location_id),
+        "related_event_id": None,
+        "utterance": None,
+        "motivation_summary": "도전과제 개입으로 강제 휴식한다.",
+        "reaction": {
+            "valence": "NEUTRAL",
+            "relationship_signals": [],
+            "state_signals": [{"signal_type": "FATIGUE_DOWN", "intensity": "HIGH"}],
+        },
+        "decision_explanation": {
+            "alternatives": [
+                {
+                    "action_type": "REST",
+                    "description": "사용자 개입으로 강제 휴식",
+                    "relative_priority": "HIGH",
+                    "selected": True,
+                }
+            ],
+            "influencing_factors": [],
+        },
+        "memory_candidates": [],
+    }
 
 # 성과·엔딩 상수 — 도전과제 1 값을 초기값으로 재사용하되 따로 조정할 수 있게
 # 도전과제 2 전용 이름으로 분리한다 (§4.8/§4.9). 모두 플레이테스트 후 조정 대상.
