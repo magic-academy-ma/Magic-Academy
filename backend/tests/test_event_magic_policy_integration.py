@@ -279,6 +279,28 @@ def test_student_missing_produces_no_active_status_effect_candidate():
 
 
 # ---------------------------------------------------------------------------
+# 23. 도전과제1 Round 3 — 신규 RANDOM_INCIDENT subtype 3종 MEDIUM 티어 등록
+#     (docs/04-feature-specs/challenge-mode-team-revival.md §8)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "subtype", ["PRESENTATION_ERROR", "MEMBER_DROPOUT", "SUPPLY_MISSING"]
+)
+def test_challenge_random_incident_subtypes_apply_medium_stress(subtype):
+    event = EventMaster().build_random_incident(
+        tick=1,
+        event_subtype=subtype,
+        participant_agent_ids=["s1"],
+        location_id="classroom",
+    )
+    candidates = build_event_effect_candidates(
+        event, run_id="run-1", agent_snapshots={"s1": _snapshot("s1", stress=10)}
+    )
+    assert len(candidates) == 1
+    assert candidates[0].metric == "stress"
+    assert candidates[0].delta == 5
+
+
+# ---------------------------------------------------------------------------
 # Task 3 handoff: Magic Layer STUDENT_MISSING candidate -> 실제
 # persist_event_batch() 호출 -> INACTIVE_TEMPORARY -> ACTIVE+CURSED -> 해제.
 # Task1은 이 전이를 직접 mutation하지 않고, Task3(#103)의 실제 서비스가
