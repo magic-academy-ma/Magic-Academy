@@ -49,10 +49,48 @@ def test_generate_uses_configured_structured_output_request():
     assert str(runtime_input.agent.agent_id) in request["messages"][0]["content"]
 
 
+def test_retry_request_includes_validation_failure_and_repeats_id_contract():
+    runtime_input = make_runtime_input()
+    candidate = IntentCandidate.model_validate(valid_response(runtime_input))
+    sdk_client = FakeAnthropic(SimpleNamespace(parsed_output=candidate))
+    client = AnthropicLLMClient(
+        client=sdk_client,
+        model="configured-model",
+        max_tokens=1234,
+    )
+
+    client.generate_retry(
+        runtime_input,
+        "ValueError: related_event_id is not included in runtime events",
+    )
+
+    content = sdk_client.messages.calls[0]["messages"][0]["content"]
+    assert "Previous response failed validation" in content
+    assert "related_event_id is not included in runtime events" in content
+    assert "events[].event_id" in content
+
+
 def test_system_prompt_defines_concise_action_target_contract():
     assert "WAIT: all target and related Event fields must be null" in SYSTEM_PROMPT
     assert "ATTEND_CLASS or TEACH_CLASS" in SYSTEM_PROMPT
     assert "Keep every explanation concise" in SYSTEM_PROMPT
+
+
+def test_system_prompt_requires_korean_for_every_user_visible_text_field():
+    assert "Write every user-visible text field in Korean" in SYSTEM_PROMPT
+    assert "utterance" in SYSTEM_PROMPT
+    assert "motivation_summary" in SYSTEM_PROMPT
+    assert "description" in SYSTEM_PROMPT
+    assert "memory_candidates[].content" in SYSTEM_PROMPT
+
+
+def test_system_prompt_defines_memory_importance_range():
+    assert "memory_candidates[].importance must be an integer from 1 through 10" in SYSTEM_PROMPT
+
+
+def test_system_prompt_requires_students_to_leave_classroom_during_free_time():
+    assert "AFTERNOON or EVENING" in SYSTEM_PROMPT
+    assert "leave that classroom first" in SYSTEM_PROMPT
 
 
 def test_structured_output_validation_error_reports_safe_field_path():

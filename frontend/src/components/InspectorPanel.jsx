@@ -12,9 +12,22 @@ const BIG_FIVE = [
 const STATE_FIELDS = [["hunger", "배고픔"], ["fatigue", "피로도"], ["stress", "스트레스"], ["satisfaction", "만족도"]];
 const RELATION_FIELDS = [["affection", "호감도"], ["closeness", "친밀도"], ["trust", "신뢰도"], ["tension", "긴장도"], ["rivalry", "경쟁"], ["dependency", "의존도"]];
 
+const SIGNED_RELATION_FIELDS = new Set(["affection", "closeness", "trust"]);
+
 function clamp(value, min, max) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : min;
+}
+
+function relationshipValue(metric, value) {
+  return SIGNED_RELATION_FIELDS.has(metric)
+    ? clamp(value, -100, 100)
+    : clamp(value, 0, 100);
+}
+
+function relationshipBarWidth(metric, value) {
+  const normalized = relationshipValue(metric, value);
+  return SIGNED_RELATION_FIELDS.has(metric) ? (normalized + 100) / 2 : normalized;
 }
 
 function BigFiveBar({ value, label }) {
@@ -65,10 +78,14 @@ export default function InspectorPanel({ agent, simulationId, token, currentTick
     setLoading(true);
     setError("");
     const request = (path) => apiRequest(path, { token, signal: controller.signal });
+    const tick = Number(currentTick);
+    const explanationRequest = Number.isFinite(tick) && tick > 0
+      ? request(`/v1/agents/${agent.id}/decision-explanation?tick=${tick}`)
+      : Promise.resolve(null);
     Promise.allSettled([
       request(`/v1/agents/${agent.id}`),
       request(`/v1/agents/${agent.id}/state`),
-      request(`/v1/agents/${agent.id}/decision-explanation?tick=${Number.isFinite(Number(currentTick)) ? currentTick : 0}`),
+      explanationRequest,
       request(`/v1/agents/${agent.id}/behavior-log?limit=5`),
       request(`/v1/agents/${agent.id}/memories?limit=10`),
       request(`/v1/agents/${agent.id}/relationships`),
@@ -104,6 +121,6 @@ export default function InspectorPanel({ agent, simulationId, token, currentTick
     <section><h3>Decision Explanation <small>Tick {currentTick ?? 0}</small></h3>{explanation?.alternatives?.length ? <div className="alternative-list">{explanation.alternatives.slice(0, 3).map((item, index) => <div className={`alternative ${item.selected ? "selected" : ""}`} key={`${item.action_type}-${index}`}><div><b>{item.action_type}</b><span className="priority">{item.relative_priority}</span></div><p>{item.description}</p></div>)}</div> : <EmptyState>이번 Tick 데이터 없음</EmptyState>}{explanation?.influencing_factors?.length ? <ul className="factor-list">{explanation.influencing_factors.map((factor, index) => <li key={`${factor.source}-${index}`}><b>{factor.source}</b> <span className={factor.direction === "SUPPORT" ? "support" : "oppose"}>{factor.direction}</span> {factor.description}</li>)}</ul> : null}</section>
     <section><h3>행동 로그</h3>{behavior.length ? <ul className="log-list">{behavior.map((item, index) => <li key={item.id ?? index}><div><b>Tick {item.tick ?? item.tick_number ?? "-"}</b><span className={`status-tag ${String(item.status ?? item.runtime_status ?? "").toLowerCase()}`}>{item.status ?? item.runtime_status ?? "-"}</span></div><strong>{item.action_type ?? item.action ?? "-"}</strong>{item.utterance && <p>“{item.utterance}”</p>}{item.motivation_summary && <small>{item.motivation_summary}</small>}</li>)}</ul> : <EmptyState>행동 로그 API가 아직 없거나 기록이 없습니다.</EmptyState>}</section>
     <section><h3>Memory</h3>{memories.length ? <ul className="memory-list">{memories.map((memory, index) => <li key={memory.id ?? index} className={`${latestMemoryIds.has(memory.id) ? "latest" : ""}`}><div><span className="memory-type">{memory.memory_type}</span>{latestMemoryIds.has(memory.id) && <span className="highlight-tag">LATEST</span>}{memory.retrieval_rank && memory.retrieval_rank <= 3 && <span className="highlight-tag rag">RAG TOP {memory.retrieval_rank}</span>}</div><p>{memory.content}</p><small>중요도 {memory.importance} · Tick {memory.created_tick}</small></li>)}</ul> : <EmptyState>저장된 Memory가 없습니다.</EmptyState>}</section>
-    <section><h3>관계</h3>{relationships.length ? <div className="relationship-list">{relationships.map((relationship, index) => <article key={relationship.target_agent_id ?? index}><div className="relationship-heading"><strong>{relationship.target_agent_name ?? relationship.target_agent?.name ?? "알 수 없음"}</strong>{relationship.relationship_type && <span className="relationship-tag">{String(relationship.relationship_type).toUpperCase()}</span>}</div>{RELATION_FIELDS.map(([key, label]) => <div className="mini-meter" key={key}><span>{label}</span><span className="mini-meter-track"><i style={{ width: `${clamp(relationship[key], 0, 100)}%` }} /></span><small>{clamp(relationship[key], 0, 100)}</small></div>)}</article>)}</div> : <EmptyState>표시할 관계가 없습니다.</EmptyState>}</section>
+    <section><h3>관계</h3>{relationships.length ? <div className="relationship-list">{relationships.map((relationship, index) => <article key={relationship.target_agent_id ?? index}><div className="relationship-heading"><strong>{relationship.target_agent_name ?? relationship.target_agent?.name ?? "알 수 없음"}</strong>{relationship.relationship_type && <span className="relationship-tag">{String(relationship.relationship_type).toUpperCase()}</span>}</div>{RELATION_FIELDS.map(([key, label]) => <div className="mini-meter" key={key}><span>{label}</span><span className="mini-meter-track"><i style={{ width: `${relationshipBarWidth(key, relationship[key])}%` }} /></span><small>{relationshipValue(key, relationship[key])}</small></div>)}</article>)}</div> : <EmptyState>표시할 관계가 없습니다.</EmptyState>}</section>
   </aside>;
 }

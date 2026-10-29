@@ -58,7 +58,7 @@ def resolve_talk_conflicts(
             target_location_id=None,
             related_event_id=None,
             utterance=None,
-            motivation_summary="TALK 충돌로 WAIT_FALLBACK 적용",
+            motivation_summary="대화 상대가 서로 일치하지 않아 이번 Tick에는 대기한다.",
             reaction=AgentReaction(
                 valence=ReactionValence.NEUTRAL,
                 relationship_signals=[],

@@ -369,8 +369,29 @@ def validate_intent_candidate(
             raise ValueError("memory candidate contains an invalid related_agent_id")
         if memory.related_event_id is not None and memory.related_event_id not in valid_event_ids:
             raise ValueError("memory candidate contains an invalid related_event_id")
+    _validate_free_time_departure(candidate, runtime_input)
     _validate_action_targets(candidate, runtime_input.agent.agent_id)
     return candidate
+
+
+def _validate_free_time_departure(
+    candidate: IntentCandidate,
+    runtime_input: AgentRuntimeInput,
+) -> None:
+    is_student_free_time = (
+        runtime_input.agent.agent_type == "student"
+        and runtime_input.block in {Block.AFTERNOON, Block.EVENING}
+        and not runtime_input.schedule.is_mandatory
+    )
+    is_still_in_classroom = (
+        runtime_input.agent.current_location_id == runtime_input.schedule.location_id
+    )
+    leaves_classroom = (
+        candidate.target_location_id is not None
+        and candidate.target_location_id != runtime_input.schedule.location_id
+    )
+    if is_student_free_time and is_still_in_classroom and not leaves_classroom:
+        raise ValueError("student must leave the classroom during free time")
 
 
 def _validate_action_targets(candidate: IntentCandidate, acting_agent_id: UUID) -> None:
@@ -628,9 +649,7 @@ class AgentRuntime:
 
     def _decide(self, state: RuntimeGraphState) -> dict[str, object]:
         attempt_count = state["attempt_count"] + 1
-        # 실제 LLM 호출 직전에 활동 Tick 쿼터를 원자적으로 차감한다. retry도
-        # 이 노드를 다시 통과하므로 별도 호출로 1회 추가 차감된다. 소진 시에는
-        # LLM을 호출하지 않고 quota exceeded 상태로 fallback 경로로 보낸다.
+        # 실제 LLM 호출 직전에 활동 Tick 쿼터를 원자적으로 차감한다. 
         if self._llm_quota is not None and not self._llm_quota.try_consume():
             with observation("llm.quota", metadata={"failure_reason": "quota_exceeded"}):
                 pass
@@ -642,19 +661,33 @@ class AgentRuntime:
                 "quota_exceeded": True,
             }
         try:
-            # Block LLM invocation during replay mode and instrument the call
             from app.simulation.replay_guard import assert_not_replay
             from app.simulation.instrumentation import increment_llm
 
             assert_not_replay("LLM generation attempted during replay")
-            increment_llm()
+            increment_llm()            
+            generate_retry = getattr(self._llm_client, "generate_retry", None)
+            last_failure = state["last_validation_failure"]
+            is_structured_output_failure = (
+                last_failure is not None and "ValidationError" in last_failure
+            )
             with observation("llm.attempt", metadata={
                 "attempt_number": attempt_count,
                 "is_retry": attempt_count > 1,
                 "provider": "mock" if isinstance(self._llm_client, MockLLMClient) else type(self._llm_client).__name__,
             }) as span:
                 try:
-                    response = self._llm_client.generate(state["runtime_input"])
+                    if (
+                        last_failure is not None
+                        and (
+                            state["current_llm_response"] is not None
+                            or is_structured_output_failure
+                        )
+                        and callable(generate_retry)
+                    ):
+                        response = generate_retry(state["runtime_input"], last_failure)
+                    else:
+                        response = self._llm_client.generate(state["runtime_input"])
                 except LLMInvocationError:
                     span.update(metadata={"failure_reason": "llm_invocation_failed"})
                     raise
