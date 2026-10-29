@@ -90,7 +90,7 @@ TEST_DATABASE_URL='<테스트 PostgreSQL URL>' python -m pytest tests/test_chall
 cd frontend
 npm test -- --run src/pages/RumorChapterPage.test.jsx
 npm run build
-E2E_BASE_URL=http://127.0.0.1:5174 npx playwright test e2e/rumor-chapter.spec.js
+E2E_BASE_URL=http://127.0.0.1:5174 E2E_API_URL=http://127.0.0.1:8001 npx playwright test e2e/rumor-chapter.spec.js
 ```
 
 E2E는 실제 API·DB에 연결한다. 테스트 API 서버는 `get_agent_runtime` dependency만 `AgentRuntime(ChapterClient(), model='browser-test-llm')`로 대체한다(`backend/tests/test_rumor_challenge_service.py`의 ChapterClient). `DATABASE_URL`을 테스트 DB로, `CORS_ORIGINS`를 프론트 주소로 설정하고, 프론트는 `VITE_USE_MOCK=false`, `VITE_API_URL`을 테스트 API 주소로 실행한다. 게임 경로를 바꾸는 별도 Mock 모드는 없다.
@@ -108,6 +108,8 @@ cd backend
 PYTHONPATH=. DATABASE_URL='<테스트 PostgreSQL URL>' CORS_ORIGINS=http://127.0.0.1:5174 python tests/test_rumor_challenge_service.py
 # 다른 터미널, frontend/에서:
 VITE_USE_MOCK=false VITE_API_URL=http://127.0.0.1:8001 npm run dev -- --host 127.0.0.1 --port 5174
+# Playwright 실행 시 E2E_API_URL도 같은 테스트 API 주소로 지정한다.
+E2E_BASE_URL=http://127.0.0.1:5174 E2E_API_URL=http://127.0.0.1:8001 npx playwright test e2e/rumor-chapter.spec.js
 ```
 
 ## 변경 파일

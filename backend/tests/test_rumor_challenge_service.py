@@ -514,6 +514,12 @@ def test_request_followed_by_refusal_does_not_award_actual_action(setup, choice,
 
 if __name__ == '__main__':
     # E2E 전용 진입점: 테스트 DB 환경 변수와 CORS 설정을 지정해 실행한다.
+    import os
     import uvicorn
     app.dependency_overrides[get_agent_runtime] = lambda: runtime()
-    uvicorn.run(app, host='127.0.0.1', port=8001)
+
+    @app.get('/health/e2e-runtime')
+    def e2e_runtime_health():
+        return {'runtime': 'mock'}
+
+    uvicorn.run(app, host=os.getenv('E2E_API_HOST', '127.0.0.1'), port=8001)

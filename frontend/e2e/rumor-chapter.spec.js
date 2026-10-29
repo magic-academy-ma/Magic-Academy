@@ -1,7 +1,29 @@
 import { expect, test } from '@playwright/test';
 
+const e2eApiUrl = process.env.E2E_API_URL ?? 'http://127.0.0.1:8001';
+const e2eApiOrigin = new URL(e2eApiUrl).origin;
+
 // 실제 API/DB. 서버의 LLM 의존성만 테스트 대역으로 바꾼다.
-test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async ({ page }) => {
+test.beforeAll(async ({ request }) => {
+  const response = await request.get(`${e2eApiUrl}/health/e2e-runtime`);
+  expect(
+    response.ok(),
+    '실제 LLM 호출을 막기 위해 tests/test_rumor_challenge_service.py 서버를 먼저 실행해야 합니다.',
+  ).toBe(true);
+  await expect(response.json()).resolves.toEqual({ runtime: 'mock' });
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/v1/**', async (route) => {
+    expect(
+      new URL(route.request().url()).origin,
+      'E2E 프론트가 Mock Runtime 테스트 API가 아닌 서버를 호출하려고 했습니다.',
+    ).toBe(e2eApiOrigin);
+    await route.continue();
+  });
+});
+
+test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async ({ page }, testInfo) => {
   const username = `rumor_${Date.now()}`;
   const password = 'Rumor-e2e-test-password!';
   await page.goto('/');
@@ -24,7 +46,7 @@ test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async (
   await page.getByRole('button', { name: '관계 보기', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: /닫기/ }).last().click();
-  await page.screenshot({ path: '/private/tmp/rumor-chapter-investigation.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('rumor-chapter-investigation.png'), fullPage: true });
   await page.reload();
   await page.getByLabel('아이디', { exact: true }).fill(username);
   await page.getByLabel('비밀번호').fill(password);
@@ -44,10 +66,10 @@ test('CHAPTER 1 조사, 새로고침 이어하기, 개입, 9틱 엔딩', async (
   }
   await expect(page.getByRole('heading', { name: '챕터 종료' })).toBeVisible();
   await expect(page.getByText('CHAPTER 1 클리어', { exact: true })).toBeVisible();
-  await page.screenshot({ path: '/private/tmp/rumor-chapter-ending.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('rumor-chapter-ending.png'), fullPage: true });
 });
 
-test('모바일 폭에서도 조사와 개입을 사용할 수 있다', async ({ page }) => {
+test('모바일 폭에서도 조사와 개입을 사용할 수 있다', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.getByRole('button', { name: '회원가입', exact: true }).click();
@@ -61,5 +83,5 @@ test('모바일 폭에서도 조사와 개입을 사용할 수 있다', async ({
   await page.getByRole('button', { name: '다음 틱 관찰' }).click();
   await expect(page.getByLabel('질문 주제')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: '/private/tmp/rumor-chapter-mobile.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('rumor-chapter-mobile.png'), fullPage: true });
 });
