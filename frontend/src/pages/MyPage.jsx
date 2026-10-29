@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client.js';
-import MyAchievements from './MyAchievements.jsx';
 import './MyPage.css';
 
 function formatSavedAt(simulation) {
@@ -25,7 +24,6 @@ export default function MyPage({ auth, onBack, onRestore }) {
   const [error, setError] = useState('');
   const [restoringId, setRestoringId] = useState(null);
   const [restoreError, setRestoreError] = useState('');
-  const [tab, setTab] = useState('simulations');
 
   useEffect(() => {
     let active = true;
@@ -74,22 +72,7 @@ export default function MyPage({ auth, onBack, onRestore }) {
             </div>
           </div>
           <nav className="mypage-menu" aria-label="마이페이지 메뉴">
-            <button
-              type="button"
-              className={`mypage-menu__item${tab === 'simulations' ? ' active' : ''}`}
-              aria-current={tab === 'simulations' ? 'page' : undefined}
-              onClick={() => setTab('simulations')}
-            >
-              시뮬레이션
-            </button>
-            <button
-              type="button"
-              className={`mypage-menu__item${tab === 'achievements' ? ' active' : ''}`}
-              aria-current={tab === 'achievements' ? 'page' : undefined}
-              onClick={() => setTab('achievements')}
-            >
-              업적
-            </button>
+            <button type="button" className="mypage-menu__item active" aria-current="page">시뮬레이션</button>
             <button type="button" className="mypage-menu__item" disabled aria-disabled="true">Persona</button>
             <button type="button" className="mypage-menu__item" disabled aria-disabled="true">관찰 통계</button>
             <button type="button" className="mypage-menu__item" disabled aria-disabled="true">프로필 및 계정</button>
@@ -97,60 +80,55 @@ export default function MyPage({ auth, onBack, onRestore }) {
         </aside>
 
         <main className="mypage-content">
-          {tab === 'achievements' && <MyAchievements auth={auth} />}
-          {tab === 'simulations' && (
-            <>
-              <header className="page-header">
-                <div>
-                  <div className="page-eyebrow">Saved Worlds</div>
-                  <h1 className="page-title">내 시뮬레이션</h1>
-                  <p className="page-description">저장한 시뮬레이션을 확인하고 이어서 관찰할 수 있습니다.</p>
-                </div>
-              </header>
+          <header className="page-header">
+            <div>
+              <div className="page-eyebrow">Saved Worlds</div>
+              <h1 className="page-title">내 시뮬레이션</h1>
+              <p className="page-description">저장한 시뮬레이션을 확인하고 이어서 관찰할 수 있습니다.</p>
+            </div>
+          </header>
 
-              {restoreError && (
-                <p className="mypage-message mypage-message--error" role="alert">{restoreError}</p>
-              )}
-              {loading && (
-                <p className="mypage-message">목록을 불러오는 중...</p>
-              )}
-              {error && (
-                <p className="mypage-message mypage-message--error" role="alert">{error}</p>
-              )}
-              {!loading && !error && simulations.length === 0 && (
-                <p className="mypage-message">저장된 시뮬레이션이 없습니다.</p>
-              )}
-              {!loading && !error && simulations.length > 0 && (
-                <div className="sim-grid">
-                  {simulations.map((item) => (
-                    <article key={item.id} className="sim-card">
-                      <div className="sim-card__thumb" aria-hidden="true" />
-                      <div className="sim-card__body">
-                        <h2 className="sim-card__name">{item.name}</h2>
-                        <div className="sim-card__meta">
-                          <span className="sim-card__date">{formatSavedAt(item)}</span>
-                          {item.status && (
-                            <span className={`sim-card__status-chip ${statusClass(item.status)}`}>
-                              {statusLabel(item.status)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="sim-card__actions">
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            disabled={restoringId !== null}
-                            onClick={() => handleRestore(item.id)}
-                          >
-                            {restoringId === item.id ? '불러오는 중...' : '불러오기'}
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </>
+          {restoreError && (
+            <p className="mypage-message mypage-message--error" role="alert">{restoreError}</p>
+          )}
+          {loading && (
+            <p className="mypage-message">목록을 불러오는 중...</p>
+          )}
+          {error && (
+            <p className="mypage-message mypage-message--error" role="alert">{error}</p>
+          )}
+          {!loading && !error && simulations.length === 0 && (
+            <p className="mypage-message">저장된 시뮬레이션이 없습니다.</p>
+          )}
+          {!loading && !error && simulations.length > 0 && (
+            <div className="sim-grid">
+              {simulations.map((item) => (
+                <article key={item.id} className="sim-card">
+                  <div className="sim-card__thumb" aria-hidden="true" />
+                  <div className="sim-card__body">
+                    <h2 className="sim-card__name">{item.name}</h2>
+                    <div className="sim-card__meta">
+                      <span className="sim-card__date">{formatSavedAt(item)}</span>
+                      {item.status && (
+                        <span className={`sim-card__status-chip ${statusClass(item.status)}`}>
+                          {statusLabel(item.status)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="sim-card__actions">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={restoringId !== null}
+                        onClick={() => handleRestore(item.id)}
+                      >
+                        {restoringId === item.id ? '불러오는 중...' : '불러오기'}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           )}
         </main>
       </div>

@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.api.achievements import router as achievements_router
 from app.api.agents import router as agents_router
 from app.api.auth import router as auth_router
 from app.api.club_challenge import router as club_challenge_router
@@ -24,7 +23,6 @@ api_router.include_router(rumor_router)
 api_router.include_router(auth_router)
 api_router.include_router(club_challenge_router)
 api_router.include_router(story_mode_router)
-api_router.include_router(achievements_router)
 api_router.include_router(events_router)
 api_router.include_router(agents_router)
 api_router.include_router(simulations_router)
