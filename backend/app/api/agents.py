@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.schemas import (
     AgentDetailResponse,
     AgentStateDetailResponse,
+    BehaviorLogResponse,
     DecisionExplanationDetailResponse,
     MemoryResponse,
     RelationshipResponse,
@@ -18,6 +19,7 @@ from app.services.agents import (
     get_agent_detail,
     get_agent_state,
     get_decision_explanation,
+    list_agent_behavior_log,
     list_agent_memories,
     list_agent_relationships,
 )
@@ -50,6 +52,16 @@ def get_memories(
 @router.get("/{agent_id}/relationships", response_model=list[RelationshipResponse])
 def get_relationships(agent_id: UUID, db: DatabaseSession, current_user: CurrentUser):
     return list_agent_relationships(db, agent_id, current_user)
+
+
+@router.get("/{agent_id}/behavior-log", response_model=list[BehaviorLogResponse])
+def get_behavior_log(
+    agent_id: UUID,
+    db: DatabaseSession,
+    current_user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+):
+    return list_agent_behavior_log(db, agent_id, current_user, limit)
 
 
 @router.get("/{agent_id}/decision-explanation", response_model=DecisionExplanationDetailResponse)

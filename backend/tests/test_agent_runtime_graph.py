@@ -84,6 +84,18 @@ class SequenceLLMClient:
         return deepcopy(outcome)
 
 
+class FeedbackSequenceLLMClient(SequenceLLMClient):
+    def __init__(self, outcomes: list[object]) -> None:
+        super().__init__(outcomes)
+        self.validation_failures: list[str] = []
+
+    def generate_retry(
+        self, runtime_input: AgentRuntimeInput, validation_failure: str
+    ) -> object:
+        self.validation_failures.append(validation_failure)
+        return self.generate(runtime_input)
+
+
 def valid_response(runtime_input: AgentRuntimeInput) -> object:
     return MockLLMClient().generate(runtime_input)
 
@@ -123,6 +135,41 @@ def test_validation_failure_then_retry_success() -> None:
     assert result.failure_reason is None
     assert client.call_count == 2
     assert client.runtime_inputs == [runtime_input, runtime_input]
+
+
+def test_validation_retry_passes_failure_reason_to_feedback_capable_client() -> None:
+    runtime_input = make_runtime_input()
+    invalid = deepcopy(valid_response(runtime_input))
+    invalid["related_event_id"] = "30000000-0000-0000-0000-000000000003"
+    client = FeedbackSequenceLLMClient([invalid, valid_response(runtime_input)])
+
+    result = AgentRuntime(client).run(runtime_input)
+
+    assert result.status == RuntimeStatus.PROPOSED
+    assert client.validation_failures == [
+        "ValueError: related_event_id is not included in runtime events"
+    ]
+
+
+def test_structured_output_validation_error_is_passed_to_retry() -> None:
+    runtime_input = make_runtime_input()
+    client = FeedbackSequenceLLMClient(
+        [
+            LLMInvocationError(
+                "Anthropic Runtime invocation failed: ValidationError "
+                "(memory_candidates.0.importance:less_than_equal)"
+            ),
+            valid_response(runtime_input),
+        ]
+    )
+
+    result = AgentRuntime(client).run(runtime_input)
+
+    assert result.status == RuntimeStatus.PROPOSED
+    assert client.validation_failures == [
+        "LLMInvocationError: Anthropic Runtime invocation failed: ValidationError "
+        "(memory_candidates.0.importance:less_than_equal)"
+    ]
 
 
 def test_two_validation_failures_return_wait_fallback() -> None:

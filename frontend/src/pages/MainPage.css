@@ -350,6 +350,13 @@
 .sim-status--ended { background: rgba(219, 76, 76, 0.16); color: var(--c-critical, #db4c4c); }
 .sim-status--ended::before { background: var(--c-critical, #db4c4c); }
 
+.sim-status--challenge { background: rgba(212, 178, 111, 0.16); color: #d4b26f; }
+.sim-status--challenge::before { background: #d4b26f; }
+
+.sim-card--challenge {
+  border-color: rgba(212, 178, 111, 0.3);
+}
+
 /* Card body */
 .sim-card__body {
   padding: var(--s-4, 16px);

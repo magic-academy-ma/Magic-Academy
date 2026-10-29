@@ -11,7 +11,7 @@ const STATUS_CHIP = {
   ENDED:   { label: 'ENDED',   cls: 'sim-status--ended' },
 };
 
-export default function MainPage({ displayName, onStart, onMyPage, onRumorChapter, simulations = [] }) {
+export default function MainPage({ displayName, onStart, onChallenge, onMyPage, onRumorChapter, simulations = [] }) {
   const cards = simulations.length > 0 ? simulations : PLACEHOLDER_SIMS;
 
   return (
@@ -46,6 +46,9 @@ export default function MainPage({ displayName, onStart, onMyPage, onRumorChapte
             </button>
             <button type="button" className="main-cta-outline" onClick={onMyPage}>
               기록 보기
+            </button>
+            <button type="button" className="main-cta-outline" onClick={onChallenge}>
+              스토리 챌린지
             </button>
           </div>
         </div>
@@ -91,6 +94,30 @@ export default function MainPage({ displayName, onStart, onMyPage, onRumorChapte
                 </div>
               );
             })}
+
+            <div
+              className="sim-card sim-card--challenge"
+              role="button"
+              tabIndex={0}
+              onClick={onChallenge}
+              onKeyDown={(e) => e.key === 'Enter' && onChallenge()}
+              aria-label="동아리를 폐부에서 구하기 도전과제 시작"
+            >
+              <div className="sim-card__thumb">
+                <div className="sim-card__thumb-img" />
+                <div className="sim-card__thumb-overlay" />
+                <div className="sim-card__thumb-status">
+                  <span className="sim-status sim-status--challenge">STORY 3</span>
+                </div>
+                <div className="sim-card__thumb-preview">
+                  <span>▶ 도전과제 시작</span>
+                </div>
+              </div>
+              <div className="sim-card__body">
+                <div className="sim-card__name">동아리를 폐부에서 구하기</div>
+                <div className="sim-card__meta">3 ROUND · 9 TICK</div>
+              </div>
+            </div>
 
             <div
               className="sim-card sim-card--new"

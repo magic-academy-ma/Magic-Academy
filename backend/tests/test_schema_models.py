@@ -16,6 +16,7 @@ class SchemaModelTests(unittest.TestCase):
                 "users",
                 "rumor_challenge_runs",
                 "simulations",
+                "club_challenge_runs",
                 "simulation_shares",
                 "share_imports",
                 "locations",

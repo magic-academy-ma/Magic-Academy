@@ -80,7 +80,7 @@ def get_persona(
     require_owned_simulation(db, simulation_id, current_user)
     config = UserPersonaService().get_persona(db, simulation_id)
     if config is None:
-        return error(404, "RESOURCE_NOT_FOUND", "User Persona is not configured")
+        return {"data": None}
     return {"data": persona_response(db, config)}
 
 
