@@ -79,7 +79,7 @@ function response(body, status = 200) {
 }
 
 // 초기 로드 시 GET config -> GET persona 순으로 호출된다.
-function mockInitialLoad({ personaStatus = 404, personaBody = {} } = {}) {
+function mockInitialLoad({ personaStatus = 200, personaBody = { data: null } } = {}) {
   return vi
     .spyOn(globalThis, "fetch")
     .mockImplementationOnce(() => response({ data: configData }))

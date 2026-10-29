@@ -123,3 +123,45 @@ def test_manual_tick_stores_then_retrieves_memory_for_next_runtime_input(session
         assert db.scalar(
             select(func.count()).select_from(AgentMemory).where(AgentMemory.agent_id == student.id)
         ) == 10
+
+
+def test_manual_tick_trace_matches_locked_refresh_with_stale_session(session_factory, monkeypatch):
+    from app.core import tracing
+    from app.domain.models import Simulation
+    from tests.test_langfuse_tracing import Recorder, metadata
+
+    recorder = Recorder()
+    monkeypatch.setattr(tracing, '_client', recorder)
+    with session_factory() as stale_db:
+        owner = User(
+            id=uuid7(), username='trace-stale-owner', display_name='Trace Owner',
+            password_hash='test-only', roles=['USER'],
+        )
+        stale_db.add(owner)
+        stale_db.flush()
+        stale_simulation = create_simulation(stale_db, owner, 'Trace refresh')
+        stale_db.commit()
+
+        # A different request completes a Tick while this session retains tick 0.
+        with session_factory() as fresh_db:
+            fresh_simulation = fresh_db.get(Simulation, stale_simulation.id)
+            first = asyncio.run(advance_manual_tick(
+                fresh_db, fresh_simulation,
+                runtime=AgentRuntime(MockLLMClient()),
+                memory_adapter=MemoryAdapter(fresh_db, embedding_client=FakeEmbeddingClient()),
+            ))
+            fresh_db.commit()
+        assert stale_simulation.current_tick == 0
+        second = asyncio.run(advance_manual_tick(
+            stale_db, stale_simulation,
+            runtime=AgentRuntime(MockLLMClient()),
+            memory_adapter=MemoryAdapter(stale_db, embedding_client=FakeEmbeddingClient()),
+        ))
+        stale_db.commit()
+
+        roots = [s for s in recorder.spans if s['fields']['name'] == 'tick']
+        engines = [s for s in recorder.spans if s['fields']['name'] == 'tick.engine']
+        assert [first.current_tick, second.current_tick] == [1, 2]
+        assert [metadata(s)['tick_number'] for s in roots] == [1, 2]
+        assert all(metadata(s)['tick_number'] == metadata(s['parent'])['tick_number'] for s in engines)
+        assert stale_simulation.current_tick == second.current_tick
