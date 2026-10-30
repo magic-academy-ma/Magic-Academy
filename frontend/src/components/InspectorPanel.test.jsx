@@ -1,5 +1,5 @@
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiRequest } from "../api/client.js";
@@ -25,7 +25,7 @@ const agent = {
 
 describe("InspectorPanel", () => {
   it("keeps signed relationship values instead of clamping them to zero", async () => {
-    client.apiRequest.mockImplementation((path) => {
+    apiRequest.mockImplementation((path) => {
       if (path.endsWith("/relationships")) {
         return Promise.resolve([
           {
@@ -43,7 +43,7 @@ describe("InspectorPanel", () => {
       return Promise.resolve([]);
     });
 
-    const { container } = render(
+    render(
       <InspectorPanel
         agent={agent}
         simulationId="simulation-1"

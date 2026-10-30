@@ -450,6 +450,7 @@ describe('Slice 0 UI', () => {
     await login()
     await completeOnboarding()
     await screen.findByText('Agent 6명')
+    await userEvent.click(screen.getByRole('button', { name: /아델/ }))
     fetchMock.mockImplementationOnce(() => response(tickResult()))
 
     await userEvent.click(screen.getByRole('button', { name: 'Tick 실행' }))
@@ -462,6 +463,9 @@ describe('Slice 0 UI', () => {
       'data-location',
       '🏫 교실'
     )
+    expect(
+      await within(screen.getByLabelText('Agent Inspector')).findByText('교실')
+    ).toBeInTheDocument()
   })
 
   it('shows an empty agent-results message', async () => {

@@ -378,7 +378,7 @@ export default function App() {
     loadAgents(newSimulation.id);
   }
 
-  async function fetchAgents(simulationId) {
+  const fetchAgents = useCallback(async (simulationId) => {
     const agentList = await apiRequest(
       `/v1/simulations/${simulationId}/agents`,
       {
@@ -389,7 +389,7 @@ export default function App() {
     setAgents(agentList);
 
     return agentList;
-  }
+  }, [auth?.access_token]);
 
   async function loadAgents(simulationId) {
     setLoading(true);
@@ -426,7 +426,7 @@ export default function App() {
         console.error("[App] Agent 상태 재조회 실패", requestError);
       }
     },
-    [auth]
+    [auth, fetchAgents]
   );
   refreshAgentsSilentlyRef.current = refreshAgentsSilently;
 

@@ -159,6 +159,13 @@ def test_invalid_settings_fail_closed(monkeypatch, enabled, url):
 
 
 def test_settings_read_dotenv_and_environment(tmp_path, monkeypatch):
+    for key in (
+        'LANGFUSE_ENABLED',
+        'LANGFUSE_PUBLIC_KEY',
+        'LANGFUSE_SECRET_KEY',
+        'LANGFUSE_BASE_URL',
+    ):
+        monkeypatch.delenv(key, raising=False)
     env = tmp_path / '.env'
     env.write_text('LANGFUSE_ENABLED=true\nLANGFUSE_PUBLIC_KEY=pk-file\nLANGFUSE_SECRET_KEY=sk-file\nLANGFUSE_BASE_URL=https://example.com\n')
     settings = Settings(_env_file=env)

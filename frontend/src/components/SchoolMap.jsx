@@ -177,7 +177,7 @@ function CardView({ agents, agentActions, activeSpace, selectedAgentId, onCardCl
   );
 }
 
-export default function SchoolMap({ agents, agentActions, simulationId, token, onAgentSelect }) {
+export default function SchoolMap({ agents, agentActions, onAgentSelect }) {
   const [view, setView] = useState("map");
   const [activeSpace, setActiveSpace] = useState(null);
   const [selectedAgentId, setSelectedAgentId] = useState(null);
