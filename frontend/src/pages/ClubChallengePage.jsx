@@ -113,7 +113,7 @@ export default function ClubChallengePage({ token, onBack, runId, onComplete }) 
       <button type="button" onClick={onBack}>← 홈</button><strong>Magic Academy</strong>
       <span>STORY 3 · ROUND {run.current_round} · TICK {run.current_tick}/9</span>
       <div className="club-game-stats"><b>회원 {run.member_count}명</b><b>평판 {run.reputation}</b></div>
-      <button type="button" onClick={advanceChallenge} disabled={loading || requiresChoice}>{loading ? "Agent 판단 중..." : "다음 Tick 실행"}</button>
+      <button type="button" onClick={advanceChallenge} disabled={loading || requiresChoice || run.status === "completed"}>{loading ? "Agent 판단 중..." : "다음 Tick 실행"}</button>
     </header>
     <main className="club-game-layout">
       <aside className="club-agent-list">

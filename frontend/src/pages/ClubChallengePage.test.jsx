@@ -99,12 +99,13 @@ describe("ClubChallengePage", () => {
   it("shows the final ending", async () => {
     apiRequest
       .mockResolvedValueOnce({
-        data: { ...running, status: "completed", current_tick: 9, ending: "REVIVAL" },
+        data: { ...running, status: "completed", current_tick: 9, ending: "REVIVAL", next_choice_options: [] },
       })
       .mockResolvedValueOnce([]);
     render(<ClubChallengePage token="token" onBack={() => {}} />);
     finishIntro();
     expect(await screen.findByRole("heading", { name: "동아리 부활" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다음 Tick 실행" })).toBeDisabled();
   });
 
   it("opens the story mode run without the intro and hands back on completion", async () => {

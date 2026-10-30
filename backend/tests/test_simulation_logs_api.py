@@ -189,6 +189,7 @@ def test_logs_return_events_and_conversations_in_one_timeline(client) -> None:
 
     logs = get_logs(test_client, headers, simulation_id)
 
+    assert len({item["id"] for item in logs}) == len(logs)
     by_id = {item["id"]: item for item in logs}
     # seed 된 CLASS Event + 수동 Event + 엔진 Event 2건 + 대화 기억 1건.
     # observation 기억은 로그에 포함되지 않는다.
