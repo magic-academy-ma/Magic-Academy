@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { apiRequest } from "../api/client.js";
+import { portraitFor } from "../characters.js";
 import "./RelationshipModal.css";
 
 // ── Layout constants ──────────────────────────────────────────────
@@ -307,8 +308,8 @@ export default function RelationshipModal({
 
 function AgentPortrait({ agent, size }) {
   const [err, setErr] = useState(false);
-  const src = `/assets/character/${agent.name}_${agent.mbti_type ?? ""}.png`;
-  return err ? (
+  const src = portraitFor(agent.name);
+  return err || !src ? (
     <div
       className="graph-node__portrait graph-node__portrait--fallback"
       style={{ width: size, height: size }}
@@ -340,7 +341,10 @@ function EdgeDetail({ edge, agentById }) {
     ["경쟁",   edge.rivalry],
     ["의존도", edge.dependency],
   ].filter(([, v]) => v !== undefined && v !== null);
-  const bg = a => `url(/assets/character/${a.name}_${a.mbti_type ?? ""}.png)`;
+  const bg = a => {
+    const src = portraitFor(a.name);
+    return src ? `url(${src})` : "none";
+  };
   return (
     <div className="rel-detail">
       <div className="rel-detail-pair">

@@ -37,7 +37,7 @@ button:disabled { opacity: .6; cursor: wait; }
 
 .sim-left, .sim-right { position: absolute; z-index: 20; top: 4px; bottom: 148px; overflow: hidden; backdrop-filter: blur(16px); }
 .sim-left { left: 12px; z-index: 25; width: 230px; padding: 0; background: rgba(10,20,50,.98); }
-.sim-right { right: 12px; width: 310px; padding: 0; overflow: hidden; }
+.sim-right { right: 12px; width: 310px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 .sim-left h1 { display: block; width: 100%; max-width: 100%; margin: 0; padding: 14px 16px 2px; overflow: hidden; color: var(--c-text); font-family: var(--f-serif-ko); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .agent-count { margin: 0; padding: 0 16px 10px; color: var(--c-text-3); font: 10px var(--f-mono); letter-spacing: .1em; }
 .sim-left > input { width: calc(100% - 32px); margin: 0 16px 10px; font-size: 12px; }
@@ -48,6 +48,7 @@ button:disabled { opacity: .6; cursor: wait; }
 .agent-list .agent:hover { background: rgba(22,35,71,.62); }
 .agent-list .agent.active { border-left-color: var(--c-primary); background: rgba(94,96,232,.2); }
 .agent-portrait { width: 34px; height: 34px; flex: 0 0 auto; border: 1.5px solid var(--c-border-hi); border-radius: 50%; background: #132248 center top / cover no-repeat; }
+.agent-portrait[data-agent-name="에단"] { background-image: url('/assets/character/professor_orion.png'); }
 .agent-portrait[data-agent-name="아델"] { background-image: url('/assets/character/Adel_ISTJ.png'); }
 .agent-portrait[data-agent-name="레오"] { background-image: url('/assets/character/Leo_ESTP.png'); }
 .agent-portrait[data-agent-name="리아"] { background-image: url('/assets/character/Ria_INFP.png'); }
@@ -60,8 +61,8 @@ button:disabled { opacity: .6; cursor: wait; }
 .persona-tag { margin-left: auto; color: var(--c-cream); font: 9px var(--f-mono); }
 
 .map-view-panel { position: absolute; z-index: 15; left: 254px; right: 334px; top: 4px; bottom: 148px; padding: 0; overflow: hidden; isolation: isolate; }
-.sim-right .inspector-panel { width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; background: transparent; }
-.sim-right .relationship-modal-btn { margin: 0 16px 16px; width: calc(100% - 32px); color: var(--c-cream); background: var(--c-cream-muted); border-color: rgba(212,178,111,.35); }
+.sim-right .inspector-panel { width: 100%; flex: 1 1 auto; min-height: 0; max-height: none; border: 0; box-shadow: none; background: transparent; }
+.sim-right .relationship-modal-btn { flex: 0 0 auto; margin: 0 16px 16px; width: calc(100% - 32px); color: var(--c-cream); background: var(--c-cream-muted); border-color: rgba(212,178,111,.35); }
 .runtime-persona-setup { position: fixed; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .utility-panel { position: fixed; z-index: 40; top: 64px; left: 50%; width: min(720px, calc(100vw - 40px)); max-height: calc(100vh - 84px); padding: 20px; overflow: auto; transform: translateX(-50%); }
 .tick-panel { visibility: hidden; pointer-events: none; }

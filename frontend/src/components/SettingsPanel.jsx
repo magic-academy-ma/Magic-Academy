@@ -16,7 +16,7 @@ import ErrorMessage from "./ErrorMessage";
 
 const LEVELS = ["low", "medium", "high"];
 
-export default function SettingsPanel({ token, simulationId, simulationStatus }) {
+export default function SettingsPanel({ token, simulationId, simulationStatus, onSaved }) {
   const status = (simulationStatus || "").toLowerCase();
   const isReady = status === "ready";
   const isRunningOrPaused = status === "running" || status === "paused";
@@ -50,12 +50,14 @@ export default function SettingsPanel({ token, simulationId, simulationStatus })
           magic_enabled: magicEnabled,
         });
         setSavedAt(result?.changed_at);
+        onSaved?.(result);
       } else if (isRunningOrPaused) {
         const result = await updateRunningConfig(token, simulationId, {
           eventFrequency,
           eventImpact,
         });
         setSavedAt(result?.changed_at);
+        onSaved?.(result);
       }
     } catch (requestError) {
       setError(requestError);

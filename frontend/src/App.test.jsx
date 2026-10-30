@@ -80,7 +80,11 @@ function createFetchMock({ login, createSimulation, agents: agentsHandlers } = {
     if (url.endsWith('/v1/simulations') && options.method === 'POST') return createSimHandler()
     if (url.endsWith('/agents')) return agentsHandler()
     if (url.includes('/user-persona/config')) return response({ data: personaConfigData })
+    if (url.includes('/user-persona') && options.method === 'POST') {
+      return response({ data: { ...JSON.parse(options.body), status: 'APPLIED', locked: false } })
+    }
     if (url.includes('/user-persona')) return response({ data: null }) // 아직 미설정 (정상 상태)
+    if (url.endsWith('/start')) return response({ data: { id: simulation.id, status: 'running', started_at: '2026-08-05T00:00:00Z' } })
     if (url.includes('/v1/shares') && (!options.method || options.method === 'GET')) return response([])
     if (url.endsWith('/v1/story/current')) return response({ data: null })
     return response({}, 404)
@@ -128,6 +132,29 @@ describe('Slice 0 UI', () => {
     await userEvent.click(screen.getByRole('button', { name: /아델/ }))
     expect(screen.getByRole('heading', { name: '아델' })).toBeInTheDocument()
     expect(screen.getByText(/기숙사/, { selector: 'dd' })).toBeInTheDocument()
+  }, 10000)
+
+  it('saves the chosen persona settings, lists the persona first, and returns home', async () => {
+    const fetchMock = createFetchMock()
+    render(<App />)
+    await login()
+    await completeOnboarding()
+    await screen.findByText('Agent 6명')
+
+    const personaCall = fetchMock.mock.calls.find(([url, options]) =>
+      url.endsWith('/user-persona') && options?.method === 'POST'
+    )
+    const leo = agents.find((agent) => agent.name === '레오')
+    expect(JSON.parse(personaCall[1].body)).toMatchObject({
+      agent_id: leo.id,
+      mbti_type: 'ESTP',
+      personality_rule_version: 'mbti-big-five-v0.1',
+    })
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/start'))).toBe(true)
+    expect(document.querySelector('[data-agent-id]')).toHaveAttribute('data-agent-id', leo.id)
+
+    await userEvent.click(screen.getByRole('button', { name: '홈으로' }))
+    expect(await screen.findByRole('heading', { name: 'Owner A님의 마법학교' })).toBeInTheDocument()
   }, 10000)
 
   it('filters agents by name and agent type', async () => {
@@ -249,7 +276,8 @@ describe('Slice 0 UI', () => {
   })
 
   it('shows an empty-agent message', async () => {
-    createFetchMock({ agents: [() => response([])] })
+    // Persona 학생 확인용 첫 조회는 성공하고, 시작 후 재조회에서 빈 목록이 온다.
+    createFetchMock({ agents: [() => response(agents), () => response([])] })
     render(<App />)
     await login()
     await completeOnboarding()
@@ -257,7 +285,8 @@ describe('Slice 0 UI', () => {
   })
 
   it('keeps the created simulation and retries only the agent request', async () => {
-    const fetchMock = createFetchMock({ agents: [() => response({}, 500), () => response(agents)] })
+    // 입학 직후 조회 → 시작 후 재조회(500) → 다시 불러오기
+    const fetchMock = createFetchMock({ agents: [() => response(agents), () => response({}, 500), () => response(agents)] })
 
     render(<App />)
     await login()
@@ -268,7 +297,7 @@ describe('Slice 0 UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Agent 다시 불러오기' }))
 
     expect(await screen.findByText('Agent 6명')).toBeInTheDocument()
-    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/agents'))).toHaveLength(2)
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/agents'))).toHaveLength(3)
     expect(fetchMock.mock.calls.filter(([url, options]) =>
       url.endsWith('/v1/simulations') && options?.method === 'POST'
     )).toHaveLength(1)

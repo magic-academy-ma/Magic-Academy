@@ -32,6 +32,11 @@
   background: rgba(6, 13, 32, 0.7);
 }
 
+.ob-back {
+  right: auto;
+  left: 24px;
+}
+
 .ob-skip:disabled {
   opacity: 0.5;
   cursor: not-allowed;

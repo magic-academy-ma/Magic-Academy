@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getUserPersonaConfig } from '../api/client.js';
 import './PersonaSetupPage.css';
 
 const CHAR_DATA = {
@@ -19,12 +20,13 @@ const CHAR_DATA = {
           desc: '온화하고 친화력 있는 치유 마법사. 학생들 사이의 갈등을 중재하고 조화를 추구합니다.' },
 };
 
+// 서버 규칙(/user-persona/config)을 받기 전 초기값. 서버 mbti-big-five-v0.1 기본값과 같다.
 const MBTI_DEFAULTS = {
-  ISTJ: { openness: -20, conscientiousness: 35,  extraversion: -25, agreeableness: 10,  stability: 25  },
-  ESTP: { openness: 15,  conscientiousness: -20, extraversion: 30,  agreeableness: -10, stability: 20  },
-  INFP: { openness: 30,  conscientiousness: -10, extraversion: -20, agreeableness: 25,  stability: -15 },
-  ENTJ: { openness: 20,  conscientiousness: 30,  extraversion: 25,  agreeableness: -15, stability: 20  },
-  ESFJ: { openness: -5,  conscientiousness: 20,  extraversion: 20,  agreeableness: 35,  stability: 15  },
+  ISTJ: { openness: -25, conscientiousness: 25,  extraversion: -25, agreeableness: -20, emotional_stability: 0 },
+  ESTP: { openness: -25, conscientiousness: -25, extraversion: 25,  agreeableness: -20, emotional_stability: 0 },
+  INFP: { openness: 25,  conscientiousness: -25, extraversion: -25, agreeableness: 20,  emotional_stability: 0 },
+  ENTJ: { openness: 25,  conscientiousness: 25,  extraversion: 25,  agreeableness: -20, emotional_stability: 0 },
+  ESFJ: { openness: -25, conscientiousness: 25,  extraversion: 25,  agreeableness: 20,  emotional_stability: 0 },
 };
 
 const BF_FIELDS = [
@@ -32,15 +34,33 @@ const BF_FIELDS = [
   { key: 'conscientiousness', label: '성실성' },
   { key: 'extraversion',    label: '외향성' },
   { key: 'agreeableness',   label: '우호성' },
-  { key: 'stability',       label: '정서 안정성' },
+  { key: 'emotional_stability', label: '정서 안정성' },
 ];
 
 const MBTI_LIST = ['ISTJ', 'ESTP', 'INFP', 'ENTJ', 'ESFJ'];
 
+const RULE_VERSION = 'mbti-big-five-v0.1';
+
 function fmt(v) { return v >= 0 ? `+${v}` : `${v}`; }
 
-export default function PersonaSetupPage({ charId = 'leo', onBack, onStart }) {
+function defaultsFor(config, mbti) {
+  const rule = config?.mbti_rules?.[mbti];
+  if (!rule) return MBTI_DEFAULTS[mbti];
+  return Object.fromEntries(BF_FIELDS.map(({ key }) => [key, rule[key].default]));
+}
+
+function clampToRule(config, mbti, values) {
+  const rule = config?.mbti_rules?.[mbti];
+  if (!rule) return values;
+  return Object.fromEntries(BF_FIELDS.map(({ key }) => {
+    const { min, max } = rule[key];
+    return [key, Math.min(max, Math.max(min, Math.round(values[key] / 5) * 5))];
+  }));
+}
+
+export default function PersonaSetupPage({ simulationId, token, charId = 'leo', onBack, onStart }) {
   const char = CHAR_DATA[charId] ?? CHAR_DATA.leo;
+  const [config, setConfig] = useState(null);
 
   const [selectedMbti, setSelectedMbti] = useState(char.mbti);
   const [bigFive, setBigFive] = useState(MBTI_DEFAULTS[char.mbti]);
@@ -52,9 +72,29 @@ export default function PersonaSetupPage({ charId = 'leo', onBack, onStart }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // MBTI별 Big Five 허용 범위는 서버 규칙을 따른다. 범위를 벗어나면 저장이 거부된다.
+  useEffect(() => {
+    if (!simulationId || !token) return;
+    let cancelled = false;
+    getUserPersonaConfig(simulationId, { token })
+      .then((result) => {
+        if (cancelled || !result) return;
+        setConfig(result);
+        setBigFive(defaultsFor(result, selectedMbti));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // 규칙은 화면 진입 시 한 번만 받는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulationId, token]);
+
+  function rangeFor(mbti, key) {
+    return config?.mbti_rules?.[mbti]?.[key] ?? { min: -50, max: 50 };
+  }
+
   function handleMbtiSelect(mbti) {
     setSelectedMbti(mbti);
-    setBigFive(MBTI_DEFAULTS[mbti]);
+    setBigFive(defaultsFor(config, mbti));
   }
 
   function handleBigFiveChange(key, value) {
@@ -80,10 +120,19 @@ export default function PersonaSetupPage({ charId = 'leo', onBack, onStart }) {
   function applyImport() {
     try {
       const data = JSON.parse(importText);
-      if (data.mbti && MBTI_DEFAULTS[data.mbti]) {
-        setSelectedMbti(data.mbti);
+      const mbti = data.mbti && MBTI_DEFAULTS[data.mbti] ? data.mbti : selectedMbti;
+      setSelectedMbti(mbti);
+      if (data.bigfive) {
+        // 이전 버전 프리셋의 stability 키도 받아 준다.
+        const { stability, ...rest } = data.bigfive;
+        const imported = { ...defaultsFor(config, mbti), ...rest };
+        if (stability !== undefined && rest.emotional_stability === undefined) {
+          imported.emotional_stability = stability;
+        }
+        setBigFive(clampToRule(config, mbti, imported));
+      } else {
+        setBigFive(defaultsFor(config, mbti));
       }
-      if (data.bigfive) setBigFive({ ...MBTI_DEFAULTS[selectedMbti], ...data.bigfive });
       if (data.params?.event) setEventParams(data.params.event);
       if (data.params?.magic) setMagicParams(data.params.magic);
       setImportError('');
@@ -100,7 +149,8 @@ export default function PersonaSetupPage({ charId = 'leo', onBack, onStart }) {
     try {
       await onStart(charId, {
         mbti: selectedMbti,
-        bigFive,
+        bigFive: clampToRule(config, selectedMbti, bigFive),
+        ruleVersion: config?.rule_version ?? RULE_VERSION,
         eventParams,
         magicParams,
       });
@@ -190,7 +240,7 @@ export default function PersonaSetupPage({ charId = 'leo', onBack, onStart }) {
                 <input
                   type="range"
                   className="slider"
-                  min={-50} max={50} step={5}
+                  min={rangeFor(selectedMbti, key).min} max={rangeFor(selectedMbti, key).max} step={5}
                   value={bigFive[key]}
                   onChange={(e) => handleBigFiveChange(key, e.target.value)}
                 />
