@@ -44,7 +44,7 @@ const SLIDES = [
   },
 ];
 
-export default function BrandingPage({ auth, onEnroll }) {
+export default function BrandingPage({ auth, onEnroll, onBack }) {
   const [slide, setSlide] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -79,6 +79,11 @@ export default function BrandingPage({ auth, onEnroll }) {
 
   return (
     <div className="branding-page">
+      {onBack && (
+        <button className="ob-skip ob-back" onClick={onBack} disabled={loading}>
+          ← 홈
+        </button>
+      )}
       <button className="ob-skip" onClick={handleEnroll} disabled={loading}>
         건너뛰기 →
       </button>

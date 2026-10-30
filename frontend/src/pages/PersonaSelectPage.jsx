@@ -73,20 +73,21 @@ function PersonaCard({ persona, selected, onSelect }) {
   );
 }
 
-export default function PersonaSelectPage({ onConfirm, fromMain = false }) {
+export default function PersonaSelectPage({ onConfirm, onBack }) {
   const [selectedId, setSelectedId] = useState('leo');
   const selected = PERSONAS.find((p) => p.id === selectedId);
 
   return (
     <div className="persona-select-page">
       <div className="page-body">
-        <a
-          href={fromMain ? '/main' : '/onboarding'}
+        <button
+          type="button"
+          onClick={onBack}
           className="back-link"
           aria-label="이전 화면으로 돌아가기"
         >
           ← 이전
-        </a>
+        </button>
 
         <div className="page-title">
           <div className="page-step">PERSONA 선택 · 2 / 3</div>

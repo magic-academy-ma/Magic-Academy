@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { portraitFor } from "../characters.js";
 import "./SchoolMap.css";
 
 const SPACES = [
@@ -30,9 +31,7 @@ function actionLabel(type) {
 // 지도 토큰은 시각적 보조 수단 — 주 Agent 선택은 좌측 목록 패널 사용.
 function AgentDot({ agent, action, spaceName, selected, onClick }) {
   const [imgError, setImgError] = useState(false);
-  const src = !imgError && agent.name && agent.mbti_type
-    ? `/assets/character/${agent.name}_${agent.mbti_type}.png`
-    : null;
+  const src = imgError ? null : portraitFor(agent.name);
   const label = actionLabel(action?.action_type ?? agent.state?.current_action);
   const initials = agent.name.slice(0, 2);
 

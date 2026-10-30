@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { apiRequest } from "./api/client.js";
+import { apiRequest, setUserPersona, startSimulation } from "./api/client.js";
+import { findAgentByPersonaKey } from "./characters.js";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import ReplayPanel from "./components/ReplayPanel.jsx";
 import SnapshotPanel from "./components/SnapshotPanel.jsx";
@@ -317,6 +318,7 @@ export default function App() {
   const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
   const [recentShare, setRecentShare] = useState(null);
   const refreshAgentsSilentlyRef = useRef(null);
+  const managementPanelRef = useRef(null);
   // 이번 접속에서 이미 받은 자유 모드 목격 업적 — 받은 뒤에는 지급 요청을 보내지 않는다.
   const freeAchievedRef = useRef(new Set());
 
@@ -356,6 +358,10 @@ export default function App() {
     setSimulationId(newSimulation.id);
     setSimulation(newSimulation);
     setIsImported(false);
+    // 홈에서 새로 입학하면 이전 Simulation의 Persona 선택이 남지 않게 초기화한다.
+    setPersonaId(null);
+    setPersonaAgentId(null);
+    setPersonaSetupDone(false);
     loadAgents(newSimulation.id);
     setScreen("persona-select");
   }
@@ -428,6 +434,20 @@ export default function App() {
   // agents 목록에는 손대지 않고 personaAgentId만 별도로 추적한다.
   const students = agents.filter((agent) => agent.agent_type === "student");
 
+  // 관리 패널이 열려 있을 때 패널 바깥을 누르면 닫는다 (관계 그래프 모달과 같은 동작).
+  useEffect(() => {
+    if (!managementView) return;
+
+    function handlePointerDown(event) {
+      if (!managementPanelRef.current?.contains(event.target)) {
+        setManagementView(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [managementView]);
+
   // agents 목록이 갱신되면 selectedAgent도 최신 상태로 동기화
   useEffect(() => {
     if (!selectedAgent) return;
@@ -469,7 +489,7 @@ export default function App() {
       }}
     />
   );
-  if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} />;
+  if (screen === "branding") return <BrandingPage auth={auth} onEnroll={handleEnroll} onBack={() => setScreen("main")} />;
   if (screen === "save") return (
     <SavePage
       simulationName={simulation?.name ?? "시뮬레이션"}
@@ -477,15 +497,48 @@ export default function App() {
       onCancel={() => setScreen("simulation")}
     />
   );
-  if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} />;
+  if (!personaId) return <PersonaSelectPage simulationId={simulationId} onConfirm={setPersonaId} onBack={() => setScreen("main")} />;
   if (!personaSetupDone) return (
     <PersonaSetupPage
       simulationId={simulationId}
+      token={auth.access_token}
       charId={personaId}
       onBack={() => setPersonaId(null)}
-      onStart={async (_charId, _config) => { setPersonaSetupDone(true); setScreen("simulation"); }}
+      onStart={applyPersonaSetup}
     />
   );
+
+  // Persona 설정 화면에서 고른 MBTI·Big Five를 서버에 저장하고 Simulation을 시작한다.
+  // 시작 시 서버가 해당 학생 Agent의 MBTI·Big Five를 Persona 설정값으로 덮어쓴다.
+  async function applyPersonaSetup(charId, setup) {
+    const agent = findAgentByPersonaKey(agents, charId);
+    if (!agent) throw new Error("선택한 Persona 학생을 찾을 수 없습니다.");
+
+    try {
+      await setUserPersona(
+        simulationId,
+        {
+          agent_id: agent.id,
+          mbti_type: setup.mbti,
+          personality_rule_version: setup.ruleVersion,
+          ...setup.bigFive,
+        },
+        { token: auth.access_token }
+      );
+      await startSimulation(simulationId, { token: auth.access_token });
+    } catch (requestError) {
+      if (requestError.status === 401) {
+        resetSession(requestError.message);
+        return;
+      }
+      throw requestError;
+    }
+
+    setPersonaAgentId(agent.id);
+    setPersonaSetupDone(true);
+    setScreen("simulation");
+    await loadAgents(simulationId);
+  }
 
   async function runTick() {
     setTickLoading(true);
@@ -523,14 +576,17 @@ export default function App() {
 
   const agentNameById = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
-  const filteredAgents = agents.filter((agent) => {
-    const matchesSearch = !searchQuery || agent.name.includes(searchQuery);
-    const matchesType =
-      agentTypeFilter === "전체" ||
-      (agentTypeFilter === "학생" && agent.agent_type === "student") ||
-      (agentTypeFilter === "교수" && agent.agent_type === "professor");
-    return matchesSearch && matchesType;
-  });
+  const filteredAgents = agents
+    .filter((agent) => {
+      const matchesSearch = !searchQuery || agent.name.includes(searchQuery);
+      const matchesType =
+        agentTypeFilter === "전체" ||
+        (agentTypeFilter === "학생" && agent.agent_type === "student") ||
+        (agentTypeFilter === "교수" && agent.agent_type === "professor");
+      return matchesSearch && matchesType;
+    })
+    // 내 Persona 학생을 목록 맨 위에 둔다.
+    .sort((a, b) => (b.id === personaAgentId) - (a.id === personaAgentId));
 
   async function handleNightSkip() {
     try {
@@ -578,6 +634,11 @@ export default function App() {
     }
   }
 
+  // 같은 탭을 다시 누르면 관리 패널을 닫는다.
+  function toggleManagementView(view) {
+    setManagementView((current) => (current === view ? null : view));
+  }
+
   function handleEventAgentSelect(agentId) {
     const agent = agents.find((a) => a.id === agentId);
     if (agent) inspectAgent(agent);
@@ -587,6 +648,7 @@ export default function App() {
     <div className="app-shell sim-screen">
       <div className="sim-atmosphere" aria-hidden="true" />
       <header className="sim-topbar">
+        <button type="button" className="topbar-action" onClick={() => setScreen("main")} aria-label="홈으로">← 홈</button>
         <div className="sim-brand-mark" aria-hidden="true">M</div>
         <strong className="sim-brand">Magic Academy</strong>
         {simulation && lastTick && (
@@ -849,37 +911,42 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div className="panel management-panel utility-panel">
+            <div className="panel management-panel utility-panel" ref={managementPanelRef}>
               <h2>관리</h2>
               <div className="management-tabs">
                 <button
                   type="button"
                   aria-pressed={managementView === "settings"}
-                  onClick={() => setManagementView("settings")}
+                  onClick={() => toggleManagementView("settings")}
                 >
                   설정
                 </button>
                 <button
                   type="button"
                   aria-pressed={managementView === "replay"}
-                  onClick={() => setManagementView("replay")}
+                  onClick={() => toggleManagementView("replay")}
                 >
                   Replay
                 </button>
                 <button
                   type="button"
                   aria-pressed={managementView === "snapshot"}
-                  onClick={() => setManagementView("snapshot")}
+                  onClick={() => toggleManagementView("snapshot")}
                 >
                   Snapshot
                 </button>
                 <button
                   type="button"
                   aria-pressed={managementView === "sharing"}
-                  onClick={() => setManagementView("sharing")}
+                  onClick={() => toggleManagementView("sharing")}
                 >
                   공유
                 </button>
+                {managementView && (
+                  <button type="button" onClick={() => setManagementView(null)}>
+                    닫기
+                  </button>
+                )}
               </div>
 
               {managementView === "settings" && (
@@ -887,6 +954,7 @@ export default function App() {
                   token={auth.access_token}
                   simulationId={simulation.id}
                   simulationStatus={simulation.status}
+                  onSaved={() => setManagementView(null)}
                 />
               )}
               {managementView === "replay" && (
@@ -916,10 +984,6 @@ export default function App() {
                 token={auth.access_token}
                 onAgentSelect={inspectAgent}
               />
-            </div>
-
-            <div className="panel relationship-panel">
-              <h4>관계 그래프</h4>
             </div>
 
           </section>

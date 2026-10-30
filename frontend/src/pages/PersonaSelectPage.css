@@ -40,6 +40,8 @@
   padding: var(--s-2) var(--s-3);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
+  background: transparent;
+  cursor: pointer;
   transition: color var(--tr-fast), border-color var(--tr-fast);
 }
 .persona-select-page .back-link:hover {
